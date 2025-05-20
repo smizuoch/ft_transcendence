@@ -1,0 +1,81 @@
+# ===== General =====
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs
+logs/*
+!logs/.gitkeep
+**/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ====================
+# === Node / TypeScript ===
+**/node_modules/
+**/.pnp
+.pnp.cjs
+.pnp.js
+
+# Build caches & outputs
+**/dist/
+**/build/
+**/.next/
+**/out/
+**/.turbo/
+**/.cache/
+**/.eslintcache
+
+# Coverage
+coverage/
+**/coverage/
+
+# Package manager archives
+*.tgz
+
+# ====================
+# === Environment files ===
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# SQLite / Prisma
+**/*.db
+**/*.db-journal
+**/*.sqlite
+**/.prisma/
+
+# ====================
+# === Docker / Compose artifacts ===
+compose.override.yml
+compose.dev.yml
+**/docker-volume/
+
+# Elasticsearch & Kibana runtime data
+services/elkstack/elasticsearch/data/
+services/elkstack/elasticsearch/logs/
+services/elkstack/logstash/logs/
+services/elkstack/kibana/logs/
+
+# Janus / SFU build artifacts
+services/sfu/janus/bin/
+services/sfu/janus/lib/
+services/sfu/janus/logs/
+
+# Nginx certs generated locally
+services/nginx/certs/
+
+# ====================
+# === Misc ===
+*.pem
+*.key
