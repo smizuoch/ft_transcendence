@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 const Home: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
@@ -46,10 +47,6 @@ const Home: React.FC = () => {
     setIsMuted(!isMuted);
   };
 
-  const handleGoogleSignIn = () => console.log("Google Sign In");
-  const handleSignIn = () => console.log("Sign In");
-  const handleSignUp = () => console.log("Sign Up");
-
   const iconColor = '#6D6F8C';
 
   return (
@@ -75,29 +72,29 @@ const Home: React.FC = () => {
           </div>
 
           {/* Icons positioned in plus shape - doubled size */}
-          <button
-            onClick={handleGoogleSignIn}
+          <Link
+            to="/my-page" // Google認証成功後はMyPageへ遷移すると仮定
             className="absolute top-0 left-1/2 transform -translate-x-1/2 hover:bg-slate-100 rounded transition-colors p-2"
             aria-label="Sign in with Google"
           >
             <img src="/images/icons/google.svg" alt="Google Sign In" className="w-14 h-14" />
-          </button>
+          </Link>
 
-          <button
-            onClick={handleSignUp}
+          <Link
+            to="/user-registration"
             className="absolute right-0 top-1/2 transform -translate-y-1/2 hover:bg-slate-100 rounded transition-colors p-2"
             aria-label="Sign Up"
           >
             <img src="/images/icons/signup.svg" alt="Sign Up" className="w-14 h-14" />
-          </button>
+          </Link>
 
-          <button
-            onClick={handleSignIn}
+          <Link
+            to="/email-verification"
             className="absolute left-0 top-1/2 transform -translate-y-1/2 hover:bg-slate-100 rounded transition-colors p-2"
             aria-label="Sign In"
           >
             <img src="/images/icons/signin.svg" alt="Sign In" className="w-14 h-14" />
-          </button>
+          </Link>
 
           <button
             onClick={toggleMute}
