@@ -59,7 +59,7 @@ bals:
 	docker volume prune -f || true
 	docker network prune -f || true
 	docker system prune -a -f --volumes || true
-	echo "bals"
+	@echo "bals"
 
 help:
 	@echo "Available commands for $(PROJECT_NAME):"
