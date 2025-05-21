@@ -1,7 +1,11 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+// import { Link } from 'react-router-dom'; // 削除
 
-const UserRegistration: React.FC = () => {
+interface UserRegistrationProps {
+  navigate: (page: string) => void;
+}
+
+const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-800 text-white p-4">
       <h1 className="text-4xl font-bold mb-8 font-['Futura']">User Registration</h1>
@@ -21,16 +25,16 @@ const UserRegistration: React.FC = () => {
           placeholder="Password"
           className="bg-gray-700 text-white placeholder-gray-400 border border-gray-600 rounded-md w-full p-3 mb-6 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-['Futura']"
         />
-        <Link
-          to="/2fa"
+        <button
+          onClick={() => navigate('TwoFactorAuth')}
           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 transition duration-150 ease-in-out block text-center font-['Futura']"
         >
           Register
-        </Link>
+        </button>
       </div>
-      <Link to="/" className="mt-8 text-indigo-400 hover:text-indigo-300 font-['Futura']">
+      <button onClick={() => navigate('Home')} className="mt-8 text-indigo-400 hover:text-indigo-300 font-['Futura']">
         Back to Home
-      </Link>
+      </button>
     </div>
   );
 };

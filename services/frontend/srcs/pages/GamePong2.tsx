@@ -1,7 +1,11 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+// import { Link } from 'react-router-dom'; // 削除
 
-const GamePong2: React.FC = () => {
+interface GamePong2Props {
+  navigate: (page: string) => void;
+}
+
+const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-4 font-['Futura']">
       <div className="absolute top-4 left-4 text-lg">Room: #12345</div>
@@ -24,15 +28,15 @@ const GamePong2: React.FC = () => {
       </div>
       <div className="text-2xl mb-8">Survivors: 2</div>
 
-      <Link
-        to="/game-result"
+      <button
+        onClick={() => navigate('GameResult')}
         className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-xl transition duration-150"
       >
         End Game (To Result)
-      </Link>
-      <Link to="/game-select" className="mt-8 text-blue-400 hover:text-blue-300">
+      </button>
+      <button onClick={() => navigate('GameSelect')} className="mt-8 text-blue-400 hover:text-blue-300">
         Back to Game Select
-      </Link>
+      </button>
     </div>
   );
 };

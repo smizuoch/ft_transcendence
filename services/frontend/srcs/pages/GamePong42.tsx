@@ -1,7 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
-const GamePong42: React.FC = () => {
+interface GamePong42Props {
+  navigate: (page: string) => void;
+}
+
+const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-4 font-['Futura']">
       <h1 className="text-6xl font-bold mb-8">PONG 42</h1>
@@ -23,15 +26,15 @@ const GamePong42: React.FC = () => {
         </div>
       </div>
 
-      <Link
-        to="/game-result"
+      <button
+        onClick={() => navigate('GameResult')}
         className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-xl transition duration-150"
       >
         End Game (To Result)
-      </Link>
-      <Link to="/game-select" className="mt-8 text-purple-400 hover:text-purple-300">
+      </button>
+      <button onClick={() => navigate('GameSelect')} className="mt-8 text-purple-400 hover:text-purple-300">
         Back to Game Select
-      </Link>
+      </button>
     </div>
   );
 };

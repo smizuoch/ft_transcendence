@@ -1,8 +1,11 @@
 import React from 'react';
-import { Link, useParams } from 'react-router-dom';
 
-const UserProfile: React.FC = () => {
-  const { userId } = useParams<{ userId: string }>();
+interface UserProfileProps {
+  navigate: (page: string) => void;
+  userId?: string;
+}
+
+const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const isOwnProfile = userId === "myusername"; // モック: "myusername" が自分のプロファイルだと仮定
 
   // モックデータ
@@ -69,12 +72,12 @@ const UserProfile: React.FC = () => {
         </div>
         
         <div className="text-center">
-          <Link
-            to="/my-page"
+          <button
+            onClick={() => navigate('MyPage')}
             className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg text-xl transition duration-150"
           >
             Back to My Page
-          </Link>
+          </button>
         </div>
       </div>
     </div>

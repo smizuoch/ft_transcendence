@@ -1,7 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
-const GameResult: React.FC = () => {
+interface GameResultProps {
+  navigate: (page: string) => void;
+}
+
+const GameResult: React.FC<GameResultProps> = ({ navigate }) => {
   // モックデータ
   const playerRank = Math.floor(Math.random() * 42) + 1; 
 
@@ -15,12 +18,12 @@ const GameResult: React.FC = () => {
         <p className="text-2xl">Your Rank</p>
       </div>
 
-      <Link
-        to="/my-page"
+      <button
+        onClick={() => navigate('MyPage')}
         className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 px-8 rounded-lg text-2xl transition duration-150"
       >
         Back to My Page
-      </Link>
+      </button>
     </div>
   );
 };
