@@ -1,0 +1,87 @@
+# version: '3.8' # この行を削除またはコメントアウト
+
+services:
+  nginx:
+    build:
+      context: ./services/nginx # Dockerfileからビルドするように変更
+      dockerfile: Dockerfile
+    container_name: nginx
+    ports:
+      - "8080:80"  # ホストの8080をコンテナの80へ
+      - "8443:443" # ホストの8443をコンテナの443へ
+    volumes:
+      - ./services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - frontend_dist:/usr/share/nginx/html:ro # frontendのビルド成果物をマウント
+    depends_on:
+      frontend:
+        condition: service_completed_successfully # frontendのビルド完了を待つ
+    restart: unless-stopped
+    networks:
+      - transcendence_net
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    container_name: frontend # ビルド専用コンテナ
+    volumes:
+      - frontend_dist:/app/dist # ビルド成果物を名前付きボリュームに出力
+    networks:
+      - transcendence_net
+    # このサービスはビルド後終了するため、restartポリシーは不要
+
+  # --- API Services (Placeholder examples) ---
+  # auth:
+  #   build: ./services/api/auth
+  #   container_name: ft_auth_service
+  #   restart: unless-stopped
+  #   networks:
+  #     - transcendence_net
+  #   environment:
+  #     - DATABASE_URL=file:./dev.db # Prismaの場合など
+  #     - JWT_SECRET=your_jwt_secret
+  #   ports: # 開発時のみ。本番はNginx経由
+  #     - "3001:3000" 
+
+  # ... (user_search, result_search, friend_search services)
+
+  # --- ELK Stack (Placeholder examples) ---
+  # elasticsearch:
+  #   build: ./services/elkstack/elasticsearch
+  #   container_name: ft_elasticsearch
+  #   # ...
+  #   networks:
+  #     - transcendence_net
+
+  # logstash:
+  #   build: ./services/elkstack/logstash
+  #   container_name: ft_logstash
+  #   # ...
+  #   networks:
+  #     - transcendence_net
+
+  # kibana:
+  #   build: ./services/elkstack/kibana
+  #   container_name: ft_kibana
+  #   ports:
+  #     - "5601:5601"
+  #   # ...
+  #   networks:
+  #     - transcendence_net
+
+  # --- SFU (Placeholder example) ---
+  # sfu:
+  #   build: ./services/sfu
+  #   container_name: ft_sfu
+  #   # ...
+  #   networks:
+  #     - transcendence_net
+
+volumes:
+  frontend_dist: # frontendのビルド成果物を永続化/共有するための名前付きボリューム
+  # db_data_auth: # authサービス用DBデータなど
+  # es_data: # Elasticsearchデータ用
+
+networks:
+  transcendence_net:
+    driver: bridge
