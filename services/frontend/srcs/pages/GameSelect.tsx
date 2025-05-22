@@ -1,35 +1,176 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface GameSelectProps {
   navigate: (page: string) => void;
 }
 
 const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
+  // 色の定義
+  const iconColor = '#6D6F8C';
+
+  // 6つの入力フィールド用の状態
+  const [roomNumber, setRoomNumber] = useState<string[]>(Array(6).fill(''));
+
+  // 各入力フィールドへの参照
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // 初期化時に参照配列を設定
+  useEffect(() => {
+    inputRefs.current = inputRefs.current.slice(0, 6);
+  }, []);
+
+  // 入力処理関数
+  const handleInputChange = (index: number, value: string) => {
+    // 数字のみ受け付ける
+    if (!/^\d*$/.test(value)) return;
+
+    // 状態を更新
+    const newRoomNumber = [...roomNumber];
+    newRoomNumber[index] = value;
+    setRoomNumber(newRoomNumber);
+
+    // 入力があれば次のフィールドにフォーカス
+    if (value !== '' && index < 5) {
+      const nextInput = inputRefs.current[index + 1];
+      if (nextInput) {
+        nextInput.focus();
+      }
+    }
+
+    // すべてのフィールドが埋まったかどうかを確認し、ゲームに遷移
+    const allFilled = newRoomNumber.every(digit => digit !== '');
+    if (allFilled) {
+      // 6桁全て入力されたらPong2ゲームに遷移
+      navigateToPong2(newRoomNumber.join(''));
+    }
+  };
+
+  // キー処理関数（バックスペースで前のフィールドに戻る）
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && roomNumber[index] === '' && index > 0) {
+      const prevInput = inputRefs.current[index - 1];
+      if (prevInput) {
+        prevInput.focus();
+      }
+    }
+  };
+
+  // Pong2ゲームへの遷移
+  const navigateToPong2 = (roomNumberStr?: string) => {
+    // 指定された部屋番号か、入力欄の値を使用（空欄は0とみなす）
+    const roomCode = roomNumberStr || roomNumber.join('') || '000000';
+    console.log(`Navigating to Pong2 with room number: ${roomCode}`);
+    navigate('GamePong2');
+  };
+
+  // Pong42ゲームへの遷移
+  const navigateToPong42 = () => {
+    navigate('GamePong42');
+  };
+
+  // MyPageへの遷移
+  const navigateToMyPage = () => {
+    navigate('MyPage');
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-800 text-white p-4 font-['Futura']">
-      <h1 className="text-5xl font-bold mb-12">Select Game Mode</h1>
-      <div className="space-y-6 mb-12 w-full max-w-md">
-        <input
-          type="text"
-          placeholder="Enter Room Number (optional)"
-          className="bg-gray-700 text-white placeholder-gray-400 border border-gray-600 rounded-lg w-full p-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-        <button
-          onClick={() => navigate('GamePong2')}
-          className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-lg text-2xl text-center transition duration-150"
-        >
-          PONG 2
-        </button>
-        <button
-          onClick={() => navigate('GamePong42')}
-          className="block w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-4 px-6 rounded-lg text-2xl text-center transition duration-150"
-        >
-          PONG 42
-        </button>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4 relative">
+      {/* X下線 - 画面中央に大きく配置 */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div
+          className="absolute top-0 left-0 w-[200%] h-[1px]"
+          style={{
+            backgroundColor: iconColor,
+            transformOrigin: 'center',
+            transform: 'rotate(45deg) translateY(-50%)',
+            top: '50%',
+            left: '25%',
+            width: '50%',
+            height: '1px'
+          }}
+        ></div>
+        <div
+          className="absolute top-0 left-0 w-[200%] h-[1px]"
+          style={{
+            backgroundColor: iconColor,
+            transformOrigin: 'center',
+            transform: 'rotate(-45deg) translateY(-50%)',
+            top: '50%',
+            left: '25%',
+            width: '50%',
+            height: '1px'
+          }}
+        ></div>
       </div>
-      <button onClick={() => navigate('MyPage')} className="text-indigo-400 hover:text-indigo-300 text-lg">
-        Back to My Page
+
+      {/* MyPage ボタン - 右下に配置 */}
+      <button
+        onClick={navigateToMyPage}
+        className="absolute bottom-16 right-16 hover:opacity-80 transition-opacity"
+        aria-label="Back to My Page"
+      >
+        <img src="/images/icons/mypage.svg" alt="MyPage" className="w-16 h-16" />
       </button>
+
+      <div className="flex flex-col items-center justify-center h-full">
+        {/* 部屋番号入力フィールド */}
+        <div className="mb-20">
+          <div className="flex justify-center items-center space-x-4">
+            {[0, 1, 2, 3, 4, 5].map((index) => (
+              <div key={index} className="relative" style={{ width: '60px', height: '60px' }}>
+                <img
+                  src="/images/icons/room_number_input_field.svg"
+                  alt="Input field"
+                  className="absolute inset-0 w-full h-full"
+                />
+                <input
+                  ref={(el) => (inputRefs.current[index] = el)}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={roomNumber[index]}
+                  onChange={(e) => handleInputChange(index, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(index, e)}
+                  className="absolute inset-0 w-full h-full text-center text-2xl font-bold bg-transparent border-none focus:outline-none"
+                  style={{ zIndex: 10, color: '#6D6F8C' }}
+                  autoFocus={index === 0}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ゲームボタンコンテナ */}
+        <div className="flex justify-center items-center space-x-40 mt-8 relative">
+          {/* Pong2ボタン */}
+          <button
+            onClick={() => navigateToPong2()}
+            className="hover:opacity-80 transition-opacity"
+            aria-label="Play Pong 2"
+          >
+            <img src="/images/icons/pong2.svg" alt="Pong 2" className="w-40 h-40" />
+          </button>
+
+          {/* Pong42ボタン */}
+          <button
+            onClick={navigateToPong42}
+            className="hover:opacity-80 transition-opacity"
+            aria-label="Play Pong 42"
+          >
+            <img src="/images/icons/pong42.svg" alt="Pong 42" className="w-40 h-40" />
+          </button>
+        </div>
+      </div>
+
+      {/* 入力フィールドのフォーカススタイル */}
+      <style>
+        {`
+        input:focus + img {
+          border: 2px solid #6D6F8C;
+          border-radius: 15px;
+        }
+        `}
+      </style>
     </div>
   );
 };
