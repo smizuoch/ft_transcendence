@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 
 interface MyPageProps {
-  navigate: (page: string, params?: Record<string, string>) => void;
+  navigate: (page: string, userId?: string) => void;
 }
 
 /**
@@ -20,7 +20,7 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const username = 'NAME';
+  const username = 'NAME'; // mock
 
   const handleAvatarClick = () => fileInputRef.current?.click();
 

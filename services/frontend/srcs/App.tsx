@@ -12,7 +12,7 @@ import UserProfile from '@/pages/UserProfile';
 
 interface RouteState {
   page: string;
-  params?: Record<string, string>;
+  userId?: string;
 }
 
 const App: React.FC = () => {
@@ -20,9 +20,9 @@ const App: React.FC = () => {
   const [showBackNavigationPopup, setShowBackNavigationPopup] = useState(false);
 
   /** -------- routing helper -------- */
-  const navigate = (page: string, params?: Record<string, string>) => {
-    setCurrentRoute({ page, params });
-    window.history.pushState({ page, params }, '', '/');
+  const navigate = (page: string, userId?: string) => {
+    setCurrentRoute({ page, userId });
+    window.history.pushState({ page, userId }, '', '/');
   };
 
   /** -------- back-navigation block -------- */
@@ -64,7 +64,7 @@ const App: React.FC = () => {
       case 'GameResult':
         return <GameResult navigate={navigate} />;
       case 'UserProfile':
-        return <UserProfile navigate={navigate} userId={currentRoute.params?.userId} />;
+        return <UserProfile navigate={navigate} userId={currentRoute?.userId} />;
       default:
         return <Home navigate={navigate} />;
     }
