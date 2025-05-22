@@ -1,6 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
+// import { Link } from 'react-router-dom'; // 削除
 
-const Home: React.FC = () => {
+interface HomeProps {
+  navigate: (page: string) => void;
+}
+
+const Home: React.FC<HomeProps> = ({ navigate }) => {
   const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -46,10 +51,6 @@ const Home: React.FC = () => {
     setIsMuted(!isMuted);
   };
 
-  const handleGoogleSignIn = () => console.log("Google Sign In");
-  const handleSignIn = () => console.log("Sign In");
-  const handleSignUp = () => console.log("Sign Up");
-
   const iconColor = '#6D6F8C';
 
   return (
@@ -76,7 +77,7 @@ const Home: React.FC = () => {
 
           {/* Icons positioned in plus shape - doubled size */}
           <button
-            onClick={handleGoogleSignIn}
+            onClick={() => navigate('MyPage')} // Google認証成功後はMyPageへ遷移すると仮定
             className="absolute top-0 left-1/2 transform -translate-x-1/2 hover:bg-slate-100 rounded transition-colors p-2"
             aria-label="Sign in with Google"
           >
@@ -84,7 +85,7 @@ const Home: React.FC = () => {
           </button>
 
           <button
-            onClick={handleSignUp}
+            onClick={() => navigate('UserRegistration')}
             className="absolute right-0 top-1/2 transform -translate-y-1/2 hover:bg-slate-100 rounded transition-colors p-2"
             aria-label="Sign Up"
           >
@@ -92,7 +93,7 @@ const Home: React.FC = () => {
           </button>
 
           <button
-            onClick={handleSignIn}
+            onClick={() => navigate('EmailVerification')}
             className="absolute left-0 top-1/2 transform -translate-y-1/2 hover:bg-slate-100 rounded transition-colors p-2"
             aria-label="Sign In"
           >
