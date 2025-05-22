@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'; // 削除
 import Home from '@/pages/Home';
 import UserRegistration from '@/pages/UserRegistration';
 import EmailVerification from '@/pages/EmailVerification';
@@ -18,32 +17,32 @@ interface RouteState {
 
 const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<RouteState>({ page: 'Home' });
+  const [showBackNavigationPopup, setShowBackNavigationPopup] = useState(false);
 
+  /** -------- routing helper -------- */
   const navigate = (page: string, params?: Record<string, string>) => {
     setCurrentRoute({ page, params });
-    window.history.pushState({ page, params }, '', '/'); // pushStateに現在のページ情報を含める
+    window.history.pushState({ page, params }, '', '/');
+  };
+
+  /** -------- back-navigation block -------- */
+  const handlePopupConfirm = () => {
+    setShowBackNavigationPopup(false);
+    navigate('Home');
   };
 
   useEffect(() => {
-    // ブラウザの戻る/進むボタンに対応するための処理
-    const handlePopState = (_event: PopStateEvent) => { // 'event' を '_event' に変更
-      alert("ブラウザの戻る・進むボタンはサポートされていません。ホームページに戻ります。");
-      // 将来的にログイン状態などを考慮してリダイレクト先を変更できるように、
-      // ここで 'Home' 以外を指定することも可能です。
-      // 例: if (isLoggedIn()) { navigate('MyPage'); } else { navigate('Home'); }
-      navigate('Home');
+    const handlePopState = () => {
+      setShowBackNavigationPopup(true);   // show pop-up instead of navigating back
     };
 
     window.addEventListener('popstate', handlePopState);
-    // 初期表示時にURLを '/' に設定し、ページ情報をstateに保存
     window.history.replaceState({ page: 'Home' }, '', '/');
 
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  /** -------- page renderer -------- */
   const renderPage = () => {
     switch (currentRoute.page) {
       case 'Home':
@@ -67,13 +66,41 @@ const App: React.FC = () => {
       case 'UserProfile':
         return <UserProfile navigate={navigate} userId={currentRoute.params?.userId} />;
       default:
-        return <Home navigate={navigate} />; // Not found, redirect to Home
+        return <Home navigate={navigate} />;
     }
   };
 
+  /** -------- UI -------- */
   return (
     <>
       {renderPage()}
+
+      {/* ---------- back-navigation pop-up ---------- */}
+      {showBackNavigationPopup && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="bg-[#E2E2E8] w-full max-w-xl p-10 rounded-2xl shadow-xl flex flex-col items-center">
+            {/* “戻る禁止”アイコン */}
+            <img
+              src="/images/icons/notreturn.svg"
+              alt=""
+              className="w-24 h-24 mb-8"
+            />
+
+            {/* confirm button (check) */}
+            <button
+              onClick={handlePopupConfirm}
+              className="rounded-full p-4 hover:bg-black/10 transition"
+              aria-label="OK – go home"
+            >
+              <img
+                src="/images/icons/check.svg"
+                alt=""
+                className="w-10 h-10"
+              />
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };
