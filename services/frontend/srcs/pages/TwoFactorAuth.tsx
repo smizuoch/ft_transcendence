@@ -5,6 +5,9 @@ interface TwoFactorAuthProps {
 }
 
 const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
+
+  const iconColor = '#6D6F8C';
+
   // 6つの入力フィールド用の状態
   const [code, setCode] = useState<string[]>(Array(6).fill(''));
   // エラー時の振動アニメーション用の状態
@@ -126,8 +129,8 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
                 value={code[index]}
                 onChange={(e) => handleInputChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
-                className="absolute inset-0 w-full h-full text-center text-4xl font-bold text-black bg-transparent border-none focus:outline-none"
-                style={{ zIndex: 10 }}
+                className="absolute inset-0 w-full h-full text-center text-4xl font-bold bg-transparent border-none focus:outline-none"
+                style={{ zIndex: 10, color: iconColor }}
                 autoFocus={index === 0}
               />
             </div>
