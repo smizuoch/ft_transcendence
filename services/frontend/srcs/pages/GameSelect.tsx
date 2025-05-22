@@ -113,42 +113,48 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
       </button>
 
       <div className="flex flex-col items-center justify-center h-full">
-        {/* 部屋番号入力フィールド */}
-        <div className="mb-20">
-          <div className="flex justify-center items-center space-x-4">
-            {[0, 1, 2, 3, 4, 5].map((index) => (
-              <div key={index} className="relative" style={{ width: '60px', height: '60px' }}>
-                <img
-                  src="/images/icons/room_number_input_field.svg"
-                  alt="Input field"
-                  className="absolute inset-0 w-full h-full"
-                />
-                <input
-                  ref={(el) => (inputRefs.current[index] = el)}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={roomNumber[index]}
-                  onChange={(e) => handleInputChange(index, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(index, e)}
-                  className="absolute inset-0 w-full h-full text-center text-2xl font-bold bg-transparent border-none focus:outline-none"
-                  style={{ zIndex: 10, color: '#6D6F8C' }}
-                  autoFocus={index === 0}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* ゲームボタンコンテナ */}
-        <div className="flex justify-center items-center space-x-40 mt-8 relative">
-          {/* Pong2ボタン */}
+        <div className="flex justify-center items-center space-x-40 relative">
+          {/* Pong2ボタンと、その子要素としての部屋番号入力フィールド */}
           <button
             onClick={() => navigateToPong2()}
-            className="hover:opacity-80 transition-opacity"
+            className="relative hover:opacity-80 transition-opacity"
             aria-label="Play Pong 2"
           >
-            <img src="/images/icons/pong2.svg" alt="Pong 2" className="w-40 h-40" />
+            <img src="/images/icons/pong2.svg" alt="Pong 2" className="w-64 h-64" />
+            {/* 部屋番号入力フィールド */}
+            <div
+              className="absolute w-48" // mt-[-32px] は不要
+              style={{
+                top: '100%', // ボタンの下端
+                left: '50%', // ボタンの水平中央
+                transform: 'translateX(-50%) translateY(-32px)', // 上に32pxオフセット
+              }}
+            >
+              <div className="flex justify-between items-center">
+                {[0, 1, 2, 3, 4, 5].map((index) => (
+                  <div key={index} className="relative" style={{ width: '24px', height: '24px' }}>
+                    <img
+                      src="/images/icons/room_number_input_field.svg"
+                      alt="Input field"
+                      className="absolute inset-0 w-full h-full"
+                    />
+                    <input
+                      ref={(el) => (inputRefs.current[index] = el)}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={roomNumber[index]}
+                      onChange={(e) => handleInputChange(index, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(index, e)}
+                      className="absolute inset-0 w-full h-full text-center text-xs font-bold bg-transparent border-none focus:outline-none pb-1"
+                      style={{ zIndex: 10, color: '#6D6F8C' }}
+                      autoFocus={index === 0}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           </button>
 
           {/* Pong42ボタン */}
@@ -157,7 +163,7 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
             className="hover:opacity-80 transition-opacity"
             aria-label="Play Pong 42"
           >
-            <img src="/images/icons/pong42.svg" alt="Pong 42" className="w-40 h-40" />
+            <img src="/images/icons/pong42.svg" alt="Pong 42" className="w-64 h-64" />
           </button>
         </div>
       </div>
