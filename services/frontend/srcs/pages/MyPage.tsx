@@ -37,6 +37,7 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
   const handleSearch = () => {
     if (searchTerm.trim()) {
       alert(`Searching for: ${searchTerm}`);
+      // 将来的にはここで検索結果に基づいて navigate('UserProfile', searchTerm) を呼び出す
     }
   };
 
@@ -93,12 +94,13 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
           {/* Name & search stack */}
           <div className="ml-10 flex flex-col" style={{ transform: `translateY(${AVATAR * 0.25}px)` }}>
             {/* Username */}
-            <span
-              className="font-medium whitespace-nowrap"
+            <button
+              onClick={() => navigate('UserProfile', 'myusername')}
+              className="font-medium whitespace-nowrap text-left hover:opacity-80 transition-opacity"
               style={{ color: accent, fontSize: 88, lineHeight: 1 }}
             >
               {username}
-            </span>
+            </button>
 
             {/* Search bar */}
             <div className="relative mt-10" style={{ width: 560 }}>
