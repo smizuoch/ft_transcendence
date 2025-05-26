@@ -1,0 +1,16 @@
+filebeat.inputs:
+- type: container
+  paths:
+    - /var/lib/docker/containers/*/*.log
+  processors:
+    - add_docker_metadata:
+        host: "unix:///var/run/docker.sock"
+
+# Logstashへの出力設定
+output.logstash:
+  hosts: ["logstash:5044"]
+
+# Filebeat自身のログ設定 (オプション)
+logging.level: info
+logging.to_files: false # コンテナログとして出力する場合はfalse
+logging.to_stderr: true  # コンテナログとして出力する場合はtrue
