@@ -41,33 +41,60 @@ services:
   #     - DATABASE_URL=file:./dev.db # Prismaの場合など
   #     - JWT_SECRET=your_jwt_secret
   #   ports: # 開発時のみ。本番はNginx経由
-  #     - "3001:3000" 
+  #     - "3001:3000"
 
   # ... (user_search, result_search, friend_search services)
 
   # --- ELK Stack (Placeholder examples) ---
-  # elasticsearch:
-  #   build: ./services/elkstack/elasticsearch
-  #   container_name: ft_elasticsearch
-  #   # ...
-  #   networks:
-  #     - transcendence_net
+  elasticsearch:
+    build:
+      context: ./services/elkstack/elasticsearch
+      dockerfile: Dockerfile
+    container_name: elasticsearch
+    ports:
+      - "9201:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - transcendence_net
+    restart: unless-stopped
 
-  # logstash:
-  #   build: ./services/elkstack/logstash
-  #   container_name: ft_logstash
-  #   # ...
-  #   networks:
-  #     - transcendence_net
+  logstash:
+    build:
+      context: ./services/elkstack/logstash
+      dockerfile: Dockerfile
+    container_name: logstash
+    ports:
+      - "5044:5044"
+    depends_on:
+      - elasticsearch
+    networks:
+      - transcendence_net
+    restart: unless-stopped
 
-  # kibana:
-  #   build: ./services/elkstack/kibana
-  #   container_name: ft_kibana
-  #   ports:
-  #     - "5601:5601"
-  #   # ...
+  kibana:
+    build:
+      context: ./services/elkstack/kibana
+      dockerfile: Dockerfile
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - transcendence_net
+    restart: unless-stopped
+
+  # filebeat:
+  #   build:
+  #     context: ./service/elkstack/filebeat
+  #     dockefile: Dockerfile
+  #   container_name: filebeat
+  #   depends_on:
+  #     - elasticsearch
   #   networks:
   #     - transcendence_net
+  #   restart: unless-stopped
 
   # --- SFU (Placeholder example) ---
   # sfu:
@@ -80,7 +107,7 @@ services:
 volumes:
   frontend_dist: # frontendのビルド成果物を永続化/共有するための名前付きボリューム
   # db_data_auth: # authサービス用DBデータなど
-  # es_data: # Elasticsearchデータ用
+  es_data: # Elasticsearchデータ用
 
 networks:
   transcendence_net:
