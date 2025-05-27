@@ -103,10 +103,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       state.ball.x = state.canvasWidth / 2;
       state.ball.y = state.canvasHeight / 2;
       
-      // 初速をランダムに設定
-      const angle = (Math.random() * 0.5 + 0.25) * Math.PI; // 45°～135°の範囲
-      state.ball.dx = state.ball.speed * Math.cos(angle) * (Math.random() > 0.5 ? 1 : -1);
-      state.ball.dy = state.ball.speed * Math.sin(angle) * (Math.random() > 0.5 ? 1 : -1);
+      // 初速を設定 - 修正: 角度を15°～45°の範囲に制限して水平方向の動きを確保
+      const angle = (Math.random() * 0.167 + 0.083) * Math.PI; // 15°～45°の範囲
+      const direction = Math.random() > 0.5 ? 1 : -1; // 左右どちらかの方向
+      const verticalDirection = Math.random() > 0.5 ? 1 : -1; // 上下どちらかの方向
+      
+      // 水平成分を大きくして、必ずパドルに到達するようにする
+      state.ball.dx = state.ball.speed * Math.cos(angle) * direction;
+      state.ball.dy = state.ball.speed * Math.sin(angle) * verticalDirection;
+      
       state.ball.speedMultiplier = 1.0; // 速度倍率をリセット
       state.paddleHits = 0; // ヒット数リセット
       
@@ -312,10 +317,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       state.ball.x = state.canvasWidth / 2;
       state.ball.y = state.canvasHeight / 2;
       
-      // より自然な角度で発射
-      const angle = (Math.random() * 0.5 + 0.25) * Math.PI; // 45°～135°の範囲
-      state.ball.dx = state.ball.speed * Math.cos(angle) * (Math.random() > 0.5 ? 1 : -1);
-      state.ball.dy = state.ball.speed * Math.sin(angle) * (Math.random() > 0.5 ? 1 : -1);
+      // より自然な角度で発射 - 修正: 同様に角度を15°～45°に制限
+      const angle = (Math.random() * 0.167 + 0.083) * Math.PI; // 15°～45°の範囲
+      const direction = Math.random() > 0.5 ? 1 : -1; // 左右どちらかの方向
+      const verticalDirection = Math.random() > 0.5 ? 1 : -1; // 上下どちらかの方向
+      
+      state.ball.dx = state.ball.speed * Math.cos(angle) * direction;
+      state.ball.dy = state.ball.speed * Math.sin(angle) * verticalDirection;
       
       // 速度倍率をリセット（ラリーごとに速度リセット）
       state.ball.speedMultiplier = 1.0;
