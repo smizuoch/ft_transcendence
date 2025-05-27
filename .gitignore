@@ -41,6 +41,7 @@ coverage/
 
 # Package manager archives
 *.tgz
+**/package-lock.json
 
 # ====================
 # === Environment files ===
