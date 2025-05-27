@@ -45,16 +45,66 @@ services:
 
   # ... (user_search, result_search, friend_search services)
 
-  # --- ELK Stack (Placeholder examples) ---
+  # --- ELK Stack Setup ---
+  elk_setup:
+    build:
+      context: ./services/elkstack/elk_setup
+      dockerfile: Dockerfile
+    container_name: elk_setup
+    user: "0"
+    volumes:
+      - elk_certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+      - KIBANA_PASSWORD=${KIBANA_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f config/certs/elasticsearch/elasticsearch.crt ]"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+    networks:
+      - transcendence_net
+    restart: "no"
+
+  # --- ELK Stack (Updated) ---
   elasticsearch:
     build:
       context: ./services/elkstack/elasticsearch
       dockerfile: Dockerfile
     container_name: elasticsearch
+    depends_on:
+      elk_setup:
+        condition: service_healthy
     ports:
       - "9201:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
+      - elk_certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - node.name=elasticsearch
+      - cluster.name=${CLUSTER_NAME:-docker-cluster}
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+      - bootstrap.memory_lock=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/elasticsearch/elasticsearch.key
+      - xpack.security.http.ssl.certificate=certs/elasticsearch/elasticsearch.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/elasticsearch/elasticsearch.key
+      - xpack.security.transport.ssl.certificate=certs/elasticsearch/elasticsearch.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=basic
+    mem_limit: 1073741824
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 60s
     networks:
       - transcendence_net
     restart: unless-stopped
@@ -67,7 +117,8 @@ services:
     ports:
       - "5044:5044"
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     networks:
       - transcendence_net
     restart: unless-stopped
@@ -77,10 +128,36 @@ services:
       context: ./services/elkstack/kibana
       dockerfile: Dockerfile
     container_name: kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      elk_setup:
+        condition: service_completed_successfully
     ports:
       - "5601:5601"
-    depends_on:
-      - elasticsearch
+    volumes:
+      - elk_certs:/usr/share/kibana/config/certs
+      - kibana_data:/usr/share/kibana/data
+    environment:
+      - SERVERNAME=kibana
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD:-changeme}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - XPACK_SECURITY_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
+      - XPACK_REPORTING_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
+      - SERVER_PUBLICBASEURL=http://localhost:5601
+      - SERVER_HOST=0.0.0.0
+      - TELEMETRY_ENABLED=false
+      - LOGGING_ROOT_LEVEL=info
+    mem_limit: 1073741824
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     networks:
       - transcendence_net
     restart: unless-stopped
@@ -108,6 +185,8 @@ volumes:
   frontend_dist: # frontendのビルド成果物を永続化/共有するための名前付きボリューム
   # db_data_auth: # authサービス用DBデータなど
   es_data: # Elasticsearchデータ用
+  elk_certs: # 証明書用ボリューム
+  kibana_data: # Kibanaデータ用ボリューム
 
 networks:
   transcendence_net:
