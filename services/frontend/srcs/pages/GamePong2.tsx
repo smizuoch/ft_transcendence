@@ -37,15 +37,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
     paddle1: {
       x: 0,
       y: 0,
-      width: 12, // パドルの幅を少し増加
-      height: 80,
+      width: 80, // 幅と高さを入れ替え
+      height: 12,
       speed: 0,
     },
     paddle2: {
       x: 0,
       y: 0,
-      width: 12, // パドルの幅を少し増加
-      height: 80,
+      width: 80, // 幅と高さを入れ替え
+      height: 12,
       speed: 0,
     },
     // キー入力の状態を追跡
@@ -103,37 +103,37 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       state.ball.x = state.canvasWidth / 2;
       state.ball.y = state.canvasHeight / 2;
       
-      // 初速を設定 - 修正: 角度を15°～45°の範囲に制限して水平方向の動きを確保
+      // 初速を設定 - 縦方向に調整
       const angle = (Math.random() * 0.167 + 0.083) * Math.PI; // 15°～45°の範囲
-      const direction = Math.random() > 0.5 ? 1 : -1; // 左右どちらかの方向
-      const verticalDirection = Math.random() > 0.5 ? 1 : -1; // 上下どちらかの方向
+      const direction = Math.random() > 0.5 ? 1 : -1; // 上下どちらかの方向
+      const horizontalDirection = Math.random() > 0.5 ? 1 : -1; // 左右どちらかの方向
       
-      // 水平成分を大きくして、必ずパドルに到達するようにする
-      state.ball.dx = state.ball.speed * Math.cos(angle) * direction;
-      state.ball.dy = state.ball.speed * Math.sin(angle) * verticalDirection;
+      // 垂直成分を大きくして、必ずパドルに到達するようにする
+      state.ball.dy = state.ball.speed * Math.cos(angle) * direction;
+      state.ball.dx = state.ball.speed * Math.sin(angle) * horizontalDirection;
       
       state.ball.speedMultiplier = 1.0; // 速度倍率をリセット
       state.paddleHits = 0; // ヒット数リセット
       
-      // パドルを両端に配置
-      state.paddle1.x = 20;
-      state.paddle1.y = state.canvasHeight / 2 - state.paddle1.height / 2;
+      // パドルを上下に配置
+      state.paddle1.x = state.canvasWidth / 2 - state.paddle1.width / 2;
+      state.paddle1.y = 20;
       
-      state.paddle2.x = state.canvasWidth - 20 - state.paddle2.width;
-      state.paddle2.y = state.canvasHeight / 2 - state.paddle2.height / 2;
+      state.paddle2.x = state.canvasWidth / 2 - state.paddle2.width / 2;
+      state.paddle2.y = state.canvasHeight - 20 - state.paddle2.height;
     };
     
     // キーボードイベントのリスナーを設定
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (key === 'w' || key === 's' || key === 'arrowup' || key === 'arrowdown') {
+      if (key === 'a' || key === 'd' || key === 'arrowleft' || key === 'arrowright') {
         e.preventDefault();  // ページスクロールを防止
         const keys = gameStateRef.current.keys;
         
-        if (key === 'w') keys.w = true;
-        else if (key === 's') keys.s = true;
-        else if (key === 'arrowup') keys.arrowUp = true;
-        else if (key === 'arrowdown') keys.arrowDown = true;
+        if (key === 'a') keys.w = true;
+        else if (key === 'd') keys.s = true;
+        else if (key === 'arrowleft') keys.arrowUp = true;
+        else if (key === 'arrowright') keys.arrowDown = true;
       }
     };
 
@@ -141,10 +141,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       const key = e.key.toLowerCase();
       const keys = gameStateRef.current.keys;
       
-      if (key === 'w') keys.w = false;
-      else if (key === 's') keys.s = false;
-      else if (key === 'arrowup') keys.arrowUp = false;
-      else if (key === 'arrowdown') keys.arrowDown = false;
+      if (key === 'a') keys.w = false;
+      else if (key === 'd') keys.s = false;
+      else if (key === 'arrowleft') keys.arrowUp = false;
+      else if (key === 'arrowright') keys.arrowDown = false;
     };
     
     // イベントリスナーを追加
@@ -176,20 +176,20 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       // パドルの移動速度（一定）
       const PADDLE_SPEED = 8;
       
-      // プレイヤー1のパドル制御（WとSキー）
-      if (state.keys.w && state.paddle1.y > 0) {
-        state.paddle1.y -= PADDLE_SPEED;
+      // プレイヤー1のパドル制御（AとDキー）- 左右移動
+      if (state.keys.w && state.paddle1.x > 0) {
+        state.paddle1.x -= PADDLE_SPEED;
       }
-      if (state.keys.s && state.paddle1.y + state.paddle1.height < state.canvasHeight) {
-        state.paddle1.y += PADDLE_SPEED;
+      if (state.keys.s && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
+        state.paddle1.x += PADDLE_SPEED;
       }
       
-      // プレイヤー2のパドル制御（上下矢印キー）
-      if (state.keys.arrowUp && state.paddle2.y > 0) {
-        state.paddle2.y -= PADDLE_SPEED;
+      // プレイヤー2のパドル制御（左右矢印キー）- 左右移動
+      if (state.keys.arrowUp && state.paddle2.x > 0) {
+        state.paddle2.x -= PADDLE_SPEED;
       }
-      if (state.keys.arrowDown && state.paddle2.y + state.paddle2.height < state.canvasHeight) {
-        state.paddle2.y += PADDLE_SPEED;
+      if (state.keys.arrowDown && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+        state.paddle2.x += PADDLE_SPEED;
       }
       
       // 速度制限の適用
@@ -206,31 +206,31 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       state.ball.x += state.ball.dx;
       state.ball.y += state.ball.dy;
       
-      // 上下の壁での反射
-      if (state.ball.y - state.ball.radius < 0 || 
-          state.ball.y + state.ball.radius > state.canvasHeight) {
-        state.ball.dy = -state.ball.dy;
+      // 左右の壁での反射
+      if (state.ball.x - state.ball.radius < 0 || 
+          state.ball.x + state.ball.radius > state.canvasWidth) {
+        state.ball.dx = -state.ball.dx;
         // 壁に埋まらないように調整
-        if (state.ball.y - state.ball.radius < 0) {
-          state.ball.y = state.ball.radius;
+        if (state.ball.x - state.ball.radius < 0) {
+          state.ball.x = state.ball.radius;
         } else {
-          state.ball.y = state.canvasHeight - state.ball.radius;
+          state.ball.x = state.canvasWidth - state.ball.radius;
         }
       }
       
       // パドルとの衝突判定
-      // プレイヤー1のパドル
+      // プレイヤー1のパドル（上）
       if (
-        state.ball.x - state.ball.radius < state.paddle1.x + state.paddle1.width &&
-        state.ball.x + state.ball.radius > state.paddle1.x &&
+        state.ball.y - state.ball.radius < state.paddle1.y + state.paddle1.height &&
         state.ball.y + state.ball.radius > state.paddle1.y &&
-        state.ball.y - state.ball.radius < state.paddle1.y + state.paddle1.height
+        state.ball.x + state.ball.radius > state.paddle1.x &&
+        state.ball.x - state.ball.radius < state.paddle1.x + state.paddle1.width
       ) {
         // ボールがパドルに埋まらないように位置調整
-        state.ball.x = state.paddle1.x + state.paddle1.width + state.ball.radius;
+        state.ball.y = state.paddle1.y + state.paddle1.height + state.ball.radius;
         
         // パドルのどこに当たったかで反射角度を変える（-0.5〜0.5の範囲）
-        const hitPosition = (state.ball.y - (state.paddle1.y + state.paddle1.height / 2)) / (state.paddle1.height / 2);
+        const hitPosition = (state.ball.x - (state.paddle1.x + state.paddle1.width / 2)) / (state.paddle1.width / 2);
         
         // 反射角度の計算（中央:0°、端:±60°）
         const maxAngle = Math.PI / 3; // 60度
@@ -242,25 +242,25 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
         
         // 新しい方向を設定
         const speed = Math.sqrt(state.ball.dx * state.ball.dx + state.ball.dy * state.ball.dy);
-        state.ball.dx = Math.cos(angle) * speed;
-        state.ball.dy = Math.sin(angle) * speed;
+        state.ball.dx = Math.sin(angle) * speed;
+        state.ball.dy = Math.cos(angle) * speed;
         
-        // 必ず右向きになるよう調整
-        if (state.ball.dx < 0) state.ball.dx = -state.ball.dx;
+        // 必ず下向きになるよう調整
+        if (state.ball.dy < 0) state.ball.dy = -state.ball.dy;
       }
       
-      // プレイヤー2のパドル
+      // プレイヤー2のパドル（下）
       if (
-        state.ball.x + state.ball.radius > state.paddle2.x &&
-        state.ball.x - state.ball.radius < state.paddle2.x + state.paddle2.width &&
         state.ball.y + state.ball.radius > state.paddle2.y &&
-        state.ball.y - state.ball.radius < state.paddle2.y + state.paddle2.height
+        state.ball.y - state.ball.radius < state.paddle2.y + state.paddle2.height &&
+        state.ball.x + state.ball.radius > state.paddle2.x &&
+        state.ball.x - state.ball.radius < state.paddle2.x + state.paddle2.width
       ) {
         // ボールがパドルに埋まらないように位置調整
-        state.ball.x = state.paddle2.x - state.ball.radius;
+        state.ball.y = state.paddle2.y - state.ball.radius;
         
         // パドルのどこに当たったかで反射角度を変える（-0.5〜0.5の範囲）
-        const hitPosition = (state.ball.y - (state.paddle2.y + state.paddle2.height / 2)) / (state.paddle2.height / 2);
+        const hitPosition = (state.ball.x - (state.paddle2.x + state.paddle2.width / 2)) / (state.paddle2.width / 2);
         
         // 反射角度の計算（中央:0°、端:±60°）
         const maxAngle = Math.PI / 3; // 60度
@@ -272,15 +272,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
         
         // 新しい方向を設定
         const speed = Math.sqrt(state.ball.dx * state.ball.dx + state.ball.dy * state.ball.dy);
-        state.ball.dx = Math.cos(Math.PI - angle) * speed;
-        state.ball.dy = Math.sin(Math.PI - angle) * speed;
+        state.ball.dx = Math.sin(Math.PI - angle) * speed;
+        state.ball.dy = Math.cos(Math.PI - angle) * speed;
         
-        // 必ず左向きになるよう調整
-        if (state.ball.dx > 0) state.ball.dx = -state.ball.dx;
+        // 必ず上向きになるよう調整
+        if (state.ball.dy > 0) state.ball.dy = -state.ball.dy;
       }
       
       // 得点判定
-      if (state.ball.x - state.ball.radius < 0) {
+      if (state.ball.y - state.ball.radius < 0) {
         // プレイヤー2の得点
         setScore(prev => {
           const newScore = { ...prev, player2: prev.player2 + 1 };
@@ -294,7 +294,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
           return newScore;
         });
         resetBall();
-      } else if (state.ball.x + state.ball.radius > state.canvasWidth) {
+      } else if (state.ball.y + state.ball.radius > state.canvasHeight) {
         // プレイヤー1の得点
         setScore(prev => {
           const newScore = { ...prev, player1: prev.player1 + 1 };
@@ -317,13 +317,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       state.ball.x = state.canvasWidth / 2;
       state.ball.y = state.canvasHeight / 2;
       
-      // より自然な角度で発射 - 修正: 同様に角度を15°～45°に制限
+      // より自然な角度で発射 - 縦方向用に調整
       const angle = (Math.random() * 0.167 + 0.083) * Math.PI; // 15°～45°の範囲
-      const direction = Math.random() > 0.5 ? 1 : -1; // 左右どちらかの方向
-      const verticalDirection = Math.random() > 0.5 ? 1 : -1; // 上下どちらかの方向
+      const direction = Math.random() > 0.5 ? 1 : -1; // 上下どちらかの方向
+      const horizontalDirection = Math.random() > 0.5 ? 1 : -1; // 左右どちらかの方向
       
-      state.ball.dx = state.ball.speed * Math.cos(angle) * direction;
-      state.ball.dy = state.ball.speed * Math.sin(angle) * verticalDirection;
+      state.ball.dy = state.ball.speed * Math.cos(angle) * direction;
+      state.ball.dx = state.ball.speed * Math.sin(angle) * horizontalDirection;
       
       // 速度倍率をリセット（ラリーごとに速度リセット）
       state.ball.speedMultiplier = 1.0;
@@ -342,11 +342,11 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       // 背景画像を描画
       context.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
       
-      // 中央線を描画
+      // 中央線を描画（横線）
       context.beginPath();
       context.setLineDash([10, 15]);
-      context.moveTo(canvas.width / 2, 0);
-      context.lineTo(canvas.width / 2, canvas.height);
+      context.moveTo(0, canvas.height / 2);
+      context.lineTo(canvas.width, canvas.height / 2);
       context.strokeStyle = 'rgba(255, 255, 255, 0.5)';
       context.lineWidth = 2;
       context.stroke();
@@ -433,11 +433,11 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       state.paddleHits = 0;
       
       const angle = (Math.random() * 0.5 + 0.25) * Math.PI;
-      state.ball.dx = state.ball.speed * Math.cos(angle) * (Math.random() > 0.5 ? 1 : -1);
-      state.ball.dy = state.ball.speed * Math.sin(angle) * (Math.random() > 0.5 ? 1 : -1);
+      state.ball.dy = state.ball.speed * Math.cos(angle) * (Math.random() > 0.5 ? 1 : -1);
+      state.ball.dx = state.ball.speed * Math.sin(angle) * (Math.random() > 0.5 ? 1 : -1);
       
-      state.paddle1.y = state.canvasHeight / 2 - state.paddle1.height / 2;
-      state.paddle2.y = state.canvasHeight / 2 - state.paddle2.height / 2;
+      state.paddle1.x = state.canvasWidth / 2 - state.paddle1.width / 2;
+      state.paddle2.x = state.canvasWidth / 2 - state.paddle2.width / 2;
     }
   };
 
@@ -458,7 +458,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       
       <h1 className="text-6xl font-bold mb-8">PONG 2</h1>
       
-      <div className="w-full max-w-4xl aspect-video bg-transparent relative mb-8">
+      <div className="w-full max-w-2xl aspect-[3/4] bg-transparent relative mb-8">
         {/* ゲーム画面 */}
         <canvas
           ref={canvasRef}
@@ -501,14 +501,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
       {/* コントロール説明 */}
       <div className="text-lg mb-8 flex gap-12">
         <div>
-          <p className="font-bold mb-2">Player 1:</p>
-          <p>W - Up</p>
-          <p>S - Down</p>
+          <p className="font-bold mb-2">Player 1 (上):</p>
+          <p>A - Left</p>
+          <p>D - Right</p>
         </div>
         <div>
-          <p className="font-bold mb-2">Player 2:</p>
-          <p>↑ - Up</p>
-          <p>↓ - Down</p>
+          <p className="font-bold mb-2">Player 2 (下):</p>
+          <p>← - Left</p>
+          <p>→ - Right</p>
         </div>
       </div>
 
