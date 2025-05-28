@@ -15,6 +15,8 @@ services:
     depends_on:
       frontend:
         condition: service_completed_successfully # frontendのビルド完了を待つ
+      logging_api:
+        condition: service_healthy # logging_apiの健康チェック完了を待つ
     restart: unless-stopped
     networks:
       - transcendence_net
@@ -54,6 +56,8 @@ services:
     user: "0"
     volumes:
       - elk_certs:/usr/share/elasticsearch/config/certs
+    env_file:
+      - ./secrets/.env
     environment:
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
       - KIBANA_PASSWORD=${KIBANA_PASSWORD:-changeme}
@@ -80,6 +84,8 @@ services:
     volumes:
       - es_data:/usr/share/elasticsearch/data
       - elk_certs:/usr/share/elasticsearch/config/certs
+    env_file:
+      - ./secrets/.env
     environment:
       - node.name=elasticsearch
       - cluster.name=${CLUSTER_NAME:-docker-cluster}
@@ -119,6 +125,13 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    volumes:
+      - elk_certs:/usr/share/logstash/config/certs
+      - ./logs:/host/logs:ro
+    env_file:
+      - ./secrets/.env
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
     networks:
       - transcendence_net
     restart: unless-stopped
@@ -138,6 +151,8 @@ services:
     volumes:
       - elk_certs:/usr/share/kibana/config/certs
       - kibana_data:/usr/share/kibana/data
+    env_file:
+      - ./secrets/.env
     environment:
       - SERVERNAME=kibana
       - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
@@ -157,29 +172,30 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
-      start_period: 60s
+      start_period: 120s
     networks:
       - transcendence_net
     restart: unless-stopped
 
-  # filebeat:
-  #   build:
-  #     context: ./service/elkstack/filebeat
-  #     dockefile: Dockerfile
-  #   container_name: filebeat
-  #   depends_on:
-  #     - elasticsearch
-  #   networks:
-  #     - transcendence_net
-  #   restart: unless-stopped
-
-  # --- SFU (Placeholder example) ---
-  # sfu:
-  #   build: ./services/sfu
-  #   container_name: ft_sfu
-  #   # ...
-  #   networks:
-  #     - transcendence_net
+  # --- Logging API Service ---
+  logging_api:
+    build:
+      context: ./services/api/logging_api
+      dockerfile: Dockerfile
+    container_name: logging_api
+    restart: unless-stopped
+    ports:
+      - "3005:3005" # 開発時のみ。本番はNginx経由
+    volumes:
+      - ./logs:/host/logs # ホストのlogsディレクトリをマウント
+    networks:
+      - transcendence_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3005/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   frontend_dist: # frontendのビルド成果物を永続化/共有するための名前付きボリューム
@@ -187,6 +203,7 @@ volumes:
   es_data: # Elasticsearchデータ用
   elk_certs: # 証明書用ボリューム
   kibana_data: # Kibanaデータ用ボリューム
+  filebeat_data: # Filebeatのレジストリデータ用
 
 networks:
   transcendence_net:
