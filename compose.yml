@@ -15,8 +15,6 @@ services:
     depends_on:
       frontend:
         condition: service_completed_successfully # frontendのビルド完了を待つ
-      logging_api:
-        condition: service_healthy # logging_apiの健康チェック完了を待つ
     restart: unless-stopped
     networks:
       - transcendence_net
@@ -176,26 +174,6 @@ services:
     networks:
       - transcendence_net
     restart: unless-stopped
-
-  # --- Logging API Service ---
-  logging_api:
-    build:
-      context: ./services/api/logging_api
-      dockerfile: Dockerfile
-    container_name: logging_api
-    restart: unless-stopped
-    ports:
-      - "3005:3005" # 開発時のみ。本番はNginx経由
-    volumes:
-      - ./logs:/host/logs # ホストのlogsディレクトリをマウント
-    networks:
-      - transcendence_net
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3005/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
 volumes:
   frontend_dist: # frontendのビルド成果物を永続化/共有するための名前付きボリューム
