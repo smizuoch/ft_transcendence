@@ -30,57 +30,24 @@ services:
       - transcendence_net
     # このサービスはビルド後終了するため、restartポリシーは不要
 
-  # --- API Services (Placeholder examples) ---
-  # auth:
-  #   build: ./services/api/auth
-  #   container_name: ft_auth_service
-  #   restart: unless-stopped
-  #   networks:
-  #     - transcendence_net
-  #   environment:
-  #     - DATABASE_URL=file:./dev.db # Prismaの場合など
-  #     - JWT_SECRET=your_jwt_secret
-  #   ports: # 開発時のみ。本番はNginx経由
-  #     - "3001:3000" 
-
-  # ... (user_search, result_search, friend_search services)
-
-  # --- ELK Stack (Placeholder examples) ---
-  # elasticsearch:
-  #   build: ./services/elkstack/elasticsearch
-  #   container_name: ft_elasticsearch
-  #   # ...
-  #   networks:
-  #     - transcendence_net
-
-  # logstash:
-  #   build: ./services/elkstack/logstash
-  #   container_name: ft_logstash
-  #   # ...
-  #   networks:
-  #     - transcendence_net
-
-  # kibana:
-  #   build: ./services/elkstack/kibana
-  #   container_name: ft_kibana
-  #   ports:
-  #     - "5601:5601"
-  #   # ...
-  #   networks:
-  #     - transcendence_net
-
-  # --- SFU (Placeholder example) ---
-  # sfu:
-  #   build: ./services/sfu
-  #   container_name: ft_sfu
-  #   # ...
-  #   networks:
-  #     - transcendence_net
+  # 最低限必要なデータベース関連サービス
+  auth:
+    build: ./services/api/auth
+    container_name: ft_auth_service
+    restart: unless-stopped
+    networks:
+      - transcendence_net
+    environment:
+      - DATABASE_URL=file:/app/data/auth.db
+      - NODE_ENV=production
+    volumes:
+      - auth_data:/app/data
+    ports:
+      - "3001:3000"
 
 volumes:
   frontend_dist: # frontendのビルド成果物を永続化/共有するための名前付きボリューム
-  # db_data_auth: # authサービス用DBデータなど
-  # es_data: # Elasticsearchデータ用
+  auth_data: # authサービス用SQLiteデータ
 
 networks:
   transcendence_net:

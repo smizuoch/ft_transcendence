@@ -1,5 +1,6 @@
+// seed.tsはデータベースに初期データを投入（シード）するためのスクリプトです。
 import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs'; // bcrypt から bcryptjs に変更
 
 const prisma = new PrismaClient();
 
