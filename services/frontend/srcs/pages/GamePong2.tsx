@@ -1,42 +1,170 @@
-import React from 'react';
-// import { Link } from 'react-router-dom'; // 削除
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
+import { DEFAULT_CONFIG } from "@/utils/gameEngine";
+
+interface PlayerInfo {
+  id: number | string;
+  avatar: string;
+}
 
 interface GamePong2Props {
   navigate: (page: string) => void;
+  players?: {
+    player1: PlayerInfo;
+    player2: PlayerInfo;
+  };
 }
 
-const GamePong2: React.FC<GamePong2Props> = ({ navigate }) => {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-4 font-['Futura']">
-      <div className="absolute top-4 left-4 text-lg">Room: #12345</div>
-      <button className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 px-4 py-2 rounded">
-        Close Room & Start
-      </button>
-      
-      <h1 className="text-6xl font-bold mb-8">PONG 2</h1>
-      <div className="w-full max-w-4xl aspect-video bg-gray-900 border-4 border-blue-500 flex items-center justify-center mb-8">
-        <p className="text-3xl">Game Area</p>
-        {/* Mock game elements */}
-        <div className="absolute left-10 top-1/2 transform -translate-y-1/2 w-4 h-24 bg-white"></div> {/* Player 1 Paddle */}
-        <div className="absolute right-10 top-1/2 transform -translate-y-1/2 w-4 h-24 bg-white"></div> {/* Player 2 Paddle */}
-        <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-yellow-400 rounded-full"></div> {/* Ball */}
-      </div>
+const ICON_PATH = "/images/icons/";
 
-      <div className="flex justify-between w-full max-w-4xl text-2xl mb-8">
-        <div>Player 1: 0</div>
-        <div>Player 2: 0</div>
-      </div>
-      <div className="text-2xl mb-8">Survivors: 2</div>
+const defaultPlayers = {
+  player1: { id: 1, avatar: "/images/avatar/default_avatar.png" },
+  player2: { id: 2, avatar: "/images/avatar/default_avatar1.png" },
+};
 
-      <button
-        onClick={() => navigate('GameResult')}
-        className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-xl transition duration-150"
+const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayers }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [score, setScore] = useState({ player1: 0, player2: 0 });
+  const [gameOver, setGameOver] = useState(false);
+  const [winner, setWinner] = useState<number | null>(null);
+  const [roomNumber] = useState(Math.floor(100000 + Math.random() * 900000));
+  const [hoverClose, setHoverClose] = useState(false);
+  const [iconsDocked, setIconsDocked] = useState(false);
+  const ICON_LAUNCH_DELAY = 600;
+
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
+  useKeyboardControls(engineRef);
+
+  useEffect(() => {
+    const handleResize = () => {
+      initializeEngine();
+    };
+
+    window.addEventListener("resize", handleResize);
+    handleResize();
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      stopGameLoop();
+    };
+  }, [initializeEngine, stopGameLoop]);
+
+  const handleScore = useCallback((scorer: 'player1' | 'player2') => {
+    setScore((prev) => {
+      const newScore = { ...prev, [scorer]: prev[scorer] + 1 };
+      if (newScore[scorer] >= DEFAULT_CONFIG.winningScore) {
+        setGameOver(true);
+        setWinner(scorer === 'player1' ? 1 : 2);
+      }
+      return newScore;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (gameStarted) {
+      startGameLoop(handleScore, gameStarted);
+    } else {
+      stopGameLoop();
+    }
+
+    return () => stopGameLoop();
+  }, [gameStarted, startGameLoop, stopGameLoop, handleScore]);
+
+  useEffect(() => {
+    if (!gameStarted) return;
+    setIconsDocked(false);
+    const t = setTimeout(() => setIconsDocked(true), ICON_LAUNCH_DELAY);
+    return () => clearTimeout(t);
+  }, [gameStarted]);
+
+  useEffect(() => {
+    if (gameOver && winner) {
+      const t = setTimeout(() => navigate("GameResult"), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [gameOver, winner, navigate]);
+
+  const handleStartGame = useCallback(() => {
+    setGameStarted(true);
+    setGameOver(false);
+    setWinner(null);
+    setScore({ player1: 0, player2: 0 });
+  }, []);
+
+  const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
+    const pts = idx === 1 ? score.player1 : score.player2;
+    const translateClass = side === "left" 
+      ? (iconsDocked ? "-translate-x-full" : "")
+      : (iconsDocked ? "translate-x-full" : "");
+    const positionClass = side === "left" 
+      ? "left-0 bottom-16" 
+      : "right-0 top-16";
+    const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
+    
+    return (
+      <div
+        className={`absolute flex items-center gap-3 select-none pointer-events-none transition-all duration-700 ease-out ${
+          side === "right" ? "flex-row-reverse" : ""
+        } ${iconsDocked ? positionClass : initialPosition} ${translateClass}`}
       >
-        End Game (To Result)
-      </button>
-      <button onClick={() => navigate('GameSelect')} className="mt-8 text-blue-400 hover:text-blue-300">
-        Back to Game Select
-      </button>
+        {/* outer score */}
+        {pts >= DEFAULT_CONFIG.winningScore ? (
+          <img src={`${ICON_PATH}win.svg`} alt="win" className="w-12 h-12 lg:w-16 lg:h-16" />
+        ) : (
+          <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
+        )}
+        {/* inner avatar */}
+        <img
+          src={players[idx === 1 ? "player1" : "player2"].avatar}
+          alt="avatar"
+          className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div className="relative w-full h-screen overflow-hidden font-[Futura]">
+      {/* BG cover */}
+      <img
+        src="/images/background/noon.png"
+        alt="bg"
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+
+      {/* central content */}
+      <div className="relative z-10 w-full h-full flex items-center justify-center">
+        {/* play square */}
+        <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
+          <canvas ref={canvasRef} className="w-full h-full border border-white" />
+
+          {/* avatar groups */}
+          {gameStarted && !gameOver && (
+            <>
+              {renderAvatarGroup(1, "right")}
+              {renderAvatarGroup(2, "left")}
+            </>
+          )}
+        </div>
+
+        {/* opening screen */}
+        {!gameStarted && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className="text-5xl mb-8 tracking-widest" style={{ color: "#212121" }}>
+              {roomNumber.toString().padStart(6, "0")}
+            </div>
+            <img
+              src={`${ICON_PATH}${hoverClose ? "close" : "open"}.svg`}
+              alt="toggle"
+              className="w-40 h-40 cursor-pointer"
+              onMouseEnter={() => setHoverClose(true)}
+              onMouseLeave={() => setHoverClose(false)}
+              onClick={handleStartGame}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 };
