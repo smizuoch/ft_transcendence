@@ -1,6 +1,9 @@
 server.host: "0.0.0.0"
 # server.port: 5601 # デフォルト値
-elasticsearch.hosts: ["http://elasticsearch:9200"] # Kibanaが接続するElasticsearchインスタンスのホストとポートを指定します。Docker Composeネットワーク内のサービス名 'elasticsearch' を使用しています。
+elasticsearch.hosts: ["https://elasticsearch:9200"]
+elasticsearch.username: kibana_system
+elasticsearch.password: ${KIBANA_PASSWORD}
+elasticsearch.ssl.certificateAuthorities: config/certs/ca/ca.crt
 
 # Kibana自身のログ設定 (オプション)
 # logging.dest: stdout # コンテナログとして出力

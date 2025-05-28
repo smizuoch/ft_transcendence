@@ -27,16 +27,28 @@ instances:
       - localhost
     ip:
       - 127.0.0.1
+  - name: logstash
+    dns:
+      - logstash
+      - localhost
+    ip:
+      - 127.0.0.1
+  - name: kibana
+    dns:
+      - kibana
+      - localhost
+    ip:
+      - 127.0.0.1
 EOF
   bin/elasticsearch-certutil cert --silent --pem -out config/certs/certs.zip --in config/certs/instances.yml --ca-cert config/certs/ca/ca.crt --ca-key config/certs/ca/ca.key
   unzip config/certs/certs.zip -d config/certs
 fi
 
-# ファイル権限の設定
+# ファイル権限の設定（rootless対応）
 echo "Setting file permissions"
-chown -R root:root config/certs
-find config/certs -type d -exec chmod 750 {} \;
-find config/certs -type f -exec chmod 640 {} \;
+chown -R 1000:1000 config/certs
+find config/certs -type d -exec chmod 755 {} \;
+find config/certs -type f -exec chmod 644 {} \;
 
 # Elasticsearchの起動を待つ
 echo "Waiting for Elasticsearch availability"
