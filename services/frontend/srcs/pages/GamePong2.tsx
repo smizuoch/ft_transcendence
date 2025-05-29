@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
+// import type { AIConfig } from "@/utils/aiTypes";
+// import { AISettingsPanel } from "@/utils/AISettingsPanel";
+// import { AIDebugPanel } from "@/utils/AIDebugPanel";
 
 interface PlayerInfo {
   id: number | string;
@@ -33,8 +36,47 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
   const [iconsDocked, setIconsDocked] = useState(false);
   const ICON_LAUNCH_DELAY = 600;
 
+  // ============= AI関連の状態（コメントアウト） =============
+  /*
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiSettings, setAiSettings] = useState<AIConfig>({
+    player: 2 as 1 | 2,
+    mode: 'heuristic' as 'heuristic' | 'fsm' | 'pid',
+    enabled: false,
+    reactionDelay: 0.1,
+    positionNoise: 5,
+    followGain: 0.7,
+    // FSM用
+    difficulty: 'Normal' as 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom',
+    returnRate: 0.80,
+    reactionDelayMs: 200,
+    maxSpeed: 0.8,
+    trackingNoise: 10,
+    trackingTimeout: 6000,
+    // PID用
+    pid: {
+      kp: 0.80,
+      ki: 0.08,
+      kd: 0.04,
+      maxIntegral: 60,
+      derivativeFilter: 0.5,
+      maxControlSpeed: 500,
+    },
+  });
+  const [aiDebugInfo, setAiDebugInfo] = useState<{ 
+    state: string; 
+    timeInState: number; 
+    returnRate: number;
+    targetPosition: number;
+    pid?: { error: number; p: number; i: number; d: number; output: number };
+  } | null>(null);
+  */
+
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
-  useKeyboardControls(engineRef);
+  const keysRef = useKeyboardControls();
+
+  // engineRefの未使用警告を抑制（AI機能が無効化されているため）
+  void engineRef;
 
   useEffect(() => {
     const handleResize = () => {
@@ -63,13 +105,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
 
   useEffect(() => {
     if (gameStarted) {
-      startGameLoop(handleScore, gameStarted);
+      startGameLoop(handleScore, gameStarted, keysRef);
     } else {
       stopGameLoop();
     }
 
     return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, handleScore]);
+  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef]);
 
   useEffect(() => {
     if (!gameStarted) return;
@@ -86,11 +128,40 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
   }, [gameOver, winner, navigate]);
 
   const handleStartGame = useCallback(() => {
+    // ============= AI設定をエンジンに反映（コメントアウト） =============
+    /*
+    // AI設定をエンジンに反映
+    if (aiEnabled && engineRef.current) {
+      engineRef.current.updateAIConfig({
+        ...aiSettings,
+        enabled: true,
+      });
+    } else if (engineRef.current) {
+      engineRef.current.updateAIConfig({ enabled: false });
+    }
+    */
+
     setGameStarted(true);
     setGameOver(false);
     setWinner(null);
     setScore({ player1: 0, player2: 0 });
-  }, []);
+  }, []); // 依存配列からAI関連を削除
+  // }, [aiEnabled, aiSettings, engineRef]);
+
+  // ============= AI状態のデバッグ情報更新（コメントアウト） =============
+  /*
+  useEffect(() => {
+    if (!gameStarted || !aiEnabled) return;
+    
+    const interval = setInterval(() => {
+      if (engineRef.current) {
+        setAiDebugInfo(engineRef.current.getAIDebugInfo());
+      }
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, [gameStarted, aiEnabled]);
+  */
 
   const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
     const pts = idx === 1 ? score.player1 : score.player2;
@@ -165,6 +236,27 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
           </div>
         )}
       </div>
+
+      {/* ============= AI設定パネル（外部コンポーネント使用、コメントアウト） ============= */}
+      {/*
+      <AISettingsPanel
+        aiEnabled={aiEnabled}
+        setAiEnabled={setAiEnabled}
+        aiSettings={aiSettings}
+        setAiSettings={setAiSettings}
+        gameStarted={gameStarted}
+      />
+      */}
+
+      {/* ============= AI状態デバッグ表示（外部コンポーネント使用、コメントアウト） ============= */}
+      {/*
+      <AIDebugPanel
+        gameStarted={gameStarted}
+        aiEnabled={aiEnabled}
+        aiSettings={aiSettings}
+        aiDebugInfo={aiDebugInfo}
+      />
+      */}
     </div>
   );
 };
