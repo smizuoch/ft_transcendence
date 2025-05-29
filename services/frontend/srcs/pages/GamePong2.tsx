@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
-// import type { AIConfig } from "@/utils/aiTypes";
-// import { AISettingsPanel } from "@/utils/AISettingsPanel";
-// import { AIDebugPanel } from "@/utils/AIDebugPanel";
+import type { NPCConfig } from "@/utils/npcTypes";
+import { NPCSettingsPanel } from "@/utils/NPCSettingsPanel";
+import { NPCDebugPanel } from "@/utils/NPCDebugPanel";
+import { getAvailableNPCAlgorithms } from "@/utils/npcAlgorithmRegistry";
 
 interface PlayerInfo {
   id: number | string;
@@ -36,17 +37,17 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
   const [iconsDocked, setIconsDocked] = useState(false);
   const ICON_LAUNCH_DELAY = 600;
 
-  // ============= AI関連の状態（コメントアウト） =============
-  /*
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiSettings, setAiSettings] = useState<AIConfig>({
+  // ============= NPC関連の状態 =============
+  const [npcEnabled, setNpcEnabled] = useState(false);
+  const [availableAlgorithms] = useState(getAvailableNPCAlgorithms());
+  const [npcSettings, setNpcSettings] = useState<NPCConfig>({
     player: 2 as 1 | 2,
-    mode: 'heuristic' as 'heuristic' | 'fsm' | 'pid',
+    mode: availableAlgorithms[0] as any || 'heuristic', // 最初の利用可能なアルゴリズムをデフォルトに
     enabled: false,
     reactionDelay: 0.1,
     positionNoise: 5,
     followGain: 0.7,
-    // FSM用
+    // PID用のみ
     difficulty: 'Normal' as 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom',
     returnRate: 0.80,
     reactionDelayMs: 200,
@@ -63,19 +64,18 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
       maxControlSpeed: 500,
     },
   });
-  const [aiDebugInfo, setAiDebugInfo] = useState<{ 
-    state: string; 
-    timeInState: number; 
+  const [npcDebugInfo, setNpcDebugInfo] = useState<{
+    state: string;
+    timeInState: number;
     returnRate: number;
     targetPosition: number;
     pid?: { error: number; p: number; i: number; d: number; output: number };
   } | null>(null);
-  */
 
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
 
-  // engineRefの未使用警告を抑制（AI機能が無効化されているため）
+  // engineRefの未使用警告を抑制（NPC機能が無効化されているため）
   void engineRef;
 
   useEffect(() => {
@@ -128,51 +128,45 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
   }, [gameOver, winner, navigate]);
 
   const handleStartGame = useCallback(() => {
-    // ============= AI設定をエンジンに反映（コメントアウト） =============
-    /*
-    // AI設定をエンジンに反映
-    if (aiEnabled && engineRef.current) {
-      engineRef.current.updateAIConfig({
-        ...aiSettings,
+    // ============= NPC設定をエンジンに反映 =============
+    if (npcEnabled && engineRef.current) {
+      engineRef.current.updateNPCConfig({
+        ...npcSettings,
         enabled: true,
       });
     } else if (engineRef.current) {
-      engineRef.current.updateAIConfig({ enabled: false });
+      engineRef.current.updateNPCConfig({ enabled: false });
     }
-    */
 
     setGameStarted(true);
     setGameOver(false);
     setWinner(null);
     setScore({ player1: 0, player2: 0 });
-  }, []); // 依存配列からAI関連を削除
-  // }, [aiEnabled, aiSettings, engineRef]);
+  }, [npcEnabled, npcSettings, engineRef]);
 
-  // ============= AI状態のデバッグ情報更新（コメントアウト） =============
-  /*
+  // ============= NPC状態のデバッグ情報更新 =============
   useEffect(() => {
-    if (!gameStarted || !aiEnabled) return;
-    
+    if (!gameStarted || !npcEnabled) return;
+
     const interval = setInterval(() => {
       if (engineRef.current) {
-        setAiDebugInfo(engineRef.current.getAIDebugInfo());
+        setNpcDebugInfo(engineRef.current.getNPCDebugInfo());
       }
     }, 100);
-    
+
     return () => clearInterval(interval);
-  }, [gameStarted, aiEnabled]);
-  */
+  }, [gameStarted, npcEnabled]);
 
   const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
     const pts = idx === 1 ? score.player1 : score.player2;
-    const translateClass = side === "left" 
+    const translateClass = side === "left"
       ? (iconsDocked ? "-translate-x-full" : "")
       : (iconsDocked ? "translate-x-full" : "");
-    const positionClass = side === "left" 
-      ? "left-0 bottom-16" 
+    const positionClass = side === "left"
+      ? "left-0 bottom-16"
       : "right-0 top-16";
     const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
-    
+
     return (
       <div
         className={`absolute flex items-center gap-3 select-none pointer-events-none transition-all duration-700 ease-out ${
@@ -237,26 +231,22 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
         )}
       </div>
 
-      {/* ============= AI設定パネル（外部コンポーネント使用、コメントアウト） ============= */}
-      {/*
-      <AISettingsPanel
-        aiEnabled={aiEnabled}
-        setAiEnabled={setAiEnabled}
-        aiSettings={aiSettings}
-        setAiSettings={setAiSettings}
+      {/* ============= NPC設定パネル ============= */}
+      <NPCSettingsPanel
+        npcEnabled={npcEnabled}
+        setNpcEnabled={setNpcEnabled}
+        npcSettings={npcSettings}
+        setNpcSettings={setNpcSettings}
         gameStarted={gameStarted}
       />
-      */}
 
-      {/* ============= AI状態デバッグ表示（外部コンポーネント使用、コメントアウト） ============= */}
-      {/*
-      <AIDebugPanel
+      {/* ============= NPC状態デバッグ表示 ============= */}
+      <NPCDebugPanel
         gameStarted={gameStarted}
-        aiEnabled={aiEnabled}
-        aiSettings={aiSettings}
-        aiDebugInfo={aiDebugInfo}
+        npcEnabled={npcEnabled}
+        npcSettings={npcSettings}
+        npcDebugInfo={npcDebugInfo}
       />
-      */}
     </div>
   );
 };

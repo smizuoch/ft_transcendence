@@ -1,6 +1,6 @@
-import { AIEngine } from './aiEngine';
-import { AIConfig, DEFAULT_AI_CONFIG } from './aiTypes';
-import type { GameState, AIDebugInfo } from './aiTypes';
+import { NPCEngine } from './npcEngine';
+import { NPCConfig, DEFAULT_NPC_CONFIG } from './npcTypes';
+import type { GameState, NPCDebugInfo } from './npcTypes';
 
 export interface Ball {
   x: number;
@@ -27,7 +27,7 @@ export interface GameConfig {
   paddleWidth: number;
   paddleHeight: number;
   initialBallSpeed: number;
-  ai: AIConfig;
+  npc: NPCConfig;
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -38,13 +38,13 @@ export const DEFAULT_CONFIG: GameConfig = {
   paddleWidth: 80,
   paddleHeight: 12,
   initialBallSpeed: 4,
-  ai: DEFAULT_AI_CONFIG,
+  npc: DEFAULT_NPC_CONFIG,
 };
 
 export class GameEngine {
   private state: GameState;
   private config: GameConfig;
-  private aiEngine: AIEngine;
+  private npcEngine: NPCEngine | null = null;
 
   constructor(canvasWidth: number, canvasHeight: number, config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -74,8 +74,7 @@ export class GameEngine {
       canvasHeight,
       paddleHits: 0,
     };
-    
-    this.aiEngine = new AIEngine(this.config.ai, canvasWidth);
+
     this.resetBall();
   }
 
@@ -97,11 +96,11 @@ export class GameEngine {
     const { canvasWidth, canvasHeight } = this.state;
     this.state.ball.x = canvasWidth / 2;
     this.state.ball.y = canvasHeight / 2;
-    
+
     // 得点者の方向にボールを射出するか、ランダム（ゲーム開始時）
     const angle = (Math.random() * 0.167 + 0.083) * Math.PI;
     const h = Math.random() > 0.5 ? 1 : -1;
-    
+
     let verticalDirection: number;
     if (lastScorer) {
       // 得点者の方向にボールを射出
@@ -110,7 +109,7 @@ export class GameEngine {
       // ゲーム開始時やリセット時はランダム
       verticalDirection = Math.random() > 0.5 ? 1 : -1;
     }
-    
+
     this.state.ball.dy = this.state.ball.speed * Math.cos(angle) * verticalDirection;
     this.state.ball.dx = this.state.ball.speed * Math.sin(angle) * h;
     this.state.ball.speedMultiplier = 1;
@@ -128,9 +127,11 @@ export class GameEngine {
   }
 
   public update(): 'none' | 'player1' | 'player2' {
-    // AI更新
-    this.aiEngine.updatePaddle(this.state, this.config.paddleSpeed);
-    
+    // NPC更新
+    if (this.npcEngine) {
+      this.npcEngine.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+    }
+
     this.updatePaddles();
     this.updateBall();
     return this.checkGoals();
@@ -183,12 +184,12 @@ export class GameEngine {
     const { ball } = this.state;
     const hitPosition = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
     const angle = hitPosition * (Math.PI / 3);
-    
+
     this.state.paddleHits += 1;
     ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 4);
-    
+
     const speed = Math.hypot(ball.dx, ball.dy);
-    
+
     if (isTop) {
       ball.dx = Math.sin(angle) * speed;
       ball.dy = Math.abs(Math.cos(angle) * speed);
@@ -214,13 +215,29 @@ export class GameEngine {
     return 'none';
   }
 
-  public updateAIConfig(config: Partial<AIConfig>): void {
-    this.config.ai = { ...this.config.ai, ...config };
-    this.aiEngine.updateConfig(config);
+  public updateNPCConfig(config: Partial<NPCConfig>): void {
+    this.config.npc = { ...this.config.npc, ...config };
+    if (!this.npcEngine) {
+      this.npcEngine = new NPCEngine(config as NPCConfig, this.state.canvasWidth);
+    } else {
+      this.npcEngine.updateConfig(config);
+    }
   }
 
-  public getAIDebugInfo(): AIDebugInfo {
-    return this.aiEngine.getDebugInfo();
+  public getNPCDebugInfo(): NPCDebugInfo | null {
+    if (!this.npcEngine) return null;
+    return this.npcEngine.getDebugInfo();
+  }
+
+  private getGameState(): GameState {
+    return {
+      ball: this.state.ball,
+      paddle1: this.state.paddle1,
+      paddle2: this.state.paddle2,
+      canvasWidth: this.state.canvasWidth,
+      canvasHeight: this.state.canvasHeight,
+      paddleHits: this.state.paddleHits || 0,
+    };
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
