@@ -1,7 +1,15 @@
-network.host: 0.0.0.0 # 外部からアクセスできるようにするため．デフォルト値は"localhost"
-http.port: 9200 # デフォルト値
+network.host: ${KIBANA_SERVER_HOST}
+http.port: ${KIBANA_SERVER_PORT:-9200}
 
 # Security settings
 xpack.security.enabled: true
 xpack.security.http.ssl.enabled: true
 xpack.security.transport.ssl.enabled: true
+
+# SSL Certificate settings
+xpack.security.http.ssl.key: ${ELASTICSEARCH_KEY_PATH}
+xpack.security.http.ssl.certificate: ${ELASTICSEARCH_CERT_PATH}
+xpack.security.http.ssl.certificate_authorities: ${CA_CERT_PATH}
+xpack.security.transport.ssl.key: ${ELASTICSEARCH_KEY_PATH}
+xpack.security.transport.ssl.certificate: ${ELASTICSEARCH_CERT_PATH}
+xpack.security.transport.ssl.certificate_authorities: ${CA_CERT_PATH}

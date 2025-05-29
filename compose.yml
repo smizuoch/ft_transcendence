@@ -56,9 +56,6 @@ services:
       - elk_certs:/usr/share/elasticsearch/config/certs
     env_file:
       - ./secrets/.env
-    environment:
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
-      - KIBANA_PASSWORD=${KIBANA_PASSWORD:-changeme}
     healthcheck:
       test: ["CMD-SHELL", "[ -f config/certs/elasticsearch/elasticsearch.crt ]"]
       interval: 1s
@@ -85,12 +82,18 @@ services:
     env_file:
       - ./secrets/.env
     environment:
-      - node.name=elasticsearch
-      - cluster.name=${CLUSTER_NAME:-docker-cluster}
+      # Discovery settings for single node
       - discovery.type=single-node
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+
+      # Network settings
+      - network.host=0.0.0.0
+      - http.port=9200
+      - transport.port=9300
+
+      # Memory settings
       - bootstrap.memory_lock=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+
+      # X-Pack Security settings
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
       - xpack.security.http.ssl.key=certs/elasticsearch/elasticsearch.key
@@ -128,8 +131,6 @@ services:
       - ./logs:/host/logs:ro
     env_file:
       - ./secrets/.env
-    environment:
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
     networks:
       - transcendence_net
     restart: unless-stopped
@@ -152,21 +153,27 @@ services:
     env_file:
       - ./secrets/.env
     environment:
-      - SERVERNAME=kibana
+      # Kibana server settings
+      - SERVER_NAME=kibana
+      - SERVER_PUBLICBASEURL=https://localhost:5601
+
+      # Elasticsearch connection
       - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
       - ELASTICSEARCH_USERNAME=kibana_system
-      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD:-changeme}
       - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
-      - XPACK_SECURITY_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
-      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
-      - XPACK_REPORTING_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
-      - SERVER_PUBLICBASEURL=https://localhost:5601
-      - SERVER_HOST=0.0.0.0
+
+      # SSL settings for Kibana
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=config/certs/kibana/kibana.crt
+      - SERVER_SSL_KEY=config/certs/kibana/kibana.key
+      - SERVER_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+
+      # Additional settings
       - TELEMETRY_ENABLED=false
       - LOGGING_ROOT_LEVEL=info
     mem_limit: 1073741824
     healthcheck:
-      test: ["CMD-SHELL", "test -f config/certs/kibana/kibana.crt && test -f config/certs/kibana/kibana.key && curl -k -f https://localhost:5601/api/status || exit 1"]
+      test: ["CMD-SHELL", "curl -k -f https://localhost:5601/api/status || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 15

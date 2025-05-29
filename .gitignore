@@ -1,13 +1,18 @@
 # ===== General =====
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Editors / IDEs
 .idea/
 .vscode/
 *.swp
-*~
+*.swo
 
 # Logs
 logs/*
@@ -48,6 +53,7 @@ coverage/
 .env.*
 !.env.example
 !**/.env.example
+secrets/.env
 
 # SQLite / Prisma
 **/*.db
@@ -60,6 +66,7 @@ coverage/
 compose.override.yml
 compose.dev.yml
 **/docker-volume/
+volumes/
 
 # Elasticsearch & Kibana runtime data
 services/elkstack/elasticsearch/data/
