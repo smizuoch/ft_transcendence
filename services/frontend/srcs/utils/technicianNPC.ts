@@ -29,6 +29,11 @@ export class TechnicianNPC implements NPCAlgorithm {
   private currentAction: Action | null = null;
   private config: NPCConfig;
 
+  // パドル移動権利システム
+  private hasMovementPermission: boolean = false;
+  private permissionGrantedTime: number = 0;
+  private lastGameState: { paddleHits: number } = { paddleHits: 0 };
+
   // 技の多様性のための変数
   private lastTechnique: TechniqueType | null = null;
   private techniqueHistory: TechniqueType[] = [];
@@ -82,6 +87,12 @@ export class TechnicianNPC implements NPCAlgorithm {
       canvasHeight: 400,
       paddleHits: 0
     };
+
+    // 試合開始後すぐに権利を付与
+    this.hasMovementPermission = true;
+    this.permissionGrantedTime = Date.now();
+    // 初回の時間更新を設定（すぐに次の権利を得られるように）
+    this.lastViewUpdateTime = Date.now() - this.viewUpdateInterval;
   }
 
   public updateConfig(config: Partial<NPCConfig>): void {
@@ -105,37 +116,89 @@ export class TechnicianNPC implements NPCAlgorithm {
     // 現在のパドル位置を記録
     this.smoothMovement.currentX = npcPaddle.x + npcPaddle.width / 2;
 
-    // 1秒に1回のみビューを更新（予測計算）
+    // 得点後の検出（paddleHitsがリセットされた場合）
+    if (gameState.paddleHits < this.lastGameState.paddleHits) {
+      // 得点が発生したので初回権利を付与
+      this.grantInitialPermission();
+    }
+    this.lastGameState.paddleHits = gameState.paddleHits;
+
+    // 1秒に1回のみビューを更新（権利付与）
     const currentTime = Date.now();
     if (currentTime - this.lastViewUpdateTime >= this.viewUpdateInterval) {
       this.lastViewUpdateTime = currentTime;
       this.cachedBallArrivalX = this.predictBallArrivalX(); // 新しい予測を計算
+
+      // パドル移動権利を付与
+      this.hasMovementPermission = true;
+      this.permissionGrantedTime = currentTime;
+
       this.update(); // 技の選択も1秒に1回
     }
 
-    // キャッシュされた予測を使用
-    this.smoothMovement.targetX = this.cachedBallArrivalX - npcPaddle.width / 2;
+    // ボールがNPC側に向かっているかチェック
+    const ballMovingToNPC = this.config.player === 1 ?
+      this.gameState.ball.dy < 0 : this.gameState.ball.dy > 0;
 
-    // スムーズな移動を計算
-    const deltaX = this.smoothMovement.targetX - this.smoothMovement.currentX;
-    const movement = Math.sign(deltaX) * Math.min(Math.abs(deltaX), this.smoothMovement.speed);
+    // 権利を持っていて、ボールがNPC側に向かっている場合のみパドルを動かす
+    // または、権利を持っていて初回の場合（ボールの方向に関係なく）
+    const shouldMove = this.hasMovementPermission && (ballMovingToNPC || this.isInitialMovement());
 
-    // 技効果の情報を含めて返す
-    const result: any = {
-      targetX: this.smoothMovement.targetX,
-      movement: movement
-    };
+    if (shouldMove) {
+      // キャッシュされた予測を使用（初回は現在のボール位置）
+      const targetBallX = this.cachedBallArrivalX || this.gameState.ball.x;
+      this.smoothMovement.targetX = targetBallX - npcPaddle.width / 2;
 
-    // アクティブな技効果がある場合は追加
-    if (this.activeTechniqueEffect.shouldApply) {
-      result.techniqueEffect = {
-        type: this.activeTechniqueEffect.type,
-        forceVerticalReturn: this.activeTechniqueEffect.type === TechniqueType.STRAIGHT,
-        player: this.config.player
+      // スムーズな移動を計算
+      const deltaX = this.smoothMovement.targetX - this.smoothMovement.currentX;
+      const movement = Math.sign(deltaX) * Math.min(Math.abs(deltaX), this.smoothMovement.speed);
+
+      // 技効果の情報を含めて返す
+      const result: any = {
+        targetX: this.smoothMovement.targetX,
+        movement: movement
+      };
+
+      // アクティブな技効果がある場合は追加
+      if (this.activeTechniqueEffect.shouldApply) {
+        result.techniqueEffect = {
+          type: this.activeTechniqueEffect.type,
+          forceVerticalReturn: this.activeTechniqueEffect.type === TechniqueType.STRAIGHT,
+          player: this.config.player
+        };
+      }
+
+      return result;
+    } else {
+      // 権利がないか、ボールが向かってこない場合は動かない
+      return {
+        targetX: this.smoothMovement.currentX,
+        movement: 0
       };
     }
+  }
 
-    return result;
+  // 得点後の初回権利付与
+  private grantInitialPermission(): void {
+    this.hasMovementPermission = true;
+    this.permissionGrantedTime = Date.now();
+
+    // 現在のアクションをリセット（新しいラウンドの準備）
+    this.currentAction = null;
+    this.isReturning = false;
+
+    // 予測をリセット
+    this.cachedBallArrivalX = this.gameState.ball.x;
+
+    // 技の履歴もリセット（新しいラウンドなので）
+    this.lastTechnique = null;
+  }
+
+  // 初回移動判定（試合開始直後の位置取りのため）
+  private isInitialMovement(): boolean {
+    // permissionGrantedTimeから2秒以内かつ、まだアクションが計画されていない場合
+    const timeSincePermission = Date.now() - this.permissionGrantedTime;
+    return timeSincePermission < 2000 && !this.currentAction && !this.isReturning;
   }
 
   // 返球率を調整してゲームバランスを改善
@@ -207,18 +270,24 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   public update(): { paddlePosition: number; shouldReturn: boolean } {
-    // この関数は calculateMovement から1秒に1回だけ呼ばれるように変更
-    // 独自の時間制限は不要
-
     // ボールが自分の方向に向かっているかチェック
     const ballMovingToNPC = this.config.player === 1 ?
       this.gameState.ball.dy < 0 : this.gameState.ball.dy > 0;
 
-    if (ballMovingToNPC && !this.isReturning) {
-      // 反応遅延を標準レベルに戻す
+    // 権利を持っていて、ボールがNPC側に向かっている場合のみアクションを計画
+    // または、初回移動の場合
+    const shouldPlanAction = this.hasMovementPermission &&
+      (ballMovingToNPC || this.isInitialMovement()) &&
+      !this.isReturning;
+
+    if (shouldPlanAction) {
+      // 反応遅延後にアクションを計画
       setTimeout(() => {
         this.planAction();
       }, this.difficulty.reactionDelay);
+
+      // 権利を使用したのでリセット
+      this.hasMovementPermission = false;
     }
 
     return this.executeCurrentAction();
@@ -595,6 +664,10 @@ export class TechnicianNPC implements NPCAlgorithm {
       ballPosition: { x: this.gameState.ball.x, y: this.gameState.ball.y },
       npcPosition: this.internalState.npcPaddlePosition,
       activeTechniqueEffect: this.activeTechniqueEffect,
+      hasMovementPermission: this.hasMovementPermission,
+      permissionAge: this.permissionGrantedTime ? Date.now() - this.permissionGrantedTime : 0,
+      isInitialMovement: this.isInitialMovement(), // 初回移動状態をデバッグ情報に追加
+      lastPaddleHits: this.lastGameState.paddleHits, // デバッグ用
       techniqueDiversity: {
         consecutive: this.lastTechnique ? 1 : 0,
         historyLength: this.techniqueHistory.length,
