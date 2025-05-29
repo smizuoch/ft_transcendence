@@ -22,7 +22,8 @@ export const useGameEngine = (
 
   const startGameLoop = useCallback((
     onScore: (scorer: 'player1' | 'player2') => void,
-    gameStarted: boolean
+    gameStarted: boolean,
+    keysRef: React.RefObject<{ [key: string]: boolean }>
   ) => {
     if (!engineRef.current || !canvasRef.current) return;
 
@@ -30,7 +31,27 @@ export const useGameEngine = (
     if (!ctx) return;
 
     const loop = () => {
-      if (engineRef.current && gameStarted) {
+      if (engineRef.current && gameStarted && keysRef.current) {
+        // キーボード制御の処理
+        const state = engineRef.current.getState();
+        const speed = 8; // paddleSpeed
+        
+        // Player 1 controls
+        if (keysRef.current['a'] && state.paddle1.x > 0) {
+          state.paddle1.x -= speed;
+        }
+        if (keysRef.current['d'] && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
+          state.paddle1.x += speed;
+        }
+        
+        // Player 2 controls
+        if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
+          state.paddle2.x -= speed;
+        }
+        if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+          state.paddle2.x += speed;
+        }
+        
         const result = engineRef.current.update();
         if (result !== 'none') {
           onScore(result);
@@ -61,7 +82,9 @@ export const useGameEngine = (
   };
 };
 
-export const useKeyboardControls = (gameEngine: React.RefObject<GameEngine>) => {
+export const useKeyboardControls = () => {
+  const keysRef = useRef<{ [key: string]: boolean }>({});
+
   useEffect(() => {
     const keyMap: Record<string, string> = {
       'a': 'a',
@@ -72,16 +95,16 @@ export const useKeyboardControls = (gameEngine: React.RefObject<GameEngine>) => 
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const mappedKey = keyMap[e.key];
-      if (mappedKey && gameEngine.current) {
+      if (mappedKey) {
         e.preventDefault();
-        gameEngine.current.setKeyState(mappedKey, true);
+        keysRef.current[mappedKey] = true;
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const mappedKey = keyMap[e.key];
-      if (mappedKey && gameEngine.current) {
-        gameEngine.current.setKeyState(mappedKey, false);
+      if (mappedKey) {
+        keysRef.current[mappedKey] = false;
       }
     };
 
@@ -92,5 +115,7 @@ export const useKeyboardControls = (gameEngine: React.RefObject<GameEngine>) => 
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameEngine]);
+  }, []);
+
+  return keysRef;
 };
