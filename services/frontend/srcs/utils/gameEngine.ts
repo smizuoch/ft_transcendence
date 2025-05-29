@@ -1,6 +1,7 @@
 import { NPCEngine } from './npcEngine';
 import { NPCConfig, DEFAULT_NPC_CONFIG } from './npcTypes';
 import type { GameState, NPCDebugInfo } from './npcTypes';
+import { DIFFICULTY_SETTINGS } from './npcTypes';
 
 export interface Ball {
   x: number;
@@ -45,6 +46,12 @@ export class GameEngine {
   private state: GameState;
   private config: GameConfig;
   private npcEngine: NPCEngine | null = null;
+
+  // パドルの速度追跡用
+  private paddleVelocity = {
+    paddle1: { x: 0, prevX: 0, lastUpdateTime: 0 },
+    paddle2: { x: 0, prevX: 0, lastUpdateTime: 0 }
+  };
 
   constructor(canvasWidth: number, canvasHeight: number, config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -127,6 +134,9 @@ export class GameEngine {
   }
 
   public update(): 'none' | 'player1' | 'player2' {
+    // パドル速度を更新
+    this.updatePaddleVelocities();
+
     // NPC更新
     if (this.npcEngine) {
       this.npcEngine.updatePaddle(this.getGameState(), this.config.paddleSpeed);
@@ -135,6 +145,23 @@ export class GameEngine {
     this.updatePaddles();
     this.updateBall();
     return this.checkGoals();
+  }
+
+  private updatePaddleVelocities(): void {
+    const currentTime = Date.now();
+    const dt = Math.max((currentTime - this.paddleVelocity.paddle1.lastUpdateTime) / 1000, 1/60);
+
+    // Paddle1の速度計算
+    const paddle1DeltaX = this.state.paddle1.x - this.paddleVelocity.paddle1.prevX;
+    this.paddleVelocity.paddle1.x = paddle1DeltaX / dt;
+    this.paddleVelocity.paddle1.prevX = this.state.paddle1.x;
+    this.paddleVelocity.paddle1.lastUpdateTime = currentTime;
+
+    // Paddle2の速度計算
+    const paddle2DeltaX = this.state.paddle2.x - this.paddleVelocity.paddle2.prevX;
+    this.paddleVelocity.paddle2.x = paddle2DeltaX / dt;
+    this.paddleVelocity.paddle2.prevX = this.state.paddle2.x;
+    this.paddleVelocity.paddle2.lastUpdateTime = currentTime;
   }
 
   private updatePaddles(): void {
@@ -182,23 +209,89 @@ export class GameEngine {
 
   private reflectBall(paddle: Paddle, isTop: boolean): void {
     const { ball } = this.state;
-    const hitPosition = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
-    const angle = hitPosition * (Math.PI / 3);
 
-    this.state.paddleHits += 1;
-    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 4);
+    // パドルの速度を取得
+    const paddleVel = isTop ? this.paddleVelocity.paddle1.x : this.paddleVelocity.paddle2.x;
 
-    const speed = Math.hypot(ball.dx, ball.dy);
+    // NPCの技効果をチェック
+    const techniqueEffect = this.npcEngine?.getActiveTechniqueEffect();
 
-    if (isTop) {
-      ball.dx = Math.sin(angle) * speed;
-      ball.dy = Math.abs(Math.cos(angle) * speed);
-      ball.y = paddle.y + paddle.height + ball.radius;
+    if (techniqueEffect && techniqueEffect.forceVerticalReturn) {
+      // 【技効果による角度制御】
+      // STRAIGHT技の場合：ほぼ垂直だが微小な水平成分を追加
+      const speed = Math.hypot(ball.dx, ball.dy);
+
+      // わずかな水平成分を追加（-5度から+5度の範囲）
+      const minAngle = Math.PI / 90; // 5度
+      const randomAngle = (Math.random() - 0.5) * 5 * minAngle; // -5度〜+5度
+
+      // 水平成分と垂直成分を計算
+      const horizontalComponent = Math.sin(randomAngle) * speed;
+      const verticalComponent = Math.cos(randomAngle) * speed;
+
+      if (isTop) {
+        ball.dx = horizontalComponent; // わずかな水平成分
+        ball.dy = Math.abs(verticalComponent); // 下向き
+        ball.y = paddle.y + paddle.height + ball.radius;
+      } else {
+        ball.dx = horizontalComponent; // わずかな水平成分
+        ball.dy = -Math.abs(verticalComponent); // 上向き
+        ball.y = paddle.y - ball.radius;
+      }
+
+      // 技効果をリセット
+      this.npcEngine?.resetTechniqueEffect();
     } else {
-      ball.dx = Math.sin(Math.PI - angle) * speed;
-      ball.dy = -Math.abs(Math.cos(angle) * speed);
-      ball.y = paddle.y - ball.radius;
+      // 【通常の角度決定システム（パドル速度考慮）】
+      // 1. パドル上での接触位置を計算（-1.0 ～ +1.0の範囲）
+      const hitPosition = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+
+      // 2. 接触位置を角度に変換（最大60度まで）
+      const baseAngle = hitPosition * (Math.PI / 3); // Math.PI/3 = 60度
+
+      // 3. パドル速度による追加角度（速度の影響を大幅に強化）
+      const velocityInfluence = 1.2; // 0.3 → 1.2に増加（4倍に強化）
+      const maxVelocityAngle = Math.PI / 3; // 最大30度 → 60度に拡大
+      const velocityAngle = Math.max(-maxVelocityAngle,
+        Math.min(maxVelocityAngle, paddleVel * velocityInfluence * 0.02)); // 0.01 → 0.02に倍増
+
+      // 4. 最終角度を計算（基本角度 + 速度角度）
+      const finalAngle = baseAngle + velocityAngle;
+
+      // 5. 角度を制限（最大85度まで拡大）
+      const maxTotalAngle = Math.PI * 17 / 36; // 75度 → 85度に拡大
+      const clampedAngle = Math.max(-maxTotalAngle, Math.min(maxTotalAngle, finalAngle));
+
+      // 6. 現在のボール速度を保持
+      const speed = Math.hypot(ball.dx, ball.dy);
+
+      if (isTop) {
+        // 上側パドル（Player1）との接触
+        ball.dx = Math.sin(clampedAngle) * speed; // 水平成分
+        ball.dy = Math.abs(Math.cos(clampedAngle) * speed); // 垂直成分（下向き）
+        ball.y = paddle.y + paddle.height + ball.radius;
+      } else {
+        // 下側パドル（Player2）との接触
+        ball.dx = Math.sin(Math.PI - clampedAngle) * speed; // 水平成分（反転）
+        ball.dy = -Math.abs(Math.cos(clampedAngle) * speed); // 垂直成分（上向き）
+        ball.y = paddle.y - ball.radius;
+      }
+
+      // パドル速度によるボール速度への追加影響
+      const speedBoost = Math.abs(paddleVel) * 0.08;
+      const currentBallSpeed = Math.hypot(ball.dx, ball.dy);
+      const boostedSpeed = Math.min(currentBallSpeed + speedBoost, this.config.maxBallSpeed);
+
+      if (boostedSpeed > currentBallSpeed) {
+        const speedRatio = boostedSpeed / currentBallSpeed;
+        ball.dx *= speedRatio;
+        ball.dy *= speedRatio;
+      }
     }
+
+    // 【速度増加システム】
+    this.state.paddleHits += 1;
+    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 4); // 最大4倍まで加速
   }
 
   private checkGoals(): 'none' | 'player1' | 'player2' {
@@ -217,6 +310,15 @@ export class GameEngine {
 
   public updateNPCConfig(config: Partial<NPCConfig>): void {
     this.config.npc = { ...this.config.npc, ...config };
+
+    // 難易度設定の自動適用
+    if (config.difficulty && config.difficulty !== 'Custom') {
+      const settings = DIFFICULTY_SETTINGS[config.difficulty];
+      if (config.mode === 'technician' && settings.technician) {
+        this.config.npc.technician = { ...this.config.npc.technician, ...settings.technician };
+      }
+    }
+
     if (!this.npcEngine) {
       this.npcEngine = new NPCEngine(config as NPCConfig, this.state.canvasWidth);
     } else {

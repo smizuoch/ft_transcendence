@@ -49,11 +49,12 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
               <label>NPC方式:</label>
               <select
                 value={npcSettings.mode}
-                onChange={(e) => setNpcSettings(prev => ({ ...prev, mode: e.target.value as 'heuristic' | 'pid' }))}
+                onChange={(e) => setNpcSettings(prev => ({ ...prev, mode: e.target.value as 'heuristic' | 'pid' | 'technician' }))}
                 className="ml-2 bg-gray-700 text-white px-2 py-1 rounded"
               >
                 <option value="heuristic">ヒューリスティック</option>
                 <option value="pid">🎯 PID制御</option>
+                <option value="technician">⚡ テクニシャン</option>
               </select>
             </div>
           </div>
@@ -201,6 +202,80 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
                         step="2"
                         value={npcSettings.trackingNoise}
                         onChange={(e) => setNpcSettings(prev => ({ ...prev, trackingNoise: Number(e.target.value) }))}
+                        className="w-full"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {npcSettings.mode === 'technician' && (
+            <div className="border-t border-gray-600 pt-3">
+              <h4 className="font-bold mb-2">⚡ テクニシャン設定</h4>
+              <div className="space-y-2">
+                <div>
+                  <label>難易度:</label>
+                  <select
+                    value={npcSettings.difficulty}
+                    onChange={(e) => {
+                      const difficulty = e.target.value as 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom';
+                      setNpcSettings(prev => ({ ...prev, difficulty }));
+                    }}
+                    className="ml-2 bg-gray-700 text-white px-2 py-1 rounded"
+                  >
+                    <option value="Easy">😴 Easy</option>
+                    <option value="Normal">⚡ Normal</option>
+                    <option value="Hard">🔥 Hard</option>
+                    <option value="Nightmare">👹 Nightmare</option>
+                    <option value="Custom">⚙️ Custom</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>反応遅延: {npcSettings.reactionDelayMs}ms</label>
+                  <input
+                    type="range"
+                    min="50"
+                    max="1000"
+                    step="50"
+                    value={npcSettings.reactionDelayMs}
+                    onChange={(e) => setNpcSettings(prev => ({ ...prev, reactionDelayMs: Number(e.target.value) }))}
+                    className="w-full"
+                  />
+                </div>
+
+                {npcSettings.difficulty === 'Custom' && npcSettings.technician && (
+                  <>
+                    <div>
+                      <label>予測精度: {npcSettings.technician.predictionAccuracy.toFixed(2)}</label>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1.0"
+                        step="0.05"
+                        value={npcSettings.technician.predictionAccuracy}
+                        onChange={(e) => setNpcSettings(prev => ({
+                          ...prev,
+                          technician: { ...prev.technician!, predictionAccuracy: Number(e.target.value) }
+                        }))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label>コース精度: {npcSettings.technician.courseAccuracy.toFixed(2)}</label>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1.0"
+                        step="0.05"
+                        value={npcSettings.technician.courseAccuracy}
+                        onChange={(e) => setNpcSettings(prev => ({
+                          ...prev,
+                          technician: { ...prev.technician!, courseAccuracy: Number(e.target.value) }
+                        }))}
                         className="w-full"
                       />
                     </div>

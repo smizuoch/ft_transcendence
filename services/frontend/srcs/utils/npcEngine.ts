@@ -3,7 +3,17 @@ import { NPCConfig, GameState, NPCDebugInfo } from './npcTypes';
 // NPCアルゴリズムの基底インターフェース
 export interface NPCAlgorithm {
   updateConfig(config: Partial<NPCConfig>): void;
-  calculateMovement(gameState: GameState, npcPaddle: { x: number; y: number; width: number; height: number }, paddleSpeed?: number): { targetX?: number; movement?: number; pidOutput?: number };
+  calculateMovement(gameState: GameState, npcPaddle: { x: number; y: number; width: number; height: number }, paddleSpeed?: number): {
+    targetX?: number;
+    movement?: number;
+    pidOutput?: number;
+    techniqueEffect?: {
+      type: string;
+      forceVerticalReturn?: boolean;
+      player?: number;
+      maxAngleDegrees?: number;
+    };
+  };
   getDebugInfo?(): any;
   getCurrentState?(): any;
   getStateStartTime?(): number;
@@ -37,11 +47,17 @@ export class NPCEngine {
 
   // NPC処理頻度制限用
   private lastNPCUpdateTime: number = 0;
-  private npcUpdateInterval: number = 10; // 元の10msに戻す（リアルタイム性重視）
+  private npcUpdateInterval: number = 10;
   private lastNPCDecision: {
     targetX: number;
     movement: number;
     pidOutput: number;
+    techniqueEffect?: {
+      type: string;
+      forceVerticalReturn?: boolean;
+      player?: number;
+      maxAngleDegrees?: number;
+    };
   } = { targetX: 0, movement: 0, pidOutput: 0 };
 
   constructor(config: NPCConfig, canvasWidth: number) {
@@ -77,10 +93,25 @@ export class NPCEngine {
       this.lastNPCDecision.targetX = result.targetX || 0;
       this.lastNPCDecision.movement = result.movement || 0;
       this.lastNPCDecision.pidOutput = result.pidOutput || 0;
+      this.lastNPCDecision.techniqueEffect = result.techniqueEffect;
     }
 
     // 保存された判断結果を適用
     this.applyNPCDecision(npcPaddle, gameState.canvasWidth);
+  }
+
+  // 現在のアクティブな技効果を取得
+  public getActiveTechniqueEffect(): any {
+    return this.lastNPCDecision.techniqueEffect || undefined;
+  }
+
+  // 技効果をリセット
+  public resetTechniqueEffect(): void {
+    this.lastNPCDecision.techniqueEffect = undefined;
+    // TechnicianNPCの場合、内部状態もリセット
+    if (this.currentAlgorithm && typeof (this.currentAlgorithm as any).resetTechniqueEffect === 'function') {
+      (this.currentAlgorithm as any).resetTechniqueEffect();
+    }
   }
 
   private applyNPCDecision(npcPaddle: { x: number; width: number }, canvasWidth: number): void {
