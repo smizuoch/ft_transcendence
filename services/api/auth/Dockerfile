@@ -63,7 +63,4 @@ ENV HOST="0.0.0.0"
 ENV PORT=3000
 
 # マイグレーション実行、シード処理、そして起動
-CMD npx prisma migrate dev --name init --create-only && \
-    npx prisma migrate deploy && \
-    npx prisma db seed && \
-    node dist/main.js
+CMD ["sh", "-c", "npx prisma migrate dev --name init --create-only && npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
