@@ -59,7 +59,7 @@ done
 
 # kibana_systemユーザーのパスワード設定
 echo "Setting kibana_system password"
-until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://elasticsearch:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do
+until curl -s -X POST --cacert config/certs/ca/ca.crt -u "${ELASTICSEARCH_USERNAME}:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://elasticsearch:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do
   echo "Retrying kibana_system password setup..."
   sleep 10
 done
