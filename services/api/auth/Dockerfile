@@ -5,6 +5,9 @@ WORKDIR /app
 # パッケージマネージャとしてpnpmを使用
 RUN npm install -g pnpm@10.11.0
 
+# ts-nodeをグローバルにインストール
+RUN npm install -g ts-node typescript
+
 # OpenSSLをインストール（Prismaの依存関係）
 RUN apt-get update && apt-get install -y openssl
 
@@ -33,18 +36,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # pnpmをインストール
 RUN npm install -g pnpm@10.11.0
 
+# ts-nodeとtypescriptをグローバルにインストール
+RUN npm install -g ts-node typescript
+
 # ビルド済みアプリケーションをコピー
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/tsconfig.json ./
 
 # データベースディレクトリを作成
 RUN mkdir -p /app/data
-
-# 本番用依存関係のみインストール
-RUN pnpm install --prod --no-frozen-lockfile
 
 # ポート
 EXPOSE 3000
@@ -59,5 +62,8 @@ ENV NODE_ENV="production"
 ENV HOST="0.0.0.0" 
 ENV PORT=3000
 
-# マイグレーション実行と起動
-CMD npx prisma migrate deploy && node dist/main.js
+# マイグレーション実行、シード処理、そして起動
+CMD npx prisma migrate dev --name init --create-only && \
+    npx prisma migrate deploy && \
+    npx prisma db seed && \
+    node dist/main.js
