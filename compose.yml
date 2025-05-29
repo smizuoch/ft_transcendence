@@ -160,17 +160,17 @@ services:
       - XPACK_SECURITY_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
       - XPACK_REPORTING_ENCRYPTIONKEY=fhjskloppd678ehkdfdlliverxcvcllccfhj
-      - SERVER_PUBLICBASEURL=http://localhost:5601
+      - SERVER_PUBLICBASEURL=https://localhost:5601
       - SERVER_HOST=0.0.0.0
       - TELEMETRY_ENABLED=false
       - LOGGING_ROOT_LEVEL=info
     mem_limit: 1073741824
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      test: ["CMD-SHELL", "test -f config/certs/kibana/kibana.crt && test -f config/certs/kibana/kibana.key && curl -k -f https://localhost:5601/api/status || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 120s
+      retries: 15
+      start_period: 180s
     networks:
       - transcendence_net
     restart: unless-stopped

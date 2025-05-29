@@ -1,5 +1,8 @@
 server.host: "0.0.0.0"
-# server.port: 5601 # デフォルト値
+server.port: 5601
+server.ssl.enabled: true
+server.ssl.certificate: config/certs/kibana/kibana.crt
+server.ssl.key: config/certs/kibana/kibana.key
 elasticsearch.hosts: ["https://elasticsearch:9200"]
 elasticsearch.username: kibana_system
 elasticsearch.password: ${KIBANA_PASSWORD}

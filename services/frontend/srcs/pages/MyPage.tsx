@@ -155,7 +155,7 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
       {/* DevOps icon – bottom‑right with wider margin                       */}
       {/* ---------------------------------------------------------------- */}
       <a
-        href="http://localhost:5601"
+        href="https://localhost:5601"
         target="_blank"
         rel="noopener noreferrer"
         className="absolute transition-opacity hover:opacity-80"
