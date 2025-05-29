@@ -121,8 +121,8 @@ services:
       context: ./services/elkstack/logstash
       dockerfile: Dockerfile
     container_name: logstash
-    ports:
-      - "5044:5044"
+    # ports:
+    #   - "5044:5044"
     depends_on:
       elasticsearch:
         condition: service_healthy
