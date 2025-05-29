@@ -1,3 +1,7 @@
+import { AIEngine } from './aiEngine';
+import { AIConfig, DEFAULT_AI_CONFIG } from './aiTypes';
+import type { GameState, AIDebugInfo } from './aiTypes';
+
 export interface Ball {
   x: number;
   y: number;
@@ -15,16 +19,6 @@ export interface Paddle {
   height: number;
 }
 
-export interface GameState {
-  ball: Ball;
-  paddle1: Paddle;
-  paddle2: Paddle;
-  keys: { [key: string]: boolean };
-  canvasWidth: number;
-  canvasHeight: number;
-  paddleHits: number;
-}
-
 export interface GameConfig {
   winningScore: number;
   maxBallSpeed: number;
@@ -33,6 +27,7 @@ export interface GameConfig {
   paddleWidth: number;
   paddleHeight: number;
   initialBallSpeed: number;
+  ai: AIConfig;
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -43,11 +38,13 @@ export const DEFAULT_CONFIG: GameConfig = {
   paddleWidth: 80,
   paddleHeight: 12,
   initialBallSpeed: 4,
+  ai: DEFAULT_AI_CONFIG,
 };
 
 export class GameEngine {
   private state: GameState;
   private config: GameConfig;
+  private aiEngine: AIEngine;
 
   constructor(canvasWidth: number, canvasHeight: number, config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -73,11 +70,12 @@ export class GameEngine {
         width: config.paddleWidth,
         height: config.paddleHeight,
       },
-      keys: {},
       canvasWidth,
       canvasHeight,
       paddleHits: 0,
     };
+    
+    this.aiEngine = new AIEngine(this.config.ai, canvasWidth);
     this.resetBall();
   }
 
@@ -91,20 +89,29 @@ export class GameEngine {
     this.initializePositions();
   }
 
-  public setKeyState(key: string, pressed: boolean): void {
-    this.state.keys[key] = pressed;
+  public setKeyState(): void {
+    // キー状態は直接パドル更新で処理
   }
 
-  public resetBall(): void {
+  public resetBall(lastScorer?: 'player1' | 'player2'): void {
     const { canvasWidth, canvasHeight } = this.state;
     this.state.ball.x = canvasWidth / 2;
     this.state.ball.y = canvasHeight / 2;
     
+    // 得点者の方向にボールを射出するか、ランダム（ゲーム開始時）
     const angle = (Math.random() * 0.167 + 0.083) * Math.PI;
-    const v = Math.random() > 0.5 ? 1 : -1;
     const h = Math.random() > 0.5 ? 1 : -1;
     
-    this.state.ball.dy = this.state.ball.speed * Math.cos(angle) * v;
+    let verticalDirection: number;
+    if (lastScorer) {
+      // 得点者の方向にボールを射出
+      verticalDirection = lastScorer === 'player1' ? -1 : 1; // player1が得点 → 上方向(-1), player2が得点 → 下方向(1)
+    } else {
+      // ゲーム開始時やリセット時はランダム
+      verticalDirection = Math.random() > 0.5 ? 1 : -1;
+    }
+    
+    this.state.ball.dy = this.state.ball.speed * Math.cos(angle) * verticalDirection;
     this.state.ball.dx = this.state.ball.speed * Math.sin(angle) * h;
     this.state.ball.speedMultiplier = 1;
     this.state.paddleHits = 0;
@@ -121,52 +128,35 @@ export class GameEngine {
   }
 
   public update(): 'none' | 'player1' | 'player2' {
+    // AI更新
+    this.aiEngine.updatePaddle(this.state, this.config.paddleSpeed);
+    
     this.updatePaddles();
     this.updateBall();
     return this.checkGoals();
   }
 
   private updatePaddles(): void {
-    const { paddle1, paddle2, keys, canvasWidth } = this.state;
-    const speed = this.config.paddleSpeed;
-
-    // Player 1 (top paddle) - A/D keys
-    if (keys['a'] && paddle1.x > 0) {
-      paddle1.x -= speed;
-    }
-    if (keys['d'] && paddle1.x + paddle1.width < canvasWidth) {
-      paddle1.x += speed;
-    }
-
-    // Player 2 (bottom paddle) - Arrow keys
-    if (keys['arrowLeft'] && paddle2.x > 0) {
-      paddle2.x -= speed;
-    }
-    if (keys['arrowRight'] && paddle2.x + paddle2.width < canvasWidth) {
-      paddle2.x += speed;
-    }
+    // キーボード制御のみ（AIは別途処理済み）
+    // キーボード制御は gameHooks で処理
   }
 
   private updateBall(): void {
     const { ball, canvasWidth } = this.state;
 
-    // Clamp speed
     const currentSpeed = Math.hypot(ball.dx, ball.dy) || 1;
     const maxSpeed = Math.min(ball.speedMultiplier, this.config.maxBallSpeed / ball.speed);
     ball.dx = (ball.dx / currentSpeed) * ball.speed * maxSpeed;
     ball.dy = (ball.dy / currentSpeed) * ball.speed * maxSpeed;
 
-    // Move ball
     ball.x += ball.dx;
     ball.y += ball.dy;
 
-    // Wall collision
     if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvasWidth) {
       ball.dx *= -1;
       ball.x = Math.max(ball.radius, Math.min(ball.x, canvasWidth - ball.radius));
     }
 
-    // Paddle collision
     this.checkPaddleCollision();
   }
 
@@ -214,14 +204,23 @@ export class GameEngine {
     const { ball } = this.state;
 
     if (ball.y - ball.radius < 0) {
-      this.resetBall();
-      return 'player2'; // Player 2 scores
+      this.resetBall('player2'); // player2が得点したので、player2の方向にボールを射出
+      return 'player2';
     } else if (ball.y + ball.radius > this.state.canvasHeight) {
-      this.resetBall();
-      return 'player1'; // Player 1 scores
+      this.resetBall('player1'); // player1が得点したので、player1の方向にボールを射出
+      return 'player1';
     }
 
     return 'none';
+  }
+
+  public updateAIConfig(config: Partial<AIConfig>): void {
+    this.config.ai = { ...this.config.ai, ...config };
+    this.aiEngine.updateConfig(config);
+  }
+
+  public getAIDebugInfo(): AIDebugInfo {
+    return this.aiEngine.getDebugInfo();
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
@@ -231,13 +230,11 @@ export class GameEngine {
     ctx.fillStyle = "rgba(255,255,255,0.15)";
     ctx.fillRect(0, 0, canvasWidth, this.state.canvasHeight);
 
-    // Draw ball
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fillStyle = "#212121";
     ctx.fill();
 
-    // Draw paddles
     ctx.fillStyle = "#212121";
     ctx.fillRect(paddle1.x, paddle1.y, paddle1.width, paddle1.height);
     ctx.fillRect(paddle2.x, paddle2.y, paddle2.width, paddle2.height);
