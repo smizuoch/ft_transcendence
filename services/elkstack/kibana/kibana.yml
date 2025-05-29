@@ -7,7 +7,3 @@ elasticsearch.hosts: ["https://elasticsearch:9200"]
 elasticsearch.username: kibana_system
 elasticsearch.password: ${KIBANA_PASSWORD}
 elasticsearch.ssl.certificateAuthorities: config/certs/ca/ca.crt
-
-# Kibana自身のログ設定 (オプション)
-# logging.dest: stdout # コンテナログとして出力
-# logging.quiet: false
