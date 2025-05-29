@@ -10,3 +10,5 @@ CREATE TABLE "users" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+-- 実際のSQLコマンドが含まれており、ユーザーテーブルの作成とメールアドレス用のユニークインデックス設定が記述されています。

@@ -21,3 +21,11 @@ export class UserController {
     return this.userService.findOne(+id);
   }
 }
+
+
+
+// このControllerが提供する機能：
+
+// /users に対するPOSTリクエストでユーザーを作成
+// /users に対するGETリクエストで全ユーザーのリストを取得
+// /users/:id に対するGETリクエストで特定のユーザーを取得

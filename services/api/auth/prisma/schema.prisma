@@ -21,3 +21,30 @@ model User {
   
   @@map("users")
 }
+
+
+
+Prismaのスキーマファイル(schema.prisma)では、SQLiteデータベースの構造を定義しています：
+
+データベース設定:
+
+provider = "sqlite": SQLiteデータベースを使用
+url = env("DATABASE_URL"): データベースの接続URLを環境変数から取得
+ユーザーモデル定義:
+
+model User: データベース内のユーザーテーブルを定義
+username String @id: ユーザー名をプライマリキーとして設定
+email String @unique: メールアドレスは一意（重複不可）
+password String: パスワード（ハッシュ化して保存）
+displayName String?: 表示名（オプショナル）
+createdAt/updatedAt: 作成日時と更新日時を自動管理
+テーブル名マッピング:
+
+@@map("users"): Userモデルを実際のテーブル名"users"にマッピング
+このスキーマに基づいて、Prismaはデータベースマイグレーション（migration.sql）を生成し、アプリケーションのデータアクセスのための型安全なクライアントコードを生成します。
+
+
+1. schema.prismaがない場合
+Prismaクライアント生成ができない → データベース接続不可
+テーブル構造が定義されない → マイグレーションができない
+型安全なデータベースアクセスが失われる
