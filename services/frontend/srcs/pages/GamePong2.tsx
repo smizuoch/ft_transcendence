@@ -146,6 +146,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
     setWinner(null);
     setScore({ player1: 0, player2: 0 });
   }, []); // 依存配列からAI関連を削除
+  // }, [aiEnabled, aiSettings, engineRef]);
 
   // ============= AI状態のデバッグ情報更新（コメントアウト） =============
   /*
