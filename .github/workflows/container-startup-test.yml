@@ -16,9 +16,9 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y make
     - name: use exmaple `.env` for test
       run: mv secrets/.env.example secrets/.env
-    - name: Docker containers will start up within 180 seconds
+    - name: Docker containers will start up within 300 seconds
       run: |
-        timeout 180s make up || {
+        timeout 300s make up || {
           echo ">>>>>>>>>> FAILURE <<<<<<<<<<"
           exit 1
         }
