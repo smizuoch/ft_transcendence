@@ -41,7 +41,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
   const [npcEnabled, setNpcEnabled] = useState(false);
   const [availableAlgorithms] = useState(getAvailableNPCAlgorithms());
   const [npcSettings, setNpcSettings] = useState<NPCConfig>({
-    player: 2 as 1 | 2,
+    player: 1 as 1 | 2, // Player 1 (上)に変更
     mode: availableAlgorithms[0] as any || 'heuristic', // 最初の利用可能なアルゴリズムをデフォルトに
     enabled: false,
     reactionDelay: 0.1,
