@@ -1,0 +1,9 @@
+server.host: "0.0.0.0"
+server.port: "5601"
+server.ssl.enabled: true
+server.ssl.certificate: ${KIBANA_CERT_PATH}
+server.ssl.key: ${KIBANA_KEY_PATH}
+elasticsearch.hosts: ["${ELASTICSEARCH_HOSTS}"]
+elasticsearch.username: ${KIBANA_SYSTEM_USERNAME}
+elasticsearch.password: ${KIBANA_PASSWORD}
+elasticsearch.ssl.certificateAuthorities: ${CA_CERT_PATH}
