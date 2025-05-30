@@ -249,17 +249,17 @@ export class GameEngine {
       // 2. 接触位置を角度に変換（最大60度まで）
       const baseAngle = hitPosition * (Math.PI / 3); // Math.PI/3 = 60度
 
-      // 3. パドル速度による追加角度（速度の影響を大幅に強化）
-      const velocityInfluence = 1.2; // 0.3 → 1.2に増加（4倍に強化）
-      const maxVelocityAngle = Math.PI / 3; // 最大30度 → 60度に拡大
+      // 3. パドル速度による追加角度（影響を軽減）
+      const velocityInfluence = 0.6; // 1.2 → 0.6に削減（半分に軽減）
+      const maxVelocityAngle = Math.PI / 6; // 60度 → 30度に削減
       const velocityAngle = Math.max(-maxVelocityAngle,
-        Math.min(maxVelocityAngle, paddleVel * velocityInfluence * 0.02)); // 0.01 → 0.02に倍増
+        Math.min(maxVelocityAngle, paddleVel * velocityInfluence * 0.01)); // 0.02 → 0.01に削減
 
       // 4. 最終角度を計算（基本角度 + 速度角度）
       const finalAngle = baseAngle + velocityAngle;
 
-      // 5. 角度を制限（最大85度まで拡大）
-      const maxTotalAngle = Math.PI * 17 / 36; // 75度 → 85度に拡大
+      // 5. 角度を制限（最大75度に調整）
+      const maxTotalAngle = Math.PI * 5 / 12; // 85度 → 75度に削減
       const clampedAngle = Math.max(-maxTotalAngle, Math.min(maxTotalAngle, finalAngle));
 
       // 6. 現在のボール速度を保持
@@ -277,8 +277,8 @@ export class GameEngine {
         ball.y = paddle.y - ball.radius;
       }
 
-      // パドル速度によるボール速度への追加影響
-      const speedBoost = Math.abs(paddleVel) * 0.08;
+      // パドル速度によるボール速度への追加影響（軽減）
+      const speedBoost = Math.abs(paddleVel) * 0.04; // 0.08 → 0.04に削減
       const currentBallSpeed = Math.hypot(ball.dx, ball.dy);
       const boostedSpeed = Math.min(currentBallSpeed + speedBoost, this.config.maxBallSpeed);
 
