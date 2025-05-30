@@ -109,12 +109,21 @@ export class GameEngine {
     const h = Math.random() > 0.5 ? 1 : -1;
 
     let verticalDirection: number;
-    if (lastScorer) {
-      // 得点者の方向にボールを射出
-      verticalDirection = lastScorer === 'player1' ? -1 : 1; // player1が得点 → 上方向(-1), player2が得点 → 下方向(1)
+
+    // NPCが有効な場合は常にプレイヤー側にボールを向ける
+    if (this.npcEngine && this.config.npc.enabled) {
+      // NPCがPlayer1の場合はPlayer2（下）にボールを向ける
+      // NPCがPlayer2の場合はPlayer1（上）にボールを向ける
+      verticalDirection = this.config.npc.player === 1 ? 1 : -1;
     } else {
-      // ゲーム開始時やリセット時はランダム
-      verticalDirection = Math.random() > 0.5 ? 1 : -1;
+      // NPC無効時の従来のロジック
+      if (lastScorer) {
+        // 得点者の方向にボールを射出
+        verticalDirection = lastScorer === 'player1' ? -1 : 1; // player1が得点 → 上方向(-1), player2が得点 → 下方向(1)
+      } else {
+        // ゲーム開始時やリセット時はランダム
+        verticalDirection = Math.random() > 0.5 ? 1 : -1;
+      }
     }
 
     this.state.ball.dy = this.state.ball.speed * Math.cos(angle) * verticalDirection;
