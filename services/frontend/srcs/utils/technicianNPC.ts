@@ -63,10 +63,6 @@ export class TechnicianNPC implements NPCAlgorithm {
     speed: 8
   };
 
-  // 予測安定化のための変数を追加
-  private lastPredictedX: number = 0;
-  private predictionStabilityThreshold: number = 30; // 30px以内の変動は無視
-
   // ビュー更新制限のための変数
   private lastViewUpdateTime: number = 0;
   private viewUpdateInterval: number = 1000; // 1秒間隔
@@ -91,8 +87,8 @@ export class TechnicianNPC implements NPCAlgorithm {
     this.config = config;
     this.difficulty = {
       reactionDelay: config.reactionDelayMs || 150,
-      predictionAccuracy: config.technician?.predictionAccuracy || 0.85,
-      courseAccuracy: config.technician?.courseAccuracy || 0.85
+      predictionAccuracy: 1.0, // デバッグ用：予測精度を最大に設定
+      courseAccuracy: 1.0 // デバッグ用：コース精度も最大に設定
     };
     this.gameState = {
       ball: { x: 0, y: 0, dx: 0, dy: 0, radius: 8, speed: 4, speedMultiplier: 1 },
@@ -116,8 +112,8 @@ export class TechnicianNPC implements NPCAlgorithm {
     if (config.technician) {
       this.difficulty = {
         reactionDelay: config.reactionDelayMs || this.difficulty.reactionDelay,
-        predictionAccuracy: config.technician.predictionAccuracy || this.difficulty.predictionAccuracy,
-        courseAccuracy: config.technician.courseAccuracy || this.difficulty.courseAccuracy
+        predictionAccuracy: 1.0, // デバッグ用：常に最大精度
+        courseAccuracy: 1.0 // デバッグ用：常に最大精度
       };
     }
   }
@@ -274,27 +270,8 @@ export class TechnicianNPC implements NPCAlgorithm {
       }
     }
 
-    // 予測精度エラーを適用（ただし毎回は変更しない）
-    const error = (1 - this.difficulty.predictionAccuracy) * 80;
-    let predictedX = futureX;
-
-    // 前回の予測から大きく変わった場合のみ新しいエラーを適用
-    if (Math.abs(futureX - this.lastPredictedX) > this.predictionStabilityThreshold) {
-      const randomError = (Math.random() - 0.5) * error;
-      predictedX = futureX + randomError;
-
-      // 意図的なミス頻度を調整
-      const missChance = 1 - this.getReturnSuccessRate();
-      if (Math.random() < missChance * 1.2) {
-        const missError = (Math.random() - 0.5) * 250;
-        predictedX = futureX + randomError + missError;
-      }
-
-      this.lastPredictedX = predictedX;
-    } else {
-      // 小さな変動の場合は前回の予測を維持（安定化）
-      predictedX = this.lastPredictedX;
-    }
+    // デバッグ用：予測精度を最大にするため、エラーを完全に排除
+    const predictedX = futureX;
 
     return Math.max(0, Math.min(this.gameState.canvasWidth, predictedX));
   }
@@ -419,6 +396,9 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateCourseUtility(isAtCenter: boolean): number {
+    // デバッグ用：ストレート以外は無効化
+    return 0;
+
     // プレイヤー距離ボーナスを削除し、シンプルな基本値ベースに
     let utility = 0.6; // 基本値のみ
 
@@ -434,7 +414,7 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateStraightUtility(isAtEdge: boolean): number {
-    let utility = 0.5;
+    let utility = 0.9; // ストレート技を最優先にするため高い値に設定
 
     // 端にいる場合の距離ボーナスを計算
     if (isAtEdge) {
@@ -461,6 +441,9 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateBounceUtility(): number {
+    // デバッグ用：ストレート以外は無効化
+    return 0;
+
     // BOUNCEのユーティリティを下げて他の技も選ばれやすくする
     let utility = 0.4;
 
@@ -471,6 +454,9 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateDoubleBounceUtility(isAtEdge: boolean): number {
+    // デバッグ用：ストレート以外は無効化
+    return 0;
+
     let utility = 0.35; // 0.45 → 0.35に下げてBOUNCE(0.4)より低く設定
 
     // 端にいる場合はダブルバウンドを優遇
@@ -486,7 +472,7 @@ export class TechnicianNPC implements NPCAlgorithm {
 
   /**
    * STRAIGHT技のための精密な位置計算
-   * 5度以内の角度で返球するため、パドルの中央付近でボールを捉える
+   * 完全にまっすぐ返球するため、パドルの正確な中央でボールを捉える
    */
   private calculateStraightTarget(): number {
     const ballX = this.gameState.ball.x;
@@ -516,32 +502,14 @@ export class TechnicianNPC implements NPCAlgorithm {
       }
     }
 
-    // 5度以内の角度を保証するため、パドルの中央20%の範囲内で接触させる
-    // 5度 ≈ tan(5°) ≈ 0.087 なので、パドル幅の8.7%以内で接触
-    const maxOffset = paddleWidth * 0.087; // 5度に対応する最大オフセット
-    const paddleCenter = predictedBallX;
-
-    // パドルの中央にボールを合わせるためのターゲット位置
-    // パドルの中央がボール位置に来るように調整
-    let targetX = paddleCenter - paddleWidth / 2;
-
-    // さらに精密な調整：現在のボールの水平速度を考慮
-    // 水平速度が大きい場合は、より中央寄りに位置取り
-    const horizontalSpeedFactor = Math.abs(ballDx) / (Math.abs(ballDx) + Math.abs(ballDy));
-    const centeringAdjustment = horizontalSpeedFactor * maxOffset;
-
-    if (ballDx > 0) {
-      // ボールが右に移動している場合、少し左寄りに
-      targetX -= centeringAdjustment;
-    } else if (ballDx < 0) {
-      // ボールが左に移動している場合、少し右寄りに
-      targetX += centeringAdjustment;
-    }
+    // 完全にまっすぐ返球するため、パドルの正確な中央に位置取り
+    // パドルの中央がボールの予測位置に正確に合うように調整
+    const targetX = predictedBallX - paddleWidth / 2;
 
     // フィールド境界内に制限
-    targetX = Math.max(0, Math.min(this.internalState.fieldWidth - paddleWidth, targetX));
+    const clampedTargetX = Math.max(0, Math.min(this.internalState.fieldWidth - paddleWidth, targetX));
 
-    return targetX + paddleWidth / 2; // パドル中央座標として返す
+    return clampedTargetX + paddleWidth / 2; // パドル中央座標として返す
   }
 
   private calculateBounceTarget(): number {
