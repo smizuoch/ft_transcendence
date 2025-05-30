@@ -81,9 +81,9 @@ export const DIFFICULTY_SETTINGS = {
     technician: { predictionAccuracy: 0.95, courseAccuracy: 0.9 }
   },
   Hard: {
-    returnRate: 0.95, reactionDelayMs: 100, maxSpeed: 1.0, trackingNoise: 5, trackingTimeout: 8000,
-    pid: { kp: 1.25, ki: 0.06, kd: 0.12, maxIntegral: 100, derivativeFilter: 0.5, maxControlSpeed: 750 },
-    technician: { predictionAccuracy: 0.85, courseAccuracy: 0.8 }
+    returnRate: 0.92, reactionDelayMs: 80, maxSpeed: 1.1, trackingNoise: 3, trackingTimeout: 8000, // より強化
+    pid: { kp: 1.35, ki: 0.05, kd: 0.13, maxIntegral: 110, derivativeFilter: 0.55, maxControlSpeed: 800 },
+    technician: { predictionAccuracy: 0.88, courseAccuracy: 0.82 }
   },
   Normal: {
     returnRate: 0.80, reactionDelayMs: 200, maxSpeed: 0.8, trackingNoise: 10, trackingTimeout: 6000,
@@ -91,9 +91,9 @@ export const DIFFICULTY_SETTINGS = {
     technician: { predictionAccuracy: 0.8, courseAccuracy: 0.7 }
   },
   Easy: {
-    returnRate: 0.50, reactionDelayMs: 400, maxSpeed: 0.6, trackingNoise: 20, trackingTimeout: 4000,
-    pid: { kp: 0.60, ki: 0.12, kd: 0.02, maxIntegral: 50, derivativeFilter: 0.3, maxControlSpeed: 400 },
-    technician: { predictionAccuracy: 0.6, courseAccuracy: 0.5 }
+    returnRate: 0.65, reactionDelayMs: 350, maxSpeed: 0.55, trackingNoise: 15, trackingTimeout: 4000, // より弱く
+    pid: { kp: 0.70, ki: 0.08, kd: 0.03, maxIntegral: 60, derivativeFilter: 0.25, maxControlSpeed: 450 },
+    technician: { predictionAccuracy: 0.65, courseAccuracy: 0.55 }
   },
 };
 
