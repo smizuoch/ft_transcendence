@@ -1,6 +1,7 @@
-import { AIEngine } from './aiEngine';
-import { AIConfig, DEFAULT_AI_CONFIG } from './aiTypes';
-import type { GameState, AIDebugInfo } from './aiTypes';
+import { NPCEngine } from './npcEngine';
+import { NPCConfig, DEFAULT_NPC_CONFIG } from './npcTypes';
+import type { GameState, NPCDebugInfo } from './npcTypes';
+import { DIFFICULTY_SETTINGS } from './npcTypes';
 
 export interface Ball {
   x: number;
@@ -27,7 +28,7 @@ export interface GameConfig {
   paddleWidth: number;
   paddleHeight: number;
   initialBallSpeed: number;
-  ai: AIConfig;
+  npc: NPCConfig;
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -38,13 +39,19 @@ export const DEFAULT_CONFIG: GameConfig = {
   paddleWidth: 80,
   paddleHeight: 12,
   initialBallSpeed: 4,
-  ai: DEFAULT_AI_CONFIG,
+  npc: DEFAULT_NPC_CONFIG,
 };
 
 export class GameEngine {
   private state: GameState;
   private config: GameConfig;
-  private aiEngine: AIEngine;
+  private npcEngine: NPCEngine | null = null;
+
+  // パドルの速度追跡用
+  private paddleVelocity = {
+    paddle1: { x: 0, prevX: 0, lastUpdateTime: 0 },
+    paddle2: { x: 0, prevX: 0, lastUpdateTime: 0 }
+  };
 
   constructor(canvasWidth: number, canvasHeight: number, config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -74,8 +81,7 @@ export class GameEngine {
       canvasHeight,
       paddleHits: 0,
     };
-    
-    this.aiEngine = new AIEngine(this.config.ai, canvasWidth);
+
     this.resetBall();
   }
 
@@ -97,20 +103,29 @@ export class GameEngine {
     const { canvasWidth, canvasHeight } = this.state;
     this.state.ball.x = canvasWidth / 2;
     this.state.ball.y = canvasHeight / 2;
-    
+
     // 得点者の方向にボールを射出するか、ランダム（ゲーム開始時）
     const angle = (Math.random() * 0.167 + 0.083) * Math.PI;
     const h = Math.random() > 0.5 ? 1 : -1;
-    
+
     let verticalDirection: number;
-    if (lastScorer) {
-      // 得点者の方向にボールを射出
-      verticalDirection = lastScorer === 'player1' ? -1 : 1; // player1が得点 → 上方向(-1), player2が得点 → 下方向(1)
+
+    // NPCが有効な場合は常にプレイヤー側にボールを向ける
+    if (this.npcEngine && this.config.npc.enabled) {
+      // NPCがPlayer1の場合はPlayer2（下）にボールを向ける
+      // NPCがPlayer2の場合はPlayer1（上）にボールを向ける
+      verticalDirection = this.config.npc.player === 1 ? 1 : -1;
     } else {
-      // ゲーム開始時やリセット時はランダム
-      verticalDirection = Math.random() > 0.5 ? 1 : -1;
+      // NPC無効時の従来のロジック
+      if (lastScorer) {
+        // 得点者の方向にボールを射出
+        verticalDirection = lastScorer === 'player1' ? -1 : 1; // player1が得点 → 上方向(-1), player2が得点 → 下方向(1)
+      } else {
+        // ゲーム開始時やリセット時はランダム
+        verticalDirection = Math.random() > 0.5 ? 1 : -1;
+      }
     }
-    
+
     this.state.ball.dy = this.state.ball.speed * Math.cos(angle) * verticalDirection;
     this.state.ball.dx = this.state.ball.speed * Math.sin(angle) * h;
     this.state.ball.speedMultiplier = 1;
@@ -128,12 +143,34 @@ export class GameEngine {
   }
 
   public update(): 'none' | 'player1' | 'player2' {
-    // AI更新
-    this.aiEngine.updatePaddle(this.state, this.config.paddleSpeed);
-    
+    // パドル速度を更新
+    this.updatePaddleVelocities();
+
+    // NPC更新
+    if (this.npcEngine) {
+      this.npcEngine.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+    }
+
     this.updatePaddles();
     this.updateBall();
     return this.checkGoals();
+  }
+
+  private updatePaddleVelocities(): void {
+    const currentTime = Date.now();
+    const dt = Math.max((currentTime - this.paddleVelocity.paddle1.lastUpdateTime) / 1000, 1/60);
+
+    // Paddle1の速度計算
+    const paddle1DeltaX = this.state.paddle1.x - this.paddleVelocity.paddle1.prevX;
+    this.paddleVelocity.paddle1.x = paddle1DeltaX / dt;
+    this.paddleVelocity.paddle1.prevX = this.state.paddle1.x;
+    this.paddleVelocity.paddle1.lastUpdateTime = currentTime;
+
+    // Paddle2の速度計算
+    const paddle2DeltaX = this.state.paddle2.x - this.paddleVelocity.paddle2.prevX;
+    this.paddleVelocity.paddle2.x = paddle2DeltaX / dt;
+    this.paddleVelocity.paddle2.prevX = this.state.paddle2.x;
+    this.paddleVelocity.paddle2.lastUpdateTime = currentTime;
   }
 
   private updatePaddles(): void {
@@ -181,23 +218,37 @@ export class GameEngine {
 
   private reflectBall(paddle: Paddle, isTop: boolean): void {
     const { ball } = this.state;
+
+    // 【シンプルな角度決定システム（接触位置のみ）】
+    // パドル上での接触位置を計算（-1.0 ～ +1.0の範囲）
     const hitPosition = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
-    const angle = hitPosition * (Math.PI / 3);
-    
-    this.state.paddleHits += 1;
-    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 4);
-    
+
+    // 接触位置を角度に変換（最大60度まで）
+    const reflectionAngle = hitPosition * (Math.PI / 3); // Math.PI/3 = 60度
+
+    // 現在のボール速度を保持
     const speed = Math.hypot(ball.dx, ball.dy);
-    
+
     if (isTop) {
-      ball.dx = Math.sin(angle) * speed;
-      ball.dy = Math.abs(Math.cos(angle) * speed);
+      // 上側パドル（Player1）との接触
+      ball.dx = Math.sin(reflectionAngle) * speed; // 水平成分
+      ball.dy = Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（下向き）
       ball.y = paddle.y + paddle.height + ball.radius;
     } else {
-      ball.dx = Math.sin(Math.PI - angle) * speed;
-      ball.dy = -Math.abs(Math.cos(angle) * speed);
+      // 下側パドル（Player2）との接触
+      ball.dx = Math.sin(Math.PI - reflectionAngle) * speed; // 水平成分（反転）
+      ball.dy = -Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（上向き）
       ball.y = paddle.y - ball.radius;
     }
+
+    // NPCの技効果をリセット（使用後クリア）
+    if (this.npcEngine) {
+      this.npcEngine.resetTechniqueEffect();
+    }
+
+    // 【速度増加システム】
+    this.state.paddleHits += 1;
+    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 4); // 最大4倍まで加速
   }
 
   private checkGoals(): 'none' | 'player1' | 'player2' {
@@ -214,13 +265,38 @@ export class GameEngine {
     return 'none';
   }
 
-  public updateAIConfig(config: Partial<AIConfig>): void {
-    this.config.ai = { ...this.config.ai, ...config };
-    this.aiEngine.updateConfig(config);
+  public updateNPCConfig(config: Partial<NPCConfig>): void {
+    this.config.npc = { ...this.config.npc, ...config };
+
+    // 難易度設定の自動適用
+    if (config.difficulty && config.difficulty !== 'Custom') {
+      const settings = DIFFICULTY_SETTINGS[config.difficulty];
+      if (config.mode === 'technician' && settings.technician) {
+        this.config.npc.technician = { ...this.config.npc.technician, ...settings.technician };
+      }
+    }
+
+    if (!this.npcEngine) {
+      this.npcEngine = new NPCEngine(config as NPCConfig, this.state.canvasWidth);
+    } else {
+      this.npcEngine.updateConfig(config);
+    }
   }
 
-  public getAIDebugInfo(): AIDebugInfo {
-    return this.aiEngine.getDebugInfo();
+  public getNPCDebugInfo(): NPCDebugInfo | null {
+    if (!this.npcEngine) return null;
+    return this.npcEngine.getDebugInfo();
+  }
+
+  private getGameState(): GameState {
+    return {
+      ball: this.state.ball,
+      paddle1: this.state.paddle1,
+      paddle2: this.state.paddle2,
+      canvasWidth: this.state.canvasWidth,
+      canvasHeight: this.state.canvasHeight,
+      paddleHits: this.state.paddleHits || 0,
+    };
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
