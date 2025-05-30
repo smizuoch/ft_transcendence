@@ -244,7 +244,7 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private predictBallArrivalX(): number {
-    // キャッシュされたゲームビューを使用（1秒に1回のみ更新される）
+    // キャッシュされたゲームビューを使用（1秒に1回のみ更新）
     const ball = {
       x: this.cachedGameView.ballPosition.x,
       y: this.cachedGameView.ballPosition.y,
@@ -352,17 +352,17 @@ export class TechnicianNPC implements NPCAlgorithm {
     const filteredActions = this.applyDiversityPenalty(actions);
 
     // 有効なアクション（utility > 0）のみを考慮
-    const validActions = filteredActions.filter(action => action.utility > 0);
+    const validActions = filteredActions.filter((action: Action) => action.utility > 0);
 
     // 有効なアクションがない場合は、前回以外の技から選択
     let bestAction: Action;
     if (validActions.length === 0) {
-      const nonRepeatingActions = actions.filter(action => action.technique !== this.lastTechnique);
-      bestAction = nonRepeatingActions.reduce((best, current) =>
+      const nonRepeatingActions = actions.filter((action: Action) => action.technique !== this.lastTechnique);
+      bestAction = nonRepeatingActions.reduce((best: Action, current: Action) =>
         current.utility > best.utility ? current : best
       );
     } else {
-      bestAction = validActions.reduce((best, current) =>
+      bestAction = validActions.reduce((best: Action, current: Action) =>
         current.utility > best.utility ? current : best
       );
     }
@@ -371,8 +371,8 @@ export class TechnicianNPC implements NPCAlgorithm {
     this.isReturning = true;
     this.targetPosition = ballArrivalX;
 
-    // 技の履歴を更新
-    this.updateTechniqueHistory(bestAction.technique);
+    // 技の履歴更新をplanActionから削除（executeCurrentActionで行う）
+    // this.updateTechniqueHistory(bestAction.technique); // この行を削除
   }
 
   private updateTechniqueHistory(technique: TechniqueType): void {
@@ -419,16 +419,12 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateCourseUtility(isAtCenter: boolean): number {
-    const playerPosition = this.internalState.playerPaddlePosition;
-    const fieldCenter = this.internalState.fieldWidth / 2;
+    // プレイヤー距離ボーナスを削除し、シンプルな基本値ベースに
+    let utility = 0.6; // 基本値のみ
 
-    // プレイヤーから遠い方向への返球を高く評価
-    const distanceFromCenter = Math.abs(playerPosition - fieldCenter);
-    let utility = 0.6 + (distanceFromCenter / fieldCenter) * 0.3;
-
-    // 中央にいる場合はコースショットを優遇
+    // 中央にいる場合はコースショットを大幅に優遇
     if (isAtCenter) {
-      utility += 0.2;
+      utility += 0.35;
     }
 
     // ランダム要素を追加
@@ -440,9 +436,22 @@ export class TechnicianNPC implements NPCAlgorithm {
   private calculateStraightUtility(isAtEdge: boolean): number {
     let utility = 0.5;
 
-    // 端にいる場合はストレートを少し優遇
+    // 端にいる場合の距離ボーナスを計算
     if (isAtEdge) {
+      const npcPosition = this.internalState.npcPaddlePosition;
+      const playerPosition = this.internalState.playerPaddlePosition;
+      const fieldWidth = this.internalState.fieldWidth;
+
+      // NPCと相手プレイヤーの距離を計算
+      const distance = Math.abs(npcPosition - playerPosition);
+      const maxDistance = fieldWidth; // 最大距離
+      const distanceRatio = distance / maxDistance;
+
+      // 基本的な端ボーナス
       utility += 0.2;
+
+      // 距離に応じたボーナス（離れているほど高評価）
+      utility += distanceRatio * 0.3; // 最大0.3のボーナス
     }
 
     // ランダム要素を追加
@@ -462,7 +471,7 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateDoubleBounceUtility(isAtEdge: boolean): number {
-    let utility = 0.45;
+    let utility = 0.35; // 0.45 → 0.35に下げてBOUNCE(0.4)より低く設定
 
     // 端にいる場合はダブルバウンドを優遇
     if (isAtEdge) {
@@ -473,68 +482,6 @@ export class TechnicianNPC implements NPCAlgorithm {
     utility += (Math.random() - 0.5) * 0.2;
 
     return Math.max(0.1, Math.min(1.0, utility));
-  }
-
-  private executeCurrentAction(): { paddlePosition: number; shouldReturn: boolean } {
-    if (!this.currentAction) {
-      this.activeTechniqueEffect.shouldApply = false;
-      return {
-        paddlePosition: this.moveToCenter(),
-        shouldReturn: false
-      };
-    }
-
-    let targetX = this.targetPosition;
-
-    switch (this.currentAction.technique) {
-      case TechniqueType.STRAIGHT:
-        targetX = this.calculateStraightTarget();
-        this.activeTechniqueEffect = {
-          type: TechniqueType.STRAIGHT,
-          shouldApply: true
-        };
-        break;
-
-      case TechniqueType.COURSE:
-        const playerPos = this.internalState.playerPaddlePosition;
-        const fieldCenter = this.internalState.fieldWidth / 2;
-        if (playerPos < fieldCenter) {
-          targetX = this.internalState.fieldWidth * 0.8;
-        } else {
-          targetX = this.internalState.fieldWidth * 0.2;
-        }
-        this.activeTechniqueEffect.shouldApply = false;
-        break;
-
-      case TechniqueType.BOUNCE:
-        targetX = this.calculateBounceTarget();
-        this.activeTechniqueEffect.shouldApply = false;
-        break;
-
-      case TechniqueType.DOUBLE_BOUNCE:
-        targetX = this.calculateDoubleBounceTarget();
-        this.activeTechniqueEffect.shouldApply = false;
-        break;
-    }
-
-    if (this.currentAction.technique !== TechniqueType.STRAIGHT) {
-      const courseError = (1 - this.difficulty.courseAccuracy) * 40;
-      const randomError = (Math.random() - 0.5) * courseError;
-      targetX += randomError;
-    }
-
-    const newPosition = this.moveTowards(targetX);
-    const shouldReturn = Math.abs(newPosition - targetX) < 25;
-
-    if (shouldReturn) {
-      this.currentAction = null;
-      this.isReturning = false;
-    }
-
-    return {
-      paddlePosition: newPosition,
-      shouldReturn: shouldReturn
-    };
   }
 
   /**
@@ -716,6 +663,70 @@ export class TechnicianNPC implements NPCAlgorithm {
 
   public getTargetPosition(): number {
     return this.targetPosition;
+  }
+
+  private executeCurrentAction(): { paddlePosition: number; shouldReturn: boolean } {
+    if (!this.currentAction) {
+      this.activeTechniqueEffect.shouldApply = false;
+      return {
+        paddlePosition: this.moveToCenter(),
+        shouldReturn: false
+      };
+    }
+
+    let targetX = this.targetPosition;
+
+    switch (this.currentAction.technique) {
+      case TechniqueType.STRAIGHT:
+        targetX = this.calculateStraightTarget();
+        this.activeTechniqueEffect = {
+          type: TechniqueType.STRAIGHT,
+          shouldApply: true
+        };
+        break;
+
+      case TechniqueType.COURSE:
+        const playerPos = this.internalState.playerPaddlePosition;
+        const fieldCenter = this.internalState.fieldWidth / 2;
+        if (playerPos < fieldCenter) {
+          targetX = this.internalState.fieldWidth * 0.8;
+        } else {
+          targetX = this.internalState.fieldWidth * 0.2;
+        }
+        this.activeTechniqueEffect.shouldApply = false;
+        break;
+
+      case TechniqueType.BOUNCE:
+        targetX = this.calculateBounceTarget();
+        this.activeTechniqueEffect.shouldApply = false;
+        break;
+
+      case TechniqueType.DOUBLE_BOUNCE:
+        targetX = this.calculateDoubleBounceTarget();
+        this.activeTechniqueEffect.shouldApply = false;
+        break;
+    }
+
+    if (this.currentAction.technique !== TechniqueType.STRAIGHT) {
+      const courseError = (1 - this.difficulty.courseAccuracy) * 40;
+      const randomError = (Math.random() - 0.5) * courseError;
+      targetX += randomError;
+    }
+
+    const newPosition = this.moveTowards(targetX);
+    const shouldReturn = Math.abs(newPosition - targetX) < 25;
+
+    if (shouldReturn) {
+      // 返球完了時：技履歴を更新してから現在のアクションをリセット
+      this.updateTechniqueHistory(this.currentAction.technique);
+      this.currentAction = null;
+      this.isReturning = false;
+    }
+
+    return {
+      paddlePosition: newPosition,
+      shouldReturn: shouldReturn
+    };
   }
 }
 
