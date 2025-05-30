@@ -274,6 +274,9 @@ export class GameEngine {
       if (config.mode === 'technician' && settings.technician) {
         this.config.npc.technician = { ...this.config.npc.technician, ...settings.technician };
       }
+      if (config.mode === 'pid' && settings.pid) {
+        this.config.npc.pid = { ...this.config.npc.pid, ...settings.pid };
+      }
     }
 
     if (!this.npcEngine) {

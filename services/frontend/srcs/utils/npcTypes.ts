@@ -1,7 +1,7 @@
 export interface NPCConfig {
   enabled: boolean;
   player: 1 | 2;
-  mode: 'heuristic' | 'pid' | 'technician'; // technicianを追加
+  mode: 'heuristic' | 'pid' | 'technician';
   reactionDelay: number;
   positionNoise: number;
   followGain: number;
@@ -11,7 +11,7 @@ export interface NPCConfig {
   trackingNoise: number;
   trackingTimeout: number;
   difficulty: 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom';
-  pid: {
+  pid?: {
     kp: number;
     ki: number;
     kd: number;
