@@ -396,9 +396,6 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateCourseUtility(isAtCenter: boolean): number {
-    // デバッグ用：ストレート以外は無効化
-    return 0;
-
     // プレイヤー距離ボーナスを削除し、シンプルな基本値ベースに
     let utility = 0.6; // 基本値のみ
 
@@ -441,9 +438,6 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateBounceUtility(): number {
-    // デバッグ用：ストレート以外は無効化
-    return 0;
-
     // BOUNCEのユーティリティを下げて他の技も選ばれやすくする
     let utility = 0.4;
 
@@ -454,9 +448,6 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateDoubleBounceUtility(isAtEdge: boolean): number {
-    // デバッグ用：ストレート以外は無効化
-    return 0;
-
     let utility = 0.35; // 0.45 → 0.35に下げてBOUNCE(0.4)より低く設定
 
     // 端にいる場合はダブルバウンドを優遇
@@ -543,14 +534,14 @@ export class TechnicianNPC implements NPCAlgorithm {
 
   private moveTowards(targetX: number): number {
     const currentX = this.internalState.npcPaddlePosition;
-    const speed = 7; // 6 → 7に向上（移動速度向上）
+    const speed = 8; // プレイヤーと同じ移動速度に設定
     const direction = targetX > currentX ? 1 : -1;
     const distance = Math.abs(targetX - currentX);
 
-    // 移動閾値（微細な移動を抑制するため）
-    const moveThreshold = 15; // 20 → 15に減少（より精密な位置取り）
+    // 移動閾値を完全に排除（すべての移動を許可）
+    const moveThreshold = 0; // 位置取り制約を完全に排除
     if (distance < moveThreshold) {
-      return currentX; // 現在位置を維持
+      return currentX;
     }
 
     if (distance < speed) {
@@ -675,14 +666,15 @@ export class TechnicianNPC implements NPCAlgorithm {
         break;
     }
 
-    if (this.currentAction.technique !== TechniqueType.STRAIGHT) {
-      const courseError = (1 - this.difficulty.courseAccuracy) * 40;
-      const randomError = (Math.random() - 0.5) * courseError;
-      targetX += randomError;
-    }
+    // STRAIGHT技以外にもエラーを完全に排除
+    // if (this.currentAction.technique !== TechniqueType.STRAIGHT) {
+    //   const courseError = (1 - this.difficulty.courseAccuracy) * 40;
+    //   const randomError = (Math.random() - 0.5) * courseError;
+    //   targetX += randomError;
+    // }
 
     const newPosition = this.moveTowards(targetX);
-    const shouldReturn = Math.abs(newPosition - targetX) < 25;
+    const shouldReturn = Math.abs(newPosition - targetX) < 1; // 位置取り制約を最小化：1ピクセル以内
 
     if (shouldReturn) {
       // 返球完了時：技履歴を更新してから現在のアクションをリセット
