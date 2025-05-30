@@ -219,56 +219,31 @@ export class GameEngine {
   private reflectBall(paddle: Paddle, isTop: boolean): void {
     const { ball } = this.state;
 
-    // NPCの技効果をチェック
-    const techniqueEffect = this.npcEngine?.getActiveTechniqueEffect();
+    // 【シンプルな角度決定システム（接触位置のみ）】
+    // パドル上での接触位置を計算（-1.0 ～ +1.0の範囲）
+    const hitPosition = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
 
-    if (techniqueEffect && techniqueEffect.forceVerticalReturn) {
-      // 【技効果による角度制御】
-      // STRAIGHT技の場合：ほぼ垂直だが微小な水平成分を追加
-      const speed = Math.hypot(ball.dx, ball.dy);
+    // 接触位置を角度に変換（最大60度まで）
+    const reflectionAngle = hitPosition * (Math.PI / 3); // Math.PI/3 = 60度
 
-      // わずかな水平成分を追加（-5度から+5度の範囲）
-      const minAngle = Math.PI / 90; // 5度
-      const randomAngle = (Math.random() - 0.5) * 5 * minAngle; // -5度〜+5度
+    // 現在のボール速度を保持
+    const speed = Math.hypot(ball.dx, ball.dy);
 
-      // 水平成分と垂直成分を計算
-      const horizontalComponent = Math.sin(randomAngle) * speed;
-      const verticalComponent = Math.cos(randomAngle) * speed;
-
-      if (isTop) {
-        ball.dx = horizontalComponent; // わずかな水平成分
-        ball.dy = Math.abs(verticalComponent); // 下向き
-        ball.y = paddle.y + paddle.height + ball.radius;
-      } else {
-        ball.dx = horizontalComponent; // わずかな水平成分
-        ball.dy = -Math.abs(verticalComponent); // 上向き
-        ball.y = paddle.y - ball.radius;
-      }
-
-      // 技効果をリセット
-      this.npcEngine?.resetTechniqueEffect();
+    if (isTop) {
+      // 上側パドル（Player1）との接触
+      ball.dx = Math.sin(reflectionAngle) * speed; // 水平成分
+      ball.dy = Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（下向き）
+      ball.y = paddle.y + paddle.height + ball.radius;
     } else {
-      // 【シンプルな角度決定システム（接触位置のみ）】
-      // パドル上での接触位置を計算（-1.0 ～ +1.0の範囲）
-      const hitPosition = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+      // 下側パドル（Player2）との接触
+      ball.dx = Math.sin(Math.PI - reflectionAngle) * speed; // 水平成分（反転）
+      ball.dy = -Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（上向き）
+      ball.y = paddle.y - ball.radius;
+    }
 
-      // 接触位置を角度に変換（最大60度まで）
-      const reflectionAngle = hitPosition * (Math.PI / 3); // Math.PI/3 = 60度
-
-      // 現在のボール速度を保持
-      const speed = Math.hypot(ball.dx, ball.dy);
-
-      if (isTop) {
-        // 上側パドル（Player1）との接触
-        ball.dx = Math.sin(reflectionAngle) * speed; // 水平成分
-        ball.dy = Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（下向き）
-        ball.y = paddle.y + paddle.height + ball.radius;
-      } else {
-        // 下側パドル（Player2）との接触
-        ball.dx = Math.sin(Math.PI - reflectionAngle) * speed; // 水平成分（反転）
-        ball.dy = -Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（上向き）
-        ball.y = paddle.y - ball.radius;
-      }
+    // NPCの技効果をリセット（使用後クリア）
+    if (this.npcEngine) {
+      this.npcEngine.resetTechniqueEffect();
     }
 
     // 【速度増加システム】
