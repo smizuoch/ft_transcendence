@@ -397,7 +397,7 @@ export class TechnicianNPC implements NPCAlgorithm {
 
   private calculateCourseUtility(isAtCenter: boolean): number {
     // プレイヤー距離ボーナスを削除し、シンプルな基本値ベースに
-    let utility = 0.6; // 基本値のみ
+    let utility = 0.4; // 基本値のみ
 
     // 中央にいる場合はコースショットを大幅に優遇
     if (isAtCenter) {
@@ -411,7 +411,7 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private calculateStraightUtility(isAtEdge: boolean): number {
-    let utility = 0.9; // ストレート技を最優先にするため高い値に設定
+    let utility = 0.4; // ストレート技を最優先にするため高い値に設定
 
     // 端にいる場合の距離ボーナスを計算
     if (isAtEdge) {
