@@ -219,9 +219,6 @@ export class GameEngine {
   private reflectBall(paddle: Paddle, isTop: boolean): void {
     const { ball } = this.state;
 
-    // パドルの速度を取得
-    const paddleVel = isTop ? this.paddleVelocity.paddle1.x : this.paddleVelocity.paddle2.x;
-
     // NPCの技効果をチェック
     const techniqueEffect = this.npcEngine?.getActiveTechniqueEffect();
 
@@ -251,50 +248,26 @@ export class GameEngine {
       // 技効果をリセット
       this.npcEngine?.resetTechniqueEffect();
     } else {
-      // 【通常の角度決定システム（パドル速度考慮）】
-      // 1. パドル上での接触位置を計算（-1.0 ～ +1.0の範囲）
+      // 【シンプルな角度決定システム（接触位置のみ）】
+      // パドル上での接触位置を計算（-1.0 ～ +1.0の範囲）
       const hitPosition = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
 
-      // 2. 接触位置を角度に変換（最大60度まで）
-      const baseAngle = hitPosition * (Math.PI / 3); // Math.PI/3 = 60度
+      // 接触位置を角度に変換（最大60度まで）
+      const reflectionAngle = hitPosition * (Math.PI / 3); // Math.PI/3 = 60度
 
-      // 3. パドル速度による追加角度（影響を軽減）
-      const velocityInfluence = 0.6; // 1.2 → 0.6に削減（半分に軽減）
-      const maxVelocityAngle = Math.PI / 6; // 60度 → 30度に削減
-      const velocityAngle = Math.max(-maxVelocityAngle,
-        Math.min(maxVelocityAngle, paddleVel * velocityInfluence * 0.01)); // 0.02 → 0.01に削減
-
-      // 4. 最終角度を計算（基本角度 + 速度角度）
-      const finalAngle = baseAngle + velocityAngle;
-
-      // 5. 角度を制限（最大75度に調整）
-      const maxTotalAngle = Math.PI * 5 / 12; // 85度 → 75度に削減
-      const clampedAngle = Math.max(-maxTotalAngle, Math.min(maxTotalAngle, finalAngle));
-
-      // 6. 現在のボール速度を保持
+      // 現在のボール速度を保持
       const speed = Math.hypot(ball.dx, ball.dy);
 
       if (isTop) {
         // 上側パドル（Player1）との接触
-        ball.dx = Math.sin(clampedAngle) * speed; // 水平成分
-        ball.dy = Math.abs(Math.cos(clampedAngle) * speed); // 垂直成分（下向き）
+        ball.dx = Math.sin(reflectionAngle) * speed; // 水平成分
+        ball.dy = Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（下向き）
         ball.y = paddle.y + paddle.height + ball.radius;
       } else {
         // 下側パドル（Player2）との接触
-        ball.dx = Math.sin(Math.PI - clampedAngle) * speed; // 水平成分（反転）
-        ball.dy = -Math.abs(Math.cos(clampedAngle) * speed); // 垂直成分（上向き）
+        ball.dx = Math.sin(Math.PI - reflectionAngle) * speed; // 水平成分（反転）
+        ball.dy = -Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（上向き）
         ball.y = paddle.y - ball.radius;
-      }
-
-      // パドル速度によるボール速度への追加影響（軽減）
-      const speedBoost = Math.abs(paddleVel) * 0.04; // 0.08 → 0.04に削減
-      const currentBallSpeed = Math.hypot(ball.dx, ball.dy);
-      const boostedSpeed = Math.min(currentBallSpeed + speedBoost, this.config.maxBallSpeed);
-
-      if (boostedSpeed > currentBallSpeed) {
-        const speedRatio = boostedSpeed / currentBallSpeed;
-        ball.dx *= speedRatio;
-        ball.dy *= speedRatio;
       }
     }
 
