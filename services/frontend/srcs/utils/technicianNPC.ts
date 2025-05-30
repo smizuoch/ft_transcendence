@@ -72,6 +72,21 @@ export class TechnicianNPC implements NPCAlgorithm {
   private viewUpdateInterval: number = 1000; // 1秒間隔
   private cachedBallArrivalX: number = 0;
 
+  // キャッシュされたゲーム状態（1秒に1回のみ更新）
+  private cachedGameView: {
+    ballPosition: { x: number; y: number };
+    playerPaddlePosition: number;
+    npcPaddlePosition: number;
+    ballMovingToNPC: boolean;
+    lastUpdateTime: number;
+  } = {
+    ballPosition: { x: 0, y: 0 },
+    playerPaddlePosition: 0,
+    npcPaddlePosition: 0,
+    ballMovingToNPC: false,
+    lastUpdateTime: 0
+  };
+
   constructor(config: NPCConfig) {
     this.config = config;
     this.difficulty = {
@@ -108,26 +123,14 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   public calculateMovement(gameState: GameState, npcPaddle: { x: number; y: number; width: number; height: number }): { targetX: number; movement: number; techniqueEffect?: any } {
-    this.gameState = gameState;
-
-    // GameStateから内部状態を更新
-    this.updateInternalState(gameState, npcPaddle);
-
-    // 現在のパドル位置を記録
+    // 現在のパドル位置のみ毎フレーム更新（物理的な位置情報）
     this.smoothMovement.currentX = npcPaddle.x + npcPaddle.width / 2;
 
-    // 得点後の検出（paddleHitsがリセットされた場合）
-    if (gameState.paddleHits < this.lastGameState.paddleHits) {
-      // 得点が発生したので初回権利を付与
-      this.grantInitialPermission();
-    }
-    this.lastGameState.paddleHits = gameState.paddleHits;
-
-    // 1秒に1回のみビューを更新（権利付与）
+    // 1秒に1回のみゲームビューを更新
     const currentTime = Date.now();
     if (currentTime - this.lastViewUpdateTime >= this.viewUpdateInterval) {
+      this.updateGameView(gameState, npcPaddle);
       this.lastViewUpdateTime = currentTime;
-      this.cachedBallArrivalX = this.predictBallArrivalX(); // 新しい予測を計算
 
       // パドル移動権利を付与
       this.hasMovementPermission = true;
@@ -136,17 +139,21 @@ export class TechnicianNPC implements NPCAlgorithm {
       this.update(); // 技の選択も1秒に1回
     }
 
-    // ボールがNPC側に向かっているかチェック
-    const ballMovingToNPC = this.config.player === 1 ?
-      this.gameState.ball.dy < 0 : this.gameState.ball.dy > 0;
+    // 得点後の検出（paddleHitsがリセットされた場合）
+    // これは物理的なゲーム状態の変化なので毎フレームチェック可能
+    if (gameState.paddleHits < this.lastGameState.paddleHits) {
+      // 得点が発生したので初回権利を付与
+      this.grantInitialPermission();
+    }
+    this.lastGameState.paddleHits = gameState.paddleHits;
 
-    // 権利を持っていて、ボールがNPC側に向かっている場合のみパドルを動かす
-    // または、権利を持っていて初回の場合（ボールの方向に関係なく）
-    const shouldMove = this.hasMovementPermission && (ballMovingToNPC || this.isInitialMovement());
+    // キャッシュされたビュー情報を使用して判定
+    const shouldMove = this.hasMovementPermission &&
+      (this.cachedGameView.ballMovingToNPC || this.isInitialMovement());
 
     if (shouldMove) {
-      // キャッシュされた予測を使用（初回は現在のボール位置）
-      const targetBallX = this.cachedBallArrivalX || this.gameState.ball.x;
+      // キャッシュされた予測を使用
+      const targetBallX = this.cachedBallArrivalX || this.cachedGameView.ballPosition.x;
       this.smoothMovement.targetX = targetBallX - npcPaddle.width / 2;
 
       // スムーズな移動を計算
@@ -178,6 +185,34 @@ export class TechnicianNPC implements NPCAlgorithm {
     }
   }
 
+  // 1秒に1回のみ実行されるゲームビュー更新
+  private updateGameView(gameState: GameState, npcPaddle: { x: number; y: number; width: number; height: number }): void {
+    // ゲーム状態を更新（1秒に1回のみ）
+    this.gameState = gameState;
+
+    // キャッシュされたビューを更新
+    this.cachedGameView = {
+      ballPosition: { x: gameState.ball.x, y: gameState.ball.y },
+      playerPaddlePosition: this.config.player === 1 ?
+        gameState.paddle2.x + gameState.paddle2.width / 2 :
+        gameState.paddle1.x + gameState.paddle1.width / 2,
+      npcPaddlePosition: npcPaddle.x + npcPaddle.width / 2,
+      ballMovingToNPC: this.config.player === 1 ?
+        gameState.ball.dy < 0 : gameState.ball.dy > 0,
+      lastUpdateTime: Date.now()
+    };
+
+    // 内部状態を更新（1秒に1回のみ）
+    this.internalState.npcPaddlePosition = this.cachedGameView.npcPaddlePosition;
+    this.internalState.playerPaddlePosition = this.cachedGameView.playerPaddlePosition;
+    this.internalState.fieldWidth = gameState.canvasWidth;
+    this.internalState.fieldHeight = gameState.canvasHeight;
+    this.internalState.paddleHeight = npcPaddle.height;
+
+    // ボール到着予測を更新（1秒に1回のみ）
+    this.cachedBallArrivalX = this.predictBallArrivalX();
+  }
+
   // 得点後の初回権利付与
   private grantInitialPermission(): void {
     this.hasMovementPermission = true;
@@ -187,8 +222,8 @@ export class TechnicianNPC implements NPCAlgorithm {
     this.currentAction = null;
     this.isReturning = false;
 
-    // 予測をリセット
-    this.cachedBallArrivalX = this.gameState.ball.x;
+    // 予測をリセット（現在のキャッシュされた情報を使用）
+    this.cachedBallArrivalX = this.cachedGameView.ballPosition.x;
 
     // 技の履歴もリセット（新しいラウンドなので）
     this.lastTechnique = null;
@@ -209,13 +244,18 @@ export class TechnicianNPC implements NPCAlgorithm {
   }
 
   private predictBallArrivalX(): number {
-    const { ball } = this.gameState;
+    // キャッシュされたゲームビューを使用（1秒に1回のみ更新される）
+    const ball = {
+      x: this.cachedGameView.ballPosition.x,
+      y: this.cachedGameView.ballPosition.y,
+      dx: this.gameState.ball.dx, // 速度情報は物理演算から取得
+      dy: this.gameState.ball.dy
+    };
+
     const npcY = this.config.player === 1 ? this.gameState.paddle1.y : this.gameState.paddle2.y;
 
-    // ボールがNPCの方向に向かっているかチェック
-    const ballMovingToNPC = this.config.player === 1 ? ball.dy < 0 : ball.dy > 0;
-
-    if (!ballMovingToNPC || Math.abs(ball.dy) < 0.1) {
+    // キャッシュされたボール方向情報を使用
+    if (!this.cachedGameView.ballMovingToNPC || Math.abs(ball.dy) < 0.1) {
       return ball.x; // ボールが向かってこない場合は現在位置
     }
 
@@ -235,7 +275,7 @@ export class TechnicianNPC implements NPCAlgorithm {
     }
 
     // 予測精度エラーを適用（ただし毎回は変更しない）
-    const error = (1 - this.difficulty.predictionAccuracy) * 80; // 100 → 80に減少（精度向上）
+    const error = (1 - this.difficulty.predictionAccuracy) * 80;
     let predictedX = futureX;
 
     // 前回の予測から大きく変わった場合のみ新しいエラーを適用
@@ -245,8 +285,8 @@ export class TechnicianNPC implements NPCAlgorithm {
 
       // 意図的なミス頻度を調整
       const missChance = 1 - this.getReturnSuccessRate();
-      if (Math.random() < missChance * 1.2) { // 1.5 → 1.2に減少（ミス頻度を下げる）
-        const missError = (Math.random() - 0.5) * 250; // 300 → 250に減少
+      if (Math.random() < missChance * 1.2) {
+        const missError = (Math.random() - 0.5) * 250;
         predictedX = futureX + randomError + missError;
       }
 
@@ -259,20 +299,9 @@ export class TechnicianNPC implements NPCAlgorithm {
     return Math.max(0, Math.min(this.gameState.canvasWidth, predictedX));
   }
 
-  private updateInternalState(gameState: GameState, npcPaddle: { x: number; y: number; width: number; height: number }): void {
-    this.internalState.npcPaddlePosition = npcPaddle.x + npcPaddle.width / 2; // X座標で管理
-    this.internalState.playerPaddlePosition = this.config.player === 1 ?
-      gameState.paddle2.x + gameState.paddle2.width / 2 :
-      gameState.paddle1.x + gameState.paddle1.width / 2;
-    this.internalState.fieldWidth = gameState.canvasWidth;
-    this.internalState.fieldHeight = gameState.canvasHeight;
-    this.internalState.paddleHeight = npcPaddle.height;
-  }
-
   public update(): { paddlePosition: number; shouldReturn: boolean } {
-    // ボールが自分の方向に向かっているかチェック
-    const ballMovingToNPC = this.config.player === 1 ?
-      this.gameState.ball.dy < 0 : this.gameState.ball.dy > 0;
+    // キャッシュされたゲームビューを使用
+    const ballMovingToNPC = this.cachedGameView.ballMovingToNPC;
 
     // 権利を持っていて、ボールがNPC側に向かっている場合のみアクションを計画
     // または、初回移動の場合
@@ -661,13 +690,14 @@ export class TechnicianNPC implements NPCAlgorithm {
       targetPosition: this.targetPosition,
       isReturning: this.isReturning,
       returnSuccessRate: this.getReturnSuccessRate(),
-      ballPosition: { x: this.gameState.ball.x, y: this.gameState.ball.y },
-      npcPosition: this.internalState.npcPaddlePosition,
+      ballPosition: this.cachedGameView.ballPosition, // キャッシュされた位置を使用
+      npcPosition: this.cachedGameView.npcPaddlePosition, // キャッシュされた位置を使用
       activeTechniqueEffect: this.activeTechniqueEffect,
       hasMovementPermission: this.hasMovementPermission,
       permissionAge: this.permissionGrantedTime ? Date.now() - this.permissionGrantedTime : 0,
-      isInitialMovement: this.isInitialMovement(), // 初回移動状態をデバッグ情報に追加
-      lastPaddleHits: this.lastGameState.paddleHits, // デバッグ用
+      isInitialMovement: this.isInitialMovement(),
+      lastPaddleHits: this.lastGameState.paddleHits,
+      viewUpdateAge: Date.now() - this.cachedGameView.lastUpdateTime, // ビュー更新からの経過時間
       techniqueDiversity: {
         consecutive: this.lastTechnique ? 1 : 0,
         historyLength: this.techniqueHistory.length,
