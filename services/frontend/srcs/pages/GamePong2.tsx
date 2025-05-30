@@ -47,21 +47,19 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
     reactionDelay: 0.1,
     positionNoise: 5,
     followGain: 0.7,
-    // PID用のみ
     difficulty: 'Normal' as 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom',
     returnRate: 0.80,
     reactionDelayMs: 200,
     maxSpeed: 0.8,
     trackingNoise: 10,
     trackingTimeout: 6000,
-    // PID用
     pid: {
-      kp: 0.80,
-      ki: 0.08,
-      kd: 0.04,
-      maxIntegral: 60,
-      derivativeFilter: 0.5,
-      maxControlSpeed: 500,
+      kp: 1.00,
+      ki: 0.10,
+      kd: 0.08,
+      maxIntegral: 80,
+      derivativeFilter: 0.4,
+      maxControlSpeed: 600,
     },
   });
   const [npcDebugInfo, setNpcDebugInfo] = useState<{

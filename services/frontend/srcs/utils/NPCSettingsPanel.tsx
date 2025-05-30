@@ -119,15 +119,15 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
                     }}
                     className="ml-2 bg-gray-700 text-white px-2 py-1 rounded"
                   >
-                    <option value="Easy">😴 Easy (Kp=0.45)</option>
-                    <option value="Normal">🎯 Normal (Kp=0.80)</option>
-                    <option value="Hard">🔥 Hard (Kp=1.10)</option>
-                    <option value="Nightmare">👹 Nightmare (Kp=1.30)</option>
+                    <option value="Easy">😴 Easy</option>
+                    <option value="Normal">🎯 Normal</option>
+                    <option value="Hard">🔥 Hard</option>
+                    <option value="Nightmare">👹 Nightmare</option>
                     <option value="Custom">⚙️ Custom</option>
                   </select>
                 </div>
 
-                {npcSettings.difficulty === 'Custom' && (
+                {npcSettings.difficulty === 'Custom' && npcSettings.pid && (
                   <>
                     <div>
                       <label>Kp (比例ゲイン): {npcSettings.pid.kp.toFixed(2)}</label>
@@ -139,7 +139,7 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
                         value={npcSettings.pid.kp}
                         onChange={(e) => setNpcSettings(prev => ({
                           ...prev,
-                          pid: { ...prev.pid, kp: Number(e.target.value) }
+                          pid: { ...prev.pid!, kp: Number(e.target.value) }
                         }))}
                         className="w-full"
                       />
@@ -155,7 +155,7 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
                         value={npcSettings.pid.ki}
                         onChange={(e) => setNpcSettings(prev => ({
                           ...prev,
-                          pid: { ...prev.pid, ki: Number(e.target.value) }
+                          pid: { ...prev.pid!, ki: Number(e.target.value) }
                         }))}
                         className="w-full"
                       />
@@ -171,7 +171,7 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
                         value={npcSettings.pid.kd}
                         onChange={(e) => setNpcSettings(prev => ({
                           ...prev,
-                          pid: { ...prev.pid, kd: Number(e.target.value) }
+                          pid: { ...prev.pid!, kd: Number(e.target.value) }
                         }))}
                         className="w-full"
                       />
@@ -187,7 +187,7 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
                         value={npcSettings.pid.maxControlSpeed}
                         onChange={(e) => setNpcSettings(prev => ({
                           ...prev,
-                          pid: { ...prev.pid, maxControlSpeed: Number(e.target.value) }
+                          pid: { ...prev.pid!, maxControlSpeed: Number(e.target.value) }
                         }))}
                         className="w-full"
                       />

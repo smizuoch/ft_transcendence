@@ -1,81 +1,14 @@
 import { NPCConfig, DIFFICULTY_SETTINGS } from './npcTypes';
 import { NPCAlgorithm, NPCFactory } from './npcEngine';
-
-class PIDController {
-  private integral: number;
-  private lastError: number;
-  private lastTime: number;
-
-  constructor(
-    public kp: number,
-    public ki: number,
-    public kd: number,
-    public maxIntegral: number,
-    public derivativeFilter: number,
-    public maxControlSpeed: number
-  ) {
-    this.integral = 0;
-    this.lastError = 0;
-    this.lastTime = Date.now();
-  }
-
-  public updateGains(kp: number, ki: number, kd: number, maxIntegral: number, derivativeFilter: number, maxControlSpeed: number) {
-    this.kp = kp;
-    this.ki = ki;
-    this.kd = kd;
-    this.maxIntegral = maxIntegral;
-    this.derivativeFilter = derivativeFilter;
-    this.maxControlSpeed = maxControlSpeed;
-  }
-
-  public update(setPoint: number, processVariable: number): number {
-    const now = Date.now();
-    const timeChange = (now - this.lastTime) / 1000; // 秒単位
-    this.lastTime = now;
-
-    const error = setPoint - processVariable;
-
-    // 積分制御
-    this.integral += error * timeChange;
-    if (this.integral > this.maxIntegral) {
-      this.integral = this.maxIntegral;
-    } else if (this.integral < -this.maxIntegral) {
-      this.integral = -this.maxIntegral;
-    }
-
-    // 微分制御
-    const derivative = (error - this.lastError) / timeChange;
-    this.lastError = error;
-
-    // PID出力計算
-    let output = this.kp * error + this.ki * this.integral + this.kd * derivative;
-
-    // 出力制限
-    if (output > this.maxControlSpeed) {
-      output = this.maxControlSpeed;
-    } else if (output < -this.maxControlSpeed) {
-      output = -this.maxControlSpeed;
-    }
-
-    return output;
-  }
-
-  public getDebugInfo() {
-    return {
-      error: this.lastError,
-      p: this.kp * this.lastError,
-      i: this.ki * this.integral,
-      d: this.kd * ((this.lastError - this.lastError) / (Date.now() - this.lastTime)),
-      output: this.lastError
-    };
-  }
-}
+import { PIDController } from './pidController';
 
 export class PIDNPC implements NPCAlgorithm {
   private config: NPCConfig;
   private pidController: PIDController;
   private state: {
     rallyStartTime: number;
+    targetX: number;
+    lastUpdateTime: number;
   };
   private pidDebugInfo: { error: number; p: number; i: number; d: number; output: number } | null = null;
 
@@ -83,9 +16,19 @@ export class PIDNPC implements NPCAlgorithm {
     this.config = config;
     this.state = {
       rallyStartTime: Date.now(),
+      targetX: _canvasWidth ? _canvasWidth / 2 : 400,
+      lastUpdateTime: Date.now(),
     };
 
-    const pidConfig = this.config.pid;
+    const pidConfig = this.config.pid || {
+      kp: 1.0,
+      ki: 0.1,
+      kd: 0.08,
+      maxIntegral: 80,
+      derivativeFilter: 0.4,
+      maxControlSpeed: 600,
+    };
+
     this.pidController = new PIDController(
       pidConfig.kp,
       pidConfig.ki,
@@ -101,33 +44,85 @@ export class PIDNPC implements NPCAlgorithm {
 
     if (config.difficulty && config.difficulty !== 'Custom') {
       const settings = DIFFICULTY_SETTINGS[config.difficulty];
-      this.config.pid = {
-        ...this.config.pid,
-        ...settings.pid
-      };
+      if (settings.pid) {
+        this.config.pid = {
+          ...this.config.pid,
+          ...settings.pid
+        };
+      }
     }
 
-    if (config.pid) {
-      this.pidController.updateGains(
-        config.pid.kp || this.config.pid.kp,
-        config.pid.ki || this.config.pid.ki,
-        config.pid.kd || this.config.pid.kd,
-        config.pid.maxIntegral || this.config.pid.maxIntegral,
-        config.pid.derivativeFilter || this.config.pid.derivativeFilter,
-        config.pid.maxControlSpeed || this.config.pid.maxControlSpeed
-      );
+    if (config.pid || config.difficulty) {
+      const pidConfig = this.config.pid;
+      if (pidConfig) {
+        this.pidController.updateGains(
+          pidConfig.kp,
+          pidConfig.ki,
+          pidConfig.kd,
+          pidConfig.maxIntegral,
+          pidConfig.derivativeFilter,
+          pidConfig.maxControlSpeed
+        );
+      }
+    }
+
+    if (config.mode === 'pid') {
+      this.pidController.reset();
+      this.state.rallyStartTime = Date.now();
     }
   }
 
   public calculateMovement(gameState: any, npcPaddle: { x: number; y: number; width: number; height: number }, _paddleSpeed?: number): { targetX: number; pidOutput: number } {
     const predictedBallX = this.predictBallIntersection(gameState, npcPaddle);
-    const currentPaddleCenter = npcPaddle.x + npcPaddle.width / 2;
+    const ballHeadingToNPC = this.config.player === 1 ? gameState.ball.dy < 0 : gameState.ball.dy > 0;
 
-    const controlOutput = this.pidController.update(predictedBallX, currentPaddleCenter);
+    let targetX: number;
+
+    if (ballHeadingToNPC && Math.abs(gameState.ball.dy) > 0.1) {
+      // ボールがNPC方向に向かっている場合
+      const noise = (Math.random() - 0.5) * (this.config.trackingNoise || 10) * 0.7;
+      targetX = predictedBallX + noise;
+
+      // 難易度調整
+      const rallyTime = (Date.now() - this.state.rallyStartTime) / 1000;
+      const difficultyFactor = Math.max(0.4, 1.0 - Math.min(rallyTime / 25, 0.6));
+
+      const pidConfig = this.config.pid;
+      if (pidConfig) {
+        this.pidController.updateGains(
+          pidConfig.kp * difficultyFactor * 0.95,
+          pidConfig.ki * 0.85,
+          pidConfig.kd * difficultyFactor * 0.8,
+          pidConfig.maxIntegral,
+          Math.max(0.2, pidConfig.derivativeFilter),
+          pidConfig.maxControlSpeed * difficultyFactor * 0.85
+        );
+      }
+    } else {
+      // ボールが向かってこない場合は中央に戻る
+      targetX = gameState.canvasWidth / 2;
+
+      const pidConfig = this.config.pid;
+      if (pidConfig) {
+        this.pidController.updateGains(
+          pidConfig.kp * 0.35,
+          pidConfig.ki * 0.4,
+          pidConfig.kd * 0.3,
+          pidConfig.maxIntegral,
+          0.7,
+          pidConfig.maxControlSpeed * 0.4
+        );
+      }
+    }
+
+    const currentPaddleCenter = npcPaddle.x + npcPaddle.width / 2;
+    const controlOutput = this.pidController.update(targetX, currentPaddleCenter);
+
+    this.state.targetX = targetX;
     this.pidDebugInfo = this.pidController.getDebugInfo();
 
     return {
-      targetX: predictedBallX,
+      targetX: targetX,
       pidOutput: controlOutput
     };
   }
@@ -173,7 +168,7 @@ export class PIDNPC implements NPCAlgorithm {
   }
 
   public getTargetPosition(): number {
-    return 0;
+    return this.state.targetX;
   }
 }
 
