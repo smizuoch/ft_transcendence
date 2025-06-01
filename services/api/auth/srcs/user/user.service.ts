@@ -19,7 +19,6 @@ export class UserService {
         username,
         email,
         password: hashedPassword,
-        displayName: username, // デフォルトでユーザー名をディスプレイ名に設定
       },
     });
     
@@ -44,6 +43,13 @@ export class UserService {
     
     const { password: _, ...result } = user;
     return result;
+  }
+
+  // メールアドレスでユーザーを検索するメソッドを追加
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: { email },
+    });
   }
 }
 

@@ -15,7 +15,6 @@ async function main() {
       username: 'admin',
       email: 'admin@example.com',
       password: password,
-      displayName: 'Administrator',
     },
   });
 
@@ -27,7 +26,6 @@ async function main() {
       username: 'testuser',
       email: 'test@example.com',
       password: await bcrypt.hash('testpass', 10),
-      displayName: 'Test User',
     },
   });
 

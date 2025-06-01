@@ -2,10 +2,11 @@ FROM node:22-bookworm AS builder
 
 WORKDIR /app
 
-# Node.js用のパッケージマネージャー、pnpmを使用
+# Node.js用のパッケージマネージャー、pnpmを使用()
 RUN npm install -g pnpm@10.11.0
 
-# ts-nodeをグローバルにインストール(TypeScript のコードを直接実行できるツール)
+
+# ts-nodeをグローバルにインストール()
 RUN npm install -g ts-node typescript
 
 # OpenSSLをインストール（Prismaの依存関係）
@@ -24,9 +25,6 @@ RUN pnpm run build
 
 # 本番用イメージ
 FROM node:22-bookworm-slim
-
-# 非rootユーザーを作成
-RUN groupadd -r appuser && useradd -r -g appuser -u 1001 appuser
 
 WORKDIR /app
 
@@ -49,21 +47,22 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/tsconfig.json ./
 
-# データベースディレクトリを作成し、権限を設定
-RUN mkdir -p /app/data && chown -R appuser:appuser /app
+# データベースディレクトリを作成
+RUN mkdir -p /app/data
 
 # ポート
 EXPOSE 3000
 
-# 非rootユーザーに切り替え
-USER appuser
+# ボリューム設定 - SQLiteデータベースファイル用
+VOLUME ["/app/data"]
 
 # 環境変数設定
 ENV DATABASE_URL="file:/app/data/auth.db"
 ENV NODE_ENV="production"
+ENV JWT_SECRET="your-secure-jwt-secret-key-should-be-changed-in-production"
 # Fastifyサーバーがすべてのインターフェースでリッスンするための設定
-ENV HOST="0.0.0.0"
+ENV HOST="0.0.0.0" 
 ENV PORT=3000
 
 # マイグレーション実行、シード処理、そして起動
-CMD ["sh", "-c", "npx prisma migrate dev --name init --create-only && npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
