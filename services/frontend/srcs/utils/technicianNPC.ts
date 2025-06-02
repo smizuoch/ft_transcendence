@@ -65,7 +65,7 @@ export class TechnicianNPC implements NPCAlgorithm {
 
   // ビュー更新制限のための変数
   private lastViewUpdateTime: number = 0;
-  private viewUpdateInterval: number = 1000; // 1秒間隔
+  private viewUpdateInterval: number = 2000; // 1秒間隔 → 2秒間隔に延長
   private cachedBallArrivalX: number = 0;
 
   // キャッシュされたゲーム状態（1秒に1回のみ更新）

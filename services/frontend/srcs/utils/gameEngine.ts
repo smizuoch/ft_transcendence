@@ -46,11 +46,18 @@ export class GameEngine {
   private state: GameState;
   private config: GameConfig;
   private npcEngine: NPCEngine | null = null;
+  private npcEngine2: NPCEngine | null = null;
 
   // パドルの速度追跡用
   private paddleVelocity = {
     paddle1: { x: 0, prevX: 0, lastUpdateTime: 0 },
     paddle2: { x: 0, prevX: 0, lastUpdateTime: 0 }
+  };
+
+  // 攻撃システム用
+  private attackEffect = {
+    speedBoost: 1.0, // ボール速度倍率
+    isActive: false, // 攻撃効果が有効かどうか
   };
 
   constructor(canvasWidth: number, canvasHeight: number, config: GameConfig = DEFAULT_CONFIG) {
@@ -146,9 +153,14 @@ export class GameEngine {
     // パドル速度を更新
     this.updatePaddleVelocities();
 
-    // NPC更新
+    // NPC更新（Player1用）
     if (this.npcEngine) {
       this.npcEngine.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+    }
+
+    // NPC更新（Player2用）
+    if (this.npcEngine2) {
+      this.npcEngine2.updatePaddle(this.getGameState(), this.config.paddleSpeed);
     }
 
     this.updatePaddles();
@@ -178,11 +190,33 @@ export class GameEngine {
     // キーボード制御は gameHooks で処理
   }
 
+  // ボール攻撃システム
+  public applySpeedAttack(speedMultiplier: number = 2.0): void {
+    this.attackEffect.speedBoost = speedMultiplier;
+    this.attackEffect.isActive = true;
+  }
+
+  public clearAttackEffect(): void {
+    this.attackEffect.speedBoost = 1.0;
+    this.attackEffect.isActive = false;
+  }
+
+  public getAttackEffect(): { speedBoost: number; isActive: boolean } {
+    return {
+      speedBoost: this.attackEffect.isActive ? this.attackEffect.speedBoost : 1.0,
+      isActive: this.attackEffect.isActive,
+    };
+  }
+
   private updateBall(): void {
     const { ball, canvasWidth } = this.state;
 
+    // 攻撃効果を適用
+    const attackEffect = this.getAttackEffect();
+    const effectiveSpeedMultiplier = ball.speedMultiplier * attackEffect.speedBoost;
+
     const currentSpeed = Math.hypot(ball.dx, ball.dy) || 1;
-    const maxSpeed = Math.min(ball.speedMultiplier, this.config.maxBallSpeed / ball.speed);
+    const maxSpeed = Math.min(effectiveSpeedMultiplier, this.config.maxBallSpeed / ball.speed);
     ball.dx = (ball.dx / currentSpeed) * ball.speed * maxSpeed;
     ball.dy = (ball.dy / currentSpeed) * ball.speed * maxSpeed;
 
@@ -255,14 +289,33 @@ export class GameEngine {
     const { ball } = this.state;
 
     if (ball.y - ball.radius < 0) {
-      this.resetBall('player2'); // player2が得点したので、player2の方向にボールを射出
+      // Player2が得点した場合、攻撃効果をクリア
+      if (this.attackEffect.isActive) {
+        this.clearAttackEffect();
+      }
+      this.resetBall('player2');
       return 'player2';
     } else if (ball.y + ball.radius > this.state.canvasHeight) {
-      this.resetBall('player1'); // player1が得点したので、player1の方向にボールを射出
+      this.resetBall('player1');
       return 'player1';
     }
 
     return 'none';
+  }
+
+  // Player2用のNPC設定を追加
+  public updateNPCConfig2(config: Partial<NPCConfig>): void {
+    if (!this.npcEngine2) {
+      this.npcEngine2 = new NPCEngine({
+        ...config,
+        player: 2 as 1 | 2, // Player2に固定
+      } as NPCConfig, this.state.canvasWidth);
+    } else {
+      this.npcEngine2.updateConfig({
+        ...config,
+        player: 2 as 1 | 2,
+      });
+    }
   }
 
   public updateNPCConfig(config: Partial<NPCConfig>): void {
@@ -284,6 +337,17 @@ export class GameEngine {
     } else {
       this.npcEngine.updateConfig(config);
     }
+
+    // 中央キャンバス用：Player2は自動NPC設定しない（プレイヤー制御）
+    // ミニゲームでのみPlayer2にPIDNPCを設定
+    if (this.state.canvasWidth === 100 && this.state.canvasHeight === 100) {
+      // ミニゲーム判定：小さいキャンバスサイズの場合のみPlayer2にNPC設定
+      this.updateNPCConfig2({
+        mode: 'pid' as any,
+        enabled: true,
+        difficulty: 'Nightmare' as any, // Hard → Nightmareに変更（最強）
+      });
+    }
   }
 
   public getNPCDebugInfo(): NPCDebugInfo | null {
@@ -302,7 +366,12 @@ export class GameEngine {
     };
   }
 
-  public draw(ctx: CanvasRenderingContext2D): void {
+  public draw(ctx: CanvasRenderingContext2D, paddleAndBallColor: string = '#212121'): void {
+    // ミニゲームの場合は描画をスキップ（計算量削減）
+    if (this.state.canvasWidth === 100 && this.state.canvasHeight === 100) {
+      return; // 描画処理をスキップして計算量を大幅削減
+    }
+
     const { ball, paddle1, paddle2, canvasWidth } = this.state;
 
     ctx.clearRect(0, 0, canvasWidth, this.state.canvasHeight);
@@ -311,10 +380,10 @@ export class GameEngine {
 
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-    ctx.fillStyle = "#212121";
+    ctx.fillStyle = paddleAndBallColor;
     ctx.fill();
 
-    ctx.fillStyle = "#212121";
+    ctx.fillStyle = paddleAndBallColor;
     ctx.fillRect(paddle1.x, paddle1.y, paddle1.width, paddle1.height);
     ctx.fillRect(paddle2.x, paddle2.y, paddle2.width, paddle2.height);
   }

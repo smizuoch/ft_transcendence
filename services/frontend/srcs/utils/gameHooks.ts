@@ -23,7 +23,8 @@ export const useGameEngine = (
   const startGameLoop = useCallback((
     onScore: (scorer: 'player1' | 'player2') => void,
     gameStarted: boolean,
-    keysRef: React.RefObject<{ [key: string]: boolean }>
+    keysRef: React.RefObject<{ [key: string]: boolean }>,
+    paddleAndBallColor?: string // 色パラメータを追加
   ) => {
     if (!engineRef.current || !canvasRef.current) return;
 
@@ -35,15 +36,9 @@ export const useGameEngine = (
         // キーボード制御の処理
         const state = engineRef.current.getState();
         const speed = 8; // paddleSpeed
-        
-        // Player 1 controls
-        if (keysRef.current['a'] && state.paddle1.x > 0) {
-          state.paddle1.x -= speed;
-        }
-        if (keysRef.current['d'] && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
-          state.paddle1.x += speed;
-        }
-        
+
+        // Player 1はPID NPCが制御するため削除
+
         // Player 2 controls
         if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
           state.paddle2.x -= speed;
@@ -51,7 +46,7 @@ export const useGameEngine = (
         if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
           state.paddle2.x += speed;
         }
-        
+
         const result = engineRef.current.update();
         if (result !== 'none') {
           onScore(result);
@@ -59,7 +54,7 @@ export const useGameEngine = (
       }
 
       if (engineRef.current) {
-        engineRef.current.draw(ctx);
+        engineRef.current.draw(ctx, paddleAndBallColor || '#212121');
       }
 
       animationRef.current = requestAnimationFrame(loop);
