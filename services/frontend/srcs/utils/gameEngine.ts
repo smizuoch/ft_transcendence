@@ -1,6 +1,7 @@
-import { AIEngine } from './aiEngine';
-import { AIConfig, DEFAULT_AI_CONFIG } from './aiTypes';
-import type { GameState, AIDebugInfo } from './aiTypes';
+import { NPCEngine } from './npcEngine';
+import { NPCConfig, DEFAULT_NPC_CONFIG } from './npcTypes';
+import type { GameState, NPCDebugInfo } from './npcTypes';
+import { DIFFICULTY_SETTINGS } from './npcTypes';
 
 export interface Ball {
   x: number;
@@ -27,7 +28,7 @@ export interface GameConfig {
   paddleWidth: number;
   paddleHeight: number;
   initialBallSpeed: number;
-  ai: AIConfig;
+  npc: NPCConfig;
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -38,13 +39,26 @@ export const DEFAULT_CONFIG: GameConfig = {
   paddleWidth: 80,
   paddleHeight: 12,
   initialBallSpeed: 4,
-  ai: DEFAULT_AI_CONFIG,
+  npc: DEFAULT_NPC_CONFIG,
 };
 
 export class GameEngine {
   private state: GameState;
   private config: GameConfig;
-  private aiEngine: AIEngine;
+  private npcEngine: NPCEngine | null = null;
+  private npcEngine2: NPCEngine | null = null;
+
+  // パドルの速度追跡用
+  private paddleVelocity = {
+    paddle1: { x: 0, prevX: 0, lastUpdateTime: 0 },
+    paddle2: { x: 0, prevX: 0, lastUpdateTime: 0 }
+  };
+
+  // 攻撃システム用
+  private attackEffect = {
+    speedBoost: 1.0, // ボール速度倍率
+    isActive: false, // 攻撃効果が有効かどうか
+  };
 
   constructor(canvasWidth: number, canvasHeight: number, config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -74,8 +88,7 @@ export class GameEngine {
       canvasHeight,
       paddleHits: 0,
     };
-    
-    this.aiEngine = new AIEngine(this.config.ai, canvasWidth);
+
     this.resetBall();
   }
 
@@ -97,20 +110,29 @@ export class GameEngine {
     const { canvasWidth, canvasHeight } = this.state;
     this.state.ball.x = canvasWidth / 2;
     this.state.ball.y = canvasHeight / 2;
-    
+
     // 得点者の方向にボールを射出するか、ランダム（ゲーム開始時）
     const angle = (Math.random() * 0.167 + 0.083) * Math.PI;
     const h = Math.random() > 0.5 ? 1 : -1;
-    
+
     let verticalDirection: number;
-    if (lastScorer) {
-      // 得点者の方向にボールを射出
-      verticalDirection = lastScorer === 'player1' ? -1 : 1; // player1が得点 → 上方向(-1), player2が得点 → 下方向(1)
+
+    // NPCが有効な場合は常にプレイヤー側にボールを向ける
+    if (this.npcEngine && this.config.npc.enabled) {
+      // NPCがPlayer1の場合はPlayer2（下）にボールを向ける
+      // NPCがPlayer2の場合はPlayer1（上）にボールを向ける
+      verticalDirection = this.config.npc.player === 1 ? 1 : -1;
     } else {
-      // ゲーム開始時やリセット時はランダム
-      verticalDirection = Math.random() > 0.5 ? 1 : -1;
+      // NPC無効時の従来のロジック
+      if (lastScorer) {
+        // 得点者の方向にボールを射出
+        verticalDirection = lastScorer === 'player1' ? -1 : 1; // player1が得点 → 上方向(-1), player2が得点 → 下方向(1)
+      } else {
+        // ゲーム開始時やリセット時はランダム
+        verticalDirection = Math.random() > 0.5 ? 1 : -1;
+      }
     }
-    
+
     this.state.ball.dy = this.state.ball.speed * Math.cos(angle) * verticalDirection;
     this.state.ball.dx = this.state.ball.speed * Math.sin(angle) * h;
     this.state.ball.speedMultiplier = 1;
@@ -128,12 +150,39 @@ export class GameEngine {
   }
 
   public update(): 'none' | 'player1' | 'player2' {
-    // AI更新
-    this.aiEngine.updatePaddle(this.state, this.config.paddleSpeed);
-    
+    // パドル速度を更新
+    this.updatePaddleVelocities();
+
+    // NPC更新（Player1用）
+    if (this.npcEngine) {
+      this.npcEngine.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+    }
+
+    // NPC更新（Player2用）
+    if (this.npcEngine2) {
+      this.npcEngine2.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+    }
+
     this.updatePaddles();
     this.updateBall();
     return this.checkGoals();
+  }
+
+  private updatePaddleVelocities(): void {
+    const currentTime = Date.now();
+    const dt = Math.max((currentTime - this.paddleVelocity.paddle1.lastUpdateTime) / 1000, 1/60);
+
+    // Paddle1の速度計算
+    const paddle1DeltaX = this.state.paddle1.x - this.paddleVelocity.paddle1.prevX;
+    this.paddleVelocity.paddle1.x = paddle1DeltaX / dt;
+    this.paddleVelocity.paddle1.prevX = this.state.paddle1.x;
+    this.paddleVelocity.paddle1.lastUpdateTime = currentTime;
+
+    // Paddle2の速度計算
+    const paddle2DeltaX = this.state.paddle2.x - this.paddleVelocity.paddle2.prevX;
+    this.paddleVelocity.paddle2.x = paddle2DeltaX / dt;
+    this.paddleVelocity.paddle2.prevX = this.state.paddle2.x;
+    this.paddleVelocity.paddle2.lastUpdateTime = currentTime;
   }
 
   private updatePaddles(): void {
@@ -141,11 +190,33 @@ export class GameEngine {
     // キーボード制御は gameHooks で処理
   }
 
+  // ボール攻撃システム
+  public applySpeedAttack(speedMultiplier: number = 2.0): void {
+    this.attackEffect.speedBoost = speedMultiplier;
+    this.attackEffect.isActive = true;
+  }
+
+  public clearAttackEffect(): void {
+    this.attackEffect.speedBoost = 1.0;
+    this.attackEffect.isActive = false;
+  }
+
+  public getAttackEffect(): { speedBoost: number; isActive: boolean } {
+    return {
+      speedBoost: this.attackEffect.isActive ? this.attackEffect.speedBoost : 1.0,
+      isActive: this.attackEffect.isActive,
+    };
+  }
+
   private updateBall(): void {
     const { ball, canvasWidth } = this.state;
 
+    // 攻撃効果を適用
+    const attackEffect = this.getAttackEffect();
+    const effectiveSpeedMultiplier = ball.speedMultiplier * attackEffect.speedBoost;
+
     const currentSpeed = Math.hypot(ball.dx, ball.dy) || 1;
-    const maxSpeed = Math.min(ball.speedMultiplier, this.config.maxBallSpeed / ball.speed);
+    const maxSpeed = Math.min(effectiveSpeedMultiplier, this.config.maxBallSpeed / ball.speed);
     ball.dx = (ball.dx / currentSpeed) * ball.speed * maxSpeed;
     ball.dy = (ball.dy / currentSpeed) * ball.speed * maxSpeed;
 
@@ -181,49 +252,126 @@ export class GameEngine {
 
   private reflectBall(paddle: Paddle, isTop: boolean): void {
     const { ball } = this.state;
+
+    // 【シンプルな角度決定システム（接触位置のみ）】
+    // パドル上での接触位置を計算（-1.0 ～ +1.0の範囲）
     const hitPosition = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
-    const angle = hitPosition * (Math.PI / 3);
-    
-    this.state.paddleHits += 1;
-    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 4);
-    
+
+    // 接触位置を角度に変換（最大60度まで）
+    const reflectionAngle = hitPosition * (Math.PI / 3); // Math.PI/3 = 60度
+
+    // 現在のボール速度を保持
     const speed = Math.hypot(ball.dx, ball.dy);
-    
+
     if (isTop) {
-      ball.dx = Math.sin(angle) * speed;
-      ball.dy = Math.abs(Math.cos(angle) * speed);
+      // 上側パドル（Player1）との接触
+      ball.dx = Math.sin(reflectionAngle) * speed; // 水平成分
+      ball.dy = Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（下向き）
       ball.y = paddle.y + paddle.height + ball.radius;
     } else {
-      ball.dx = Math.sin(Math.PI - angle) * speed;
-      ball.dy = -Math.abs(Math.cos(angle) * speed);
+      // 下側パドル（Player2）との接触
+      ball.dx = Math.sin(Math.PI - reflectionAngle) * speed; // 水平成分（反転）
+      ball.dy = -Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（上向き）
       ball.y = paddle.y - ball.radius;
     }
+
+    // NPCの技効果をリセット（使用後クリア）
+    if (this.npcEngine) {
+      this.npcEngine.resetTechniqueEffect();
+    }
+
+    // 【速度増加システム】
+    this.state.paddleHits += 1;
+    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 4); // 最大4倍まで加速
   }
 
   private checkGoals(): 'none' | 'player1' | 'player2' {
     const { ball } = this.state;
 
     if (ball.y - ball.radius < 0) {
-      this.resetBall('player2'); // player2が得点したので、player2の方向にボールを射出
+      // Player2が得点した場合、攻撃効果をクリア
+      if (this.attackEffect.isActive) {
+        this.clearAttackEffect();
+      }
+      this.resetBall('player2');
       return 'player2';
     } else if (ball.y + ball.radius > this.state.canvasHeight) {
-      this.resetBall('player1'); // player1が得点したので、player1の方向にボールを射出
+      this.resetBall('player1');
       return 'player1';
     }
 
     return 'none';
   }
 
-  public updateAIConfig(config: Partial<AIConfig>): void {
-    this.config.ai = { ...this.config.ai, ...config };
-    this.aiEngine.updateConfig(config);
+  // Player2用のNPC設定を追加
+  public updateNPCConfig2(config: Partial<NPCConfig>): void {
+    if (!this.npcEngine2) {
+      this.npcEngine2 = new NPCEngine({
+        ...config,
+        player: 2 as 1 | 2, // Player2に固定
+      } as NPCConfig, this.state.canvasWidth);
+    } else {
+      this.npcEngine2.updateConfig({
+        ...config,
+        player: 2 as 1 | 2,
+      });
+    }
   }
 
-  public getAIDebugInfo(): AIDebugInfo {
-    return this.aiEngine.getDebugInfo();
+  public updateNPCConfig(config: Partial<NPCConfig>): void {
+    this.config.npc = { ...this.config.npc, ...config };
+
+    // 難易度設定の自動適用
+    if (config.difficulty && config.difficulty !== 'Custom') {
+      const settings = DIFFICULTY_SETTINGS[config.difficulty];
+      if (config.mode === 'technician' && settings.technician) {
+        this.config.npc.technician = { ...this.config.npc.technician, ...settings.technician };
+      }
+      if (config.mode === 'pid' && settings.pid) {
+        this.config.npc.pid = { ...this.config.npc.pid, ...settings.pid };
+      }
+    }
+
+    if (!this.npcEngine) {
+      this.npcEngine = new NPCEngine(config as NPCConfig, this.state.canvasWidth);
+    } else {
+      this.npcEngine.updateConfig(config);
+    }
+
+    // 中央キャンバス用：Player2は自動NPC設定しない（プレイヤー制御）
+    // ミニゲームでのみPlayer2にPIDNPCを設定
+    if (this.state.canvasWidth === 100 && this.state.canvasHeight === 100) {
+      // ミニゲーム判定：小さいキャンバスサイズの場合のみPlayer2にNPC設定
+      this.updateNPCConfig2({
+        mode: 'pid' as any,
+        enabled: true,
+        difficulty: 'Nightmare' as any, // Hard → Nightmareに変更（最強）
+      });
+    }
   }
 
-  public draw(ctx: CanvasRenderingContext2D): void {
+  public getNPCDebugInfo(): NPCDebugInfo | null {
+    if (!this.npcEngine) return null;
+    return this.npcEngine.getDebugInfo();
+  }
+
+  private getGameState(): GameState {
+    return {
+      ball: this.state.ball,
+      paddle1: this.state.paddle1,
+      paddle2: this.state.paddle2,
+      canvasWidth: this.state.canvasWidth,
+      canvasHeight: this.state.canvasHeight,
+      paddleHits: this.state.paddleHits || 0,
+    };
+  }
+
+  public draw(ctx: CanvasRenderingContext2D, paddleAndBallColor: string = '#212121'): void {
+    // ミニゲームの場合は描画をスキップ（計算量削減）
+    if (this.state.canvasWidth === 100 && this.state.canvasHeight === 100) {
+      return; // 描画処理をスキップして計算量を大幅削減
+    }
+
     const { ball, paddle1, paddle2, canvasWidth } = this.state;
 
     ctx.clearRect(0, 0, canvasWidth, this.state.canvasHeight);
@@ -232,10 +380,10 @@ export class GameEngine {
 
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-    ctx.fillStyle = "#212121";
+    ctx.fillStyle = paddleAndBallColor;
     ctx.fill();
 
-    ctx.fillStyle = "#212121";
+    ctx.fillStyle = paddleAndBallColor;
     ctx.fillRect(paddle1.x, paddle1.y, paddle1.width, paddle1.height);
     ctx.fillRect(paddle2.x, paddle2.y, paddle2.width, paddle2.height);
   }
