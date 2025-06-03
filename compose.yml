@@ -36,9 +36,6 @@ services:
     restart: unless-stopped
     networks:
       - transcendence_net
-    environment:
-      - DATABASE_URL=file:/app/data/auth.db
-      - NODE_ENV=production
     volumes:
       - auth_data:/app/data
     env_file:
