@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, ValidationPipe } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -15,11 +15,6 @@ export class UserController {
   findAll() {
     return this.userService.findAll();
   }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
-  }
 }
 
 
@@ -28,4 +23,3 @@ export class UserController {
 
 // /users に対するPOSTリクエストでユーザーを作成
 // /users に対するGETリクエストで全ユーザーのリストを取得
-// /users/:id に対するGETリクエストで特定のユーザーを取得

@@ -31,19 +31,6 @@ export class UserService {
     const users = await this.prisma.user.findMany();
     return users.map(({ password: _, ...user }) => user);
   }
-
-  async findOne(id: number) {
-    const user = await this.prisma.user.findFirst({
-      where: { username: `user${id}` }, // idをもとにユーザー名を検索する例
-    });
-    
-    if (!user) {
-      return null;
-    }
-    
-    const { password: _, ...result } = user;
-    return result;
-  }
 }
 
 
@@ -56,7 +43,6 @@ export class UserService {
 
 // create: 新規ユーザー作成とパスワードハッシュ化
 // findAll: 全ユーザー取得
-// findOne: 特定IDのユーザー取得
 // データセキュリティ：bcryptjsを使用してパスワードをハッシュ化し、レスポンスからパスワードを除外して返します
 
 // このファイルはコントローラー(user.controller.ts)から呼び出され、実際のビジネスロジックを処理します。RESTエンドポイントとデータベース間の中間レイヤーとして機能し、アプリケーションのコア機能を提供するため、非常に重要なファイルです。
