@@ -30,20 +30,16 @@ services:
       - transcendence_net
     # このサービスはビルド後終了するため、restartポリシーは不要
 
-  # --- API Services (Placeholder examples) ---
-  # auth:
-  #   build: ./services/api/auth
-  #   container_name: ft_auth_service
-  #   restart: unless-stopped
-  #   networks:
-  #     - transcendence_net
-  #   environment:
-  #     - DATABASE_URL=file:./dev.db # Prismaの場合など
-  #     - JWT_SECRET=your_jwt_secret
-  #   ports: # 開発時のみ。本番はNginx経由
-  #     - "3001:3000"
-
-  # ... (user_search, result_search, friend_search services)
+  auth:
+    build: ./services/api/auth
+    container_name: auth
+    restart: unless-stopped
+    networks:
+      - transcendence_net
+    volumes:
+      - auth_data:/app/data
+    env_file:
+      - ./secrets/.env
 
   # --- ELK Stack Setup ---
   elk_setup:
@@ -186,7 +182,7 @@ volumes:
   es_data: # Elasticsearchデータ用
   elk_certs: # 証明書用ボリューム
   kibana_data: # Kibanaデータ用ボリューム
-  filebeat_data: # Filebeatのレジストリデータ用
+  auth_data: # authサービス用SQLiteデータ
 
 networks:
   transcendence_net:
