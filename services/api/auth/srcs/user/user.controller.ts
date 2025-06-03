@@ -17,9 +17,3 @@ export class UserController {
   }
 }
 
-
-
-// このControllerが提供する機能：
-
-// /users に対するPOSTリクエストでユーザーを作成
-// /users に対するGETリクエストで全ユーザーのリストを取得
