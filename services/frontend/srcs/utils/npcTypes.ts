@@ -1,7 +1,7 @@
-export interface AIConfig {
+export interface NPCConfig {
   enabled: boolean;
   player: 1 | 2;
-  mode: 'heuristic' | 'fsm' | 'pid';
+  mode: 'heuristic' | 'pid' | 'technician';
   reactionDelay: number;
   positionNoise: number;
   followGain: number;
@@ -11,7 +11,7 @@ export interface AIConfig {
   trackingNoise: number;
   trackingTimeout: number;
   difficulty: 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom';
-  pid: {
+  pid?: {
     kp: number;
     ki: number;
     kd: number;
@@ -19,9 +19,13 @@ export interface AIConfig {
     derivativeFilter: number;
     maxControlSpeed: number;
   };
+  technician?: {
+    predictionAccuracy: number;
+    courseAccuracy: number;
+  };
 }
 
-export enum AIState {
+export enum NPCState {
   IDLE = 'IDLE',
   TRACK = 'TRACK',
   MISS = 'MISS',
@@ -56,7 +60,7 @@ export interface GameState {
   paddleHits: number;
 }
 
-export interface AIDebugInfo {
+export interface NPCDebugInfo {
   state: string;
   timeInState: number;
   returnRate: number;
@@ -71,25 +75,29 @@ export interface AIDebugInfo {
 }
 
 export const DIFFICULTY_SETTINGS = {
-  Nightmare: { 
+  Nightmare: {
     returnRate: 0.99, reactionDelayMs: 50, maxSpeed: 1.2, trackingNoise: 2, trackingTimeout: 10000,
-    pid: { kp: 1.50, ki: 0.04, kd: 0.15, maxIntegral: 120, derivativeFilter: 0.6, maxControlSpeed: 900 }
+    pid: { kp: 1.50, ki: 0.04, kd: 0.15, maxIntegral: 120, derivativeFilter: 0.6, maxControlSpeed: 900 },
+    technician: { predictionAccuracy: 0.95, courseAccuracy: 0.9 }
   },
-  Hard: { 
-    returnRate: 0.95, reactionDelayMs: 100, maxSpeed: 1.0, trackingNoise: 5, trackingTimeout: 8000,
-    pid: { kp: 1.25, ki: 0.06, kd: 0.12, maxIntegral: 100, derivativeFilter: 0.5, maxControlSpeed: 750 }
+  Hard: {
+    returnRate: 0.92, reactionDelayMs: 80, maxSpeed: 1.1, trackingNoise: 3, trackingTimeout: 8000, // より強化
+    pid: { kp: 1.35, ki: 0.05, kd: 0.13, maxIntegral: 110, derivativeFilter: 0.55, maxControlSpeed: 800 },
+    technician: { predictionAccuracy: 0.88, courseAccuracy: 0.82 }
   },
-  Normal: { 
+  Normal: {
     returnRate: 0.80, reactionDelayMs: 200, maxSpeed: 0.8, trackingNoise: 10, trackingTimeout: 6000,
-    pid: { kp: 1.00, ki: 0.10, kd: 0.08, maxIntegral: 80, derivativeFilter: 0.4, maxControlSpeed: 600 }
+    pid: { kp: 1.00, ki: 0.10, kd: 0.08, maxIntegral: 80, derivativeFilter: 0.4, maxControlSpeed: 600 },
+    technician: { predictionAccuracy: 0.8, courseAccuracy: 0.7 }
   },
-  Easy: { 
-    returnRate: 0.50, reactionDelayMs: 400, maxSpeed: 0.6, trackingNoise: 20, trackingTimeout: 4000,
-    pid: { kp: 0.60, ki: 0.12, kd: 0.02, maxIntegral: 50, derivativeFilter: 0.3, maxControlSpeed: 400 }
+  Easy: {
+    returnRate: 0.65, reactionDelayMs: 350, maxSpeed: 0.55, trackingNoise: 15, trackingTimeout: 4000, // より弱く
+    pid: { kp: 0.70, ki: 0.08, kd: 0.03, maxIntegral: 60, derivativeFilter: 0.25, maxControlSpeed: 450 },
+    technician: { predictionAccuracy: 0.65, courseAccuracy: 0.55 }
   },
 };
 
-export const DEFAULT_AI_CONFIG: AIConfig = {
+export const DEFAULT_NPC_CONFIG: NPCConfig = {
   enabled: false,
   player: 2,
   mode: 'heuristic',
@@ -110,4 +118,8 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
     derivativeFilter: 0.4,
     maxControlSpeed: 600,
   },
+  technician: {
+    predictionAccuracy: 0.8,
+    courseAccuracy: 0.7
+  }
 };
