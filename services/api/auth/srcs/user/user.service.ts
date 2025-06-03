@@ -22,8 +22,8 @@ export class UserService {
       },
     });
     
-    // パスワードを除外して返す
-    const { password: _, ...result } = user;
+    // パスワード,emalを除外して返す
+    const { password: _, email: __, ...result } = user;
     return result;
   }
 
