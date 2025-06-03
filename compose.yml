@@ -178,7 +178,6 @@ services:
 
 volumes:
   frontend_dist: # frontendのビルド成果物を永続化/共有するための名前付きボリューム
-  # db_data_auth: # authサービス用DBデータなど
   es_data: # Elasticsearchデータ用
   elk_certs: # 証明書用ボリューム
   kibana_data: # Kibanaデータ用ボリューム
