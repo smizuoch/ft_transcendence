@@ -17,7 +17,7 @@ async function bootstrap() {
     forbidNonWhitelisted: true, // 許可されていないプロパティがあるとエラーを発生
   }));
   
-  // CORSを有効化（必要に応じて）
+  // 異なるオリジンとの通信をするためのCORSを有効化
   app.enableCors();
   
   await app.listen(3000, '0.0.0.0'); // 全てのインターフェースでリッスン

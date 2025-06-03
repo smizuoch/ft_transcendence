@@ -32,7 +32,7 @@ services:
 
   auth:
     build: ./services/api/auth
-    container_name: ft_auth_service
+    container_name: auth
     restart: unless-stopped
     networks:
       - transcendence_net
@@ -41,8 +41,8 @@ services:
       - NODE_ENV=production
     volumes:
       - auth_data:/app/data
-    ports:
-      - "3001:3000"
+    env_file:
+      - ./secrets/.env
 
   # --- ELK Stack Setup ---
   elk_setup:
