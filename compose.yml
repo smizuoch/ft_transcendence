@@ -182,7 +182,6 @@ volumes:
   es_data: # Elasticsearchデータ用
   elk_certs: # 証明書用ボリューム
   kibana_data: # Kibanaデータ用ボリューム
-  filebeat_data: # Filebeatのレジストリデータ用
   auth_data: # authサービス用SQLiteデータ
 
 networks:
