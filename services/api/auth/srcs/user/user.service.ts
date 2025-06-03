@@ -19,7 +19,6 @@ export class UserService {
         username,
         email,
         password: hashedPassword,
-        displayName: username, // デフォルトでユーザー名をディスプレイ名に設定
       },
     });
     

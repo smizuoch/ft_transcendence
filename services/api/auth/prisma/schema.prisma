@@ -15,9 +15,6 @@ model User {
   username    String    @id // ユーザー名を主キーとして使用
   email       String    @unique
   password    String
-  displayName String?   // オプションのディスプレイ名フィールドを追加
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
   
   @@map("users")
 }
