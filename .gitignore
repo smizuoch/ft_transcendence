@@ -87,3 +87,6 @@ secrets/certs/*
 # === Misc ===
 *.pem
 *.key
+
+# webserv
+services/webserv/
