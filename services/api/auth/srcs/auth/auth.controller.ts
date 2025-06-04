@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
+import { LoginDto } from './login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
@@ -16,5 +16,10 @@ export class AuthController {
   @Get('profile')
   getProfile(@Request() req) {
     return req.user;
+  }
+
+  @Post('verify')
+  async verifyToken(@Body() verifyTokenDto: { token: string }) {
+    return this.authService.verifyToken(verifyTokenDto.token);
   }
 }
