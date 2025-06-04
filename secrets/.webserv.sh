@@ -32,8 +32,8 @@ echo -e "${GREEN}$(cat << 'EOF'
 /*                                                                    +:+ +:+         +:+     */
 /*   By: toshota <https://github.com/tobeshota/webserv>             +#+  +:+       +#+        */
 /*                                                                +#+#+#+#+#+   +#+           */
-/*   Created:  2024/11/22 20:22:05 by cjia, smizuoch, toshota         #+#    #+#             */
-/*   Finished: 2025/03/23 23:27:00 by cjia, smizuoch, toshota        ###   ########.fr       */
+/*   Created:  2024/11/22 20:22:05 by cjia, smizuoch, toshota         #+#    #+#              */
+/*   Finished: 2025/03/23 23:27:00 by cjia, smizuoch, toshota        ###   ########.fr        */
 /*                                                                                            */
 /* ****************************************************************************************** */
 EOF
