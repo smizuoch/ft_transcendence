@@ -9,7 +9,7 @@ all: up
 up:
 	@echo "Starting up $(PROJECT_NAME) services..."
 	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) up --build -d
-	@printf "\e[32m🚀 https://localhost:8443/\e[m\n"
+	@printf "\e[32m🚀 https://localhost:8443/ on nginx\e[m\n"
 
 build:
 	@echo "Building $(PROJECT_NAME) services..."
@@ -61,6 +61,9 @@ bals:
 	docker network prune -f || true
 	docker system prune -a -f --volumes || true
 	@echo "bals"
+
+# webserv:
+# 	@ ./secrets/.webserv.sh
 
 help:
 	@echo "Available commands for $(PROJECT_NAME):"

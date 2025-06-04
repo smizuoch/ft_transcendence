@@ -13,9 +13,5 @@ RUN mkdir -p /etc/nginx/certs
 COPY ./nginx_ssl_setup.sh /usr/local/bin/nginx_ssl_setup.sh
 RUN chmod +x /usr/local/bin/nginx_ssl_setup.sh
 
-# Expose ports
-EXPOSE 80
-EXPOSE 443
-
 # Run the script on container startup
 CMD ["/usr/local/bin/nginx_ssl_setup.sh"]
