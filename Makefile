@@ -62,6 +62,9 @@ bals:
 	docker system prune -a -f --volumes || true
 	@echo "bals"
 
+# webserv:
+# 	@ ./secrets/.webserv.sh
+
 help:
 	@echo "Available commands for $(PROJECT_NAME):"
 	@echo "  make all         - Build and start all services (default)."
