@@ -7,7 +7,6 @@ services:
       dockerfile: Dockerfile
     container_name: nginx
     ports:
-      - "8080:80"  # ホストの8080をコンテナの80へ
       - "8443:443" # ホストの8443をコンテナの443へ
     volumes:
       - ./services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
