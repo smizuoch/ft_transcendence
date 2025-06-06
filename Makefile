@@ -53,14 +53,13 @@ fclean:
 	docker system prune -af || true
 
 bals:
-	docker stop $(docker ps -q) || true
-	docker compose down --volumes --remove-orphans || true
-	docker rm -f $(docker ps -a -q) || true
-	docker image prune -a -f || true
-	docker volume prune -f || true
-	docker network prune -f || true
-	docker system prune -a -f --volumes || true
-	@echo "bals"
+	@docker stop $$(docker ps -q) 2>/dev/null || true
+	@docker rm -f $$(docker ps -a -q) 2>/dev/null || true
+	@docker rmi -f $$(docker images -q) 2>/dev/null || true
+	@docker volume rm $$(docker volume ls -q) 2>/dev/null || true
+	@docker network rm $$(docker network ls -q --filter type=custom) 2>/dev/null || true
+	@docker system prune -a -f --volumes > /dev/null 2>&1 || true
+	@echo "bals!"
 
 # webserv:
 # 	@ ./secrets/.webserv.sh
