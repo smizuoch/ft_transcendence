@@ -4,7 +4,8 @@ import { DEFAULT_CONFIG } from "@/utils/gameEngine";
 import type { NPCConfig } from "@/utils/npcTypes";
 import { NPCSettingsPanel } from "@/utils/NPCSettingsPanel";
 import { NPCDebugPanel } from "@/utils/NPCDebugPanel";
-import { getAvailableNPCAlgorithms } from "@/utils/npcAlgorithmRegistry";
+// NPCアルゴリズムの登録を確実に行うためにインポート
+import "@/utils/npcAlgorithmRegistry";
 
 interface PlayerInfo {
   id: number | string;
@@ -35,32 +36,33 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
   const [roomNumber] = useState(Math.floor(100000 + Math.random() * 900000));
   const [hoverClose, setHoverClose] = useState(false);
   const [iconsDocked, setIconsDocked] = useState(false);
-  const ICON_LAUNCH_DELAY = 600;
-
-  // ============= NPC関連の状態 =============
+  const ICON_LAUNCH_DELAY = 600;  // ============= NPC関連の状態 =============
   const [npcEnabled, setNpcEnabled] = useState(false);
-  const [availableAlgorithms] = useState(getAvailableNPCAlgorithms());
   const [npcSettings, setNpcSettings] = useState<NPCConfig>({
-    player: 1 as 1 | 2, // Player 1 (上)に変更
-    mode: availableAlgorithms[0] as any || 'heuristic', // 最初の利用可能なアルゴリズムをデフォルトに
+    player: 1 as 1 | 2, // Player 1 (上)に固定
+    mode: 'technician' as any, // technicianに固定
     enabled: false,
-    reactionDelay: 0.1,
-    positionNoise: 5,
-    followGain: 0.7,
-    difficulty: 'Normal' as 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom',
-    returnRate: 0.80,
-    reactionDelayMs: 200,
-    maxSpeed: 0.8,
-    trackingNoise: 10,
-    trackingTimeout: 6000,
+    reactionDelay: 0.05, // 50ms
+    positionNoise: 2,
+    followGain: 0.9,
+    difficulty: 'Nightmare' as 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom',
+    returnRate: 0.99,
+    reactionDelayMs: 50, // 50ms固定
+    maxSpeed: 1.2,
+    trackingNoise: 2,
+    trackingTimeout: 10000,
     pid: {
-      kp: 1.00,
-      ki: 0.10,
-      kd: 0.08,
-      maxIntegral: 80,
-      derivativeFilter: 0.4,
-      maxControlSpeed: 600,
+      kp: 1.50,
+      ki: 0.04,
+      kd: 0.15,
+      maxIntegral: 120,
+      derivativeFilter: 0.6,
+      maxControlSpeed: 900,
     },
+    technician: {
+      predictionAccuracy: 0.95,
+      courseAccuracy: 0.9
+    }
   });
   const [npcDebugInfo, setNpcDebugInfo] = useState<{
     state: string;
@@ -99,17 +101,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
       }
       return newScore;
     });
-  }, []);
-
-  useEffect(() => {
+  }, []);  useEffect(() => {
     if (gameStarted) {
-      startGameLoop(handleScore, gameStarted, keysRef);
+      startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled);
     } else {
       stopGameLoop();
     }
 
     return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef]);
+  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, npcEnabled]);
 
   useEffect(() => {
     if (!gameStarted) return;
@@ -124,15 +124,20 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
       return () => clearTimeout(t);
     }
   }, [gameOver, winner, navigate]);
-
   const handleStartGame = useCallback(() => {
-    // ============= NPC設定をエンジンに反映 =============
+    // ============= モード設定：PVP vs PVE =============
     if (npcEnabled && engineRef.current) {
+      // PVEモード: Player1 = technicianNPC, Player2 = プレイヤー
       engineRef.current.updateNPCConfig({
         ...npcSettings,
         enabled: true,
+        player: 1, // Player1をNPCに設定
+        mode: 'technician', // technicianNPCに固定
+        difficulty: 'Nightmare', // Nightmare難易度に固定
+        reactionDelayMs: 50, // 50ms固定
       });
     } else if (engineRef.current) {
+      // PVPモード: Player1 = プレイヤー, Player2 = プレイヤー
       engineRef.current.updateNPCConfig({ enabled: false });
     }
 
@@ -209,14 +214,37 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
               {renderAvatarGroup(2, "left")}
             </>
           )}
-        </div>
-
-        {/* opening screen */}
+        </div>        {/* opening screen */}
         {!gameStarted && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-5xl mb-8 tracking-widest" style={{ color: "#212121" }}>
+            <div className="text-5xl mb-4 tracking-widest" style={{ color: "#212121" }}>
               {roomNumber.toString().padStart(6, "0")}
             </div>
+
+            {/* モード表示 */}
+            <div className="text-2xl mb-8 tracking-wider" style={{ color: "#212121" }}>
+              {npcEnabled ? (
+                <span>🤖 PVE モード (プレイヤー vs AI)</span>
+              ) : (
+                <span>👥 PVP モード (プレイヤー vs プレイヤー)</span>
+              )}
+            </div>
+
+            {/* コントロール説明 */}
+            <div className="text-sm mb-6 text-center" style={{ color: "#212121" }}>
+              {npcEnabled ? (
+                <>
+                  <div>Player 1 (上): 🤖 Technician AI</div>
+                  <div>Player 2 (下): ← → キー</div>
+                </>
+              ) : (
+                <>
+                  <div>Player 1 (上): A D キー</div>
+                  <div>Player 2 (下): ← → キー</div>
+                </>
+              )}
+            </div>
+
             <img
               src={`${ICON_PATH}${hoverClose ? "close" : "open"}.svg`}
               alt="toggle"

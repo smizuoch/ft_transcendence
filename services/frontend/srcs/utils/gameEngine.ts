@@ -321,32 +321,41 @@ export class GameEngine {
   public updateNPCConfig(config: Partial<NPCConfig>): void {
     this.config.npc = { ...this.config.npc, ...config };
 
-    // 難易度設定の自動適用
-    if (config.difficulty && config.difficulty !== 'Custom') {
-      const settings = DIFFICULTY_SETTINGS[config.difficulty];
-      if (config.mode === 'technician' && settings.technician) {
-        this.config.npc.technician = { ...this.config.npc.technician, ...settings.technician };
-      }
-      if (config.mode === 'pid' && settings.pid) {
-        this.config.npc.pid = { ...this.config.npc.pid, ...settings.pid };
-      }
+    // NPCが無効になった場合は、NPCエンジンを完全に削除
+    if (config.enabled === false) {
+      this.npcEngine = null;
+      return;
     }
 
-    if (!this.npcEngine) {
-      this.npcEngine = new NPCEngine(config as NPCConfig, this.state.canvasWidth);
-    } else {
-      this.npcEngine.updateConfig(config);
-    }
+    // NPCが有効で、modeが指定されている場合のみ、以下の処理を実行
+    if (config.enabled === true && config.mode) {
+      // 難易度設定の自動適用
+      if (config.difficulty && config.difficulty !== 'Custom') {
+        const settings = DIFFICULTY_SETTINGS[config.difficulty];
+        if (config.mode === 'technician' && settings.technician) {
+          this.config.npc.technician = { ...this.config.npc.technician, ...settings.technician };
+        }
+        if (config.mode === 'pid' && settings.pid) {
+          this.config.npc.pid = { ...this.config.npc.pid, ...settings.pid };
+        }
+      }
 
-    // 中央キャンバス用：Player2は自動NPC設定しない（プレイヤー制御）
-    // ミニゲームでのみPlayer2にPIDNPCを設定
-    if (this.state.canvasWidth === 100 && this.state.canvasHeight === 100) {
-      // ミニゲーム判定：小さいキャンバスサイズの場合のみPlayer2にNPC設定
-      this.updateNPCConfig2({
-        mode: 'pid' as any,
-        enabled: true,
-        difficulty: 'Nightmare' as any, // Hard → Nightmareに変更（最強）
-      });
+      if (!this.npcEngine) {
+        this.npcEngine = new NPCEngine(config as NPCConfig, this.state.canvasWidth);
+      } else {
+        this.npcEngine.updateConfig(config);
+      }
+
+      // 中央キャンバス用：Player2は自動NPC設定しない（プレイヤー制御）
+      // ミニゲームでのみPlayer2にPIDNPCを設定
+      if (this.state.canvasWidth === 100 && this.state.canvasHeight === 100) {
+        // ミニゲーム判定：小さいキャンバスサイズの場合のみPlayer2にNPC設定
+        this.updateNPCConfig2({
+          mode: 'pid' as any,
+          enabled: true,
+          difficulty: 'Nightmare' as any, // Hard → Nightmareに変更（最強）
+        });
+      }
     }
   }
 
