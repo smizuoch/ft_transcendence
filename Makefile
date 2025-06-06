@@ -2,7 +2,7 @@
 COMPOSE_FILE = compose.yml
 PROJECT_NAME = ft_transcendence
 
-.PHONY: all up build start down stop logs ps re clean fclean help
+.PHONY: all up build start down stop logs ps re RE clean fclean bals status help
 
 all: up
 
