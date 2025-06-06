@@ -221,30 +221,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, players = defaultPlayer
               {roomNumber.toString().padStart(6, "0")}
             </div>
 
-            {/* モード表示 */}
-            <div className="text-2xl mb-8 tracking-wider" style={{ color: "#212121" }}>
-              {npcEnabled ? (
-                <span>🤖 PVE モード (プレイヤー vs AI)</span>
-              ) : (
-                <span>👥 PVP モード (プレイヤー vs プレイヤー)</span>
-              )}
-            </div>
-
-            {/* コントロール説明 */}
-            <div className="text-sm mb-6 text-center" style={{ color: "#212121" }}>
-              {npcEnabled ? (
-                <>
-                  <div>Player 1 (上): 🤖 Technician AI</div>
-                  <div>Player 2 (下): ← → キー</div>
-                </>
-              ) : (
-                <>
-                  <div>Player 1 (上): A D キー</div>
-                  <div>Player 2 (下): ← → キー</div>
-                </>
-              )}
-            </div>
-
             <img
               src={`${ICON_PATH}${hoverClose ? "close" : "open"}.svg`}
               alt="toggle"
