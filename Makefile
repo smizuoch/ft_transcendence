@@ -61,6 +61,13 @@ bals:
 	@docker system prune -a -f --volumes > /dev/null 2>&1 || true
 	@echo "bals!"
 
+status:
+	@docker images ; echo
+	@docker ps -a ; echo
+	@docker volume ls ; echo
+	@docker network ls ; echo
+	@docker system df ; echo
+
 # webserv:
 # 	@ ./secrets/.webserv.sh
 
