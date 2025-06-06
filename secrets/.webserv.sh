@@ -4,7 +4,7 @@
 cd ./services/webserv
 
 # webservの設定ファイルを作成する
-[ -f ./webserv.conf ] || cat << EOF > ./conf/webserv.conf
+[ -f ./conf/webserv.conf ] || cat << EOF > ./conf/webserv.conf
 [localhost]
 listen = [8001]
 root = "/app/html"
