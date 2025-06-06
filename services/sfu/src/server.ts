@@ -9,9 +9,30 @@ import { GameState } from './types';
 const app = express();
 const server = createServer(app);
 
-// CORSの設定
+// CORSの設定 - 動的にoriginを許可
+const allowedOrigins = [
+  'http://localhost:8080',
+  'https://localhost:8443',
+  'http://10.16.2.9:8080',
+  'https://10.16.2.9:8443'
+];
+
 app.use(cors({
-  origin: ['http://localhost:8080', 'https://localhost:8443'],
+  origin: (origin, callback) => {
+    // originがundefined（同一オリジン）または許可リストに含まれている場合は許可
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // ローカルIPアドレスのパターンもチェック
+      const localIpPattern = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.)/;
+      if (localIpPattern.test(origin)) {
+        callback(null, true);
+      } else {
+        console.log('CORS blocked origin:', origin);
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true
 }));
 
@@ -20,7 +41,19 @@ app.use(express.json());
 // Socket.IOサーバーの設定
 const io = new SocketIOServer(server, {
   cors: {
-    origin: ['http://localhost:8080', 'https://localhost:8443'],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        const localIpPattern = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.)/;
+        if (localIpPattern.test(origin)) {
+          callback(null, true);
+        } else {
+          console.log('Socket.IO CORS blocked origin:', origin);
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true
   }

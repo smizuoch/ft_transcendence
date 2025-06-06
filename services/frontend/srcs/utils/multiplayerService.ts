@@ -63,8 +63,25 @@ export class MultiplayerService {
   }
 
   private initializeSocket() {
+    // 環境に応じてSFUサーバーのURLを決定
+    const getSFUServerUrl = () => {
+      // 本番環境の場合
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        // HTTPSの場合はwssを使用、HTTPの場合はwsを使用
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const hostname = window.location.hostname;
+        const port = '3001';
+        return `${protocol}//${hostname}:${port}`;
+      }
+      // 開発環境の場合
+      return 'http://localhost:3001';
+    };
+
+    const sfuUrl = getSFUServerUrl();
+    console.log('Connecting to SFU server:', sfuUrl);
+
     // SFUサーバーに接続
-    this.socket = io('http://localhost:3001', {
+    this.socket = io(sfuUrl, {
       transports: ['websocket', 'polling'],
       autoConnect: false
     });
