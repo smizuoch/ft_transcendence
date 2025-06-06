@@ -25,7 +25,8 @@ export const useGameEngine = (
     gameStarted: boolean,
     keysRef: React.RefObject<{ [key: string]: boolean }>,
     paddleAndBallColor?: string, // 色パラメータ
-    isPVEMode?: boolean // PVEモードかどうか
+    isPVEMode?: boolean, // PVEモードかどうか
+    remotePlayerInput?: { up: boolean; down: boolean; timestamp: number } | null // マルチプレイヤー入力
   ) => {
     if (!engineRef.current || !canvasRef.current) return;
 
@@ -46,6 +47,23 @@ export const useGameEngine = (
           }
           if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
             state.paddle2.x += speed;
+          }
+        } else if (remotePlayerInput) {
+          // マルチプレイヤーモード: リモートプレイヤーの入力を適用
+          // ローカルプレイヤー（Player2）の制御
+          if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
+            state.paddle2.x -= speed;
+          }
+          if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+            state.paddle2.x += speed;
+          }
+
+          // リモートプレイヤー（Player1）の制御
+          if (remotePlayerInput.up && state.paddle1.x > 0) {
+            state.paddle1.x -= speed; // upは左移動
+          }
+          if (remotePlayerInput.down && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
+            state.paddle1.x += speed; // downは右移動
           }
         } else {
           // PVPモード: Player1 = プレイヤー, Player2 = プレイヤー

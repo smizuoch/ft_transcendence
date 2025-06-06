@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GamePong2 マルチプレイヤーデバッグ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        #log {
+            height: 300px;
+            overflow-y: scroll;
+            background: #000;
+            padding: 10px;
+            border: 1px solid #333;
+            font-family: monospace;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GamePong2 マルチプレイヤーデバッグツール</h1>
+
+        <div class="section">
+            <h3>接続テスト</h3>
+            <input type="text" id="roomNumber" value="000042" placeholder="部屋番号">
+            <button onclick="connectToRoom()">部屋に接続</button>
+            <button onclick="startGame()">ゲーム開始</button>
+            <button onclick="disconnect()">切断</button>
+        </div>
+
+        <div class="section">
+            <h3>デバッグログ</h3>
+            <div id="log"></div>
+            <button onclick="clearLog()">ログクリア</button>
+        </div>
+
+        <div class="section">
+            <h3>テスト手順</h3>
+            <ol>
+                <li>2つのブラウザタブでこのページを開く</li>
+                <li>両方のタブで同じ部屋番号に接続</li>
+                <li>どちらかのタブで「ゲーム開始」をクリック</li>
+                <li>両方のタブでゲーム開始メッセージが表示されることを確認</li>
+            </ol>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        let currentRoom = null;
+
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function connectToRoom() {
+            const roomNumber = document.getElementById('roomNumber').value;
+            if (!roomNumber) {
+                log('ERROR: 部屋番号を入力してください');
+                return;
+            }
+
+            disconnect(); // 既存の接続を切断
+
+            log(`接続中... Room: ${roomNumber}`);
+
+            // Socket.IO接続
+            socket = io('ws://localhost:3001');
+            currentRoom = roomNumber;
+
+            socket.on('connect', () => {
+                log(`✓ サーバーに接続しました (ID: ${socket.id})`);
+
+                // 部屋に参加
+                socket.emit('join-room', {
+                    roomNumber: roomNumber,
+                    playerInfo: {
+                        id: socket.id,
+                        avatar: 'test-avatar.png',
+                        name: `Player-${Math.random().toString(36).substr(2, 4)}`
+                    }
+                });
+            });
+
+            socket.on('room-joined', (data) => {
+                log(`✓ 部屋に参加しました: Player ${data.playerNumber}`);
+                log(`  - プレイヤー数: ${data.players.length}`);
+                log(`  - ゲーム準備完了: ${data.isGameReady}`);
+            });
+
+            socket.on('player-joined', (data) => {
+                log(`✓ 他のプレイヤーが参加: Player ${data.playerNumber}`);
+                log(`  - ゲーム準備完了: ${data.isGameReady}`);
+            });
+
+            socket.on('game-ready', (data) => {
+                log('✓ ゲーム準備完了！2人のプレイヤーが揃いました');
+            });
+
+            socket.on('game-started', (data) => {
+                log('🎮 ゲーム開始！');
+                log(`  - 開始者: ${data.initiator}`);
+                log(`  - 参加者数: ${data.players.length}`);
+            });
+
+            socket.on('game-start-failed', (data) => {
+                log(`❌ ゲーム開始失敗: ${data.reason}`);
+                log(`  - 現在のプレイヤー数: ${data.currentPlayers}`);
+            });
+
+            socket.on('error', (data) => {
+                log(`❌ エラー: ${data.message}`);
+            });
+
+            socket.on('disconnect', () => {
+                log('❌ サーバーから切断されました');
+            });
+        }
+
+        function startGame() {
+            if (!socket || !currentRoom) {
+                log('ERROR: 部屋に接続してください');
+                return;
+            }
+
+            log('ゲーム開始要求を送信中...');
+            socket.emit('start-game', {
+                roomNumber: currentRoom
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                currentRoom = null;
+                log('切断しました');
+            }
+        }
+
+        // 初期化
+        log('デバッグツール初期化完了');
+        log('部屋番号を入力して「部屋に接続」をクリックしてください');
+    </script>
+</body>
+</html>

@@ -30,6 +30,21 @@ services:
       - transcendence_net
     # このサービスはビルド後終了するため、restartポリシーは不要
 
+  sfu:
+    build:
+      context: ./services/sfu
+      dockerfile: Dockerfile
+    container_name: sfu
+    ports:
+      - "3001:3001"
+      - "10000-10100:10000-10100/udp" # RTC用ポート範囲
+    environment:
+      - PORT=3001
+      - ANNOUNCED_IP=127.0.0.1
+    networks:
+      - transcendence_net
+    restart: unless-stopped
+
   auth:
     build: ./services/api/auth
     container_name: auth
