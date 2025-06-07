@@ -40,7 +40,8 @@ services:
       - "10000-10100:10000-10100/udp" # RTC用ポート範囲
     environment:
       - PORT=3001
-      - ANNOUNCED_IP=0.0.0.0  # 全てのIPアドレスからのアクセスを許可
+      - DOCKER_ENV=true
+      - HOST_IP=${HOST_IP:-192.168.1.100}  # ホストマシンのローカルIPアドレス
     networks:
       - transcendence_net
     restart: unless-stopped
