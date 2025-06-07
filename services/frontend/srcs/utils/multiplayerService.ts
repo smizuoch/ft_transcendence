@@ -67,8 +67,8 @@ export class MultiplayerService {
     const getSFUServerUrl = () => {
       // 本番環境の場合
       if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        // HTTPSの場合はwssを使用、HTTPの場合はwsを使用
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // HTTPSの場合はhttpsを使用、HTTPの場合はhttpを使用
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
         const hostname = window.location.hostname;
         const port = '3001';
         return `${protocol}//${hostname}:${port}`;
@@ -83,7 +83,16 @@ export class MultiplayerService {
     // SFUサーバーに接続
     this.socket = io(sfuUrl, {
       transports: ['websocket', 'polling'],
-      autoConnect: false
+      autoConnect: false,
+      // 自己署名証明書対応
+      rejectUnauthorized: false,
+      // 追加のSSL設定
+      secure: true,
+      forceNew: true,
+      reconnection: true,
+      timeout: 5000,
+      // CORS設定
+      withCredentials: true
     });
 
     this.socket.on('connect', () => {

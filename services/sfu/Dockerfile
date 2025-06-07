@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     pkg-config \
     libssl-dev \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
 # package.jsonとpackage-lock.jsonをコピー
@@ -21,11 +22,15 @@ RUN npm install --verbose
 # TypeScript設定ファイルをコピー
 COPY tsconfig.json ./
 
-# ソースコードをコピー
+# ソースコードとスクリプトをコピー
 COPY src/ ./src/
+COPY scripts/ ./scripts/
 
 # TypeScriptをビルド
 RUN npm run build
+
+# SSL証明書を生成
+RUN chmod +x ./scripts/generate-ssl-certs.sh && ./scripts/generate-ssl-certs.sh
 
 # 本番用ユーザーを作成
 RUN addgroup --gid 1001 nodejs
