@@ -49,7 +49,7 @@ echo -e "${GREEN}$(cat << 'EOF'
 /*                                                                                            */
 /* ****************************************************************************************** */
 
-🚀 http://localhost:8001/ on webserv
+🏠 http://localhost:8001/ on webserv
 
 EOF
 )${RESET}"

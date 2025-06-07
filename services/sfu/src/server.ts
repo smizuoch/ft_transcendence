@@ -6,50 +6,19 @@ import { GameState } from './types';
 
 const app = fastify({ logger: true });
 
-// CORSの設定 - 動的にoriginを許可
-const allowedOrigins = [
-  'http://localhost:8080',
-  'https://localhost:8443',
-  'http://10.16.2.9:8080',
-  'https://10.16.2.9:8443'
-];
-
+// CORSの設定 - 全世界からのアクセスを許可
 // Fastify CORS設定
 app.register(require('@fastify/cors'), {
-  origin: (origin: string, callback: (err: Error | null, allow?: boolean) => void) => {
-    // originがundefined（同一オリジン）または許可リストに含まれている場合は許可
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      // ローカルIPアドレスのパターンもチェック
-      const localIpPattern = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.)/;
-      if (localIpPattern.test(origin)) {
-        callback(null, true);
-      } else {
-        console.log('CORS blocked origin:', origin);
-        callback(new Error('Not allowed by CORS'));
-      }
-    }
-  },
-  credentials: true
+  origin: true, // 全てのオリジンを許可
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 });
 
 // Socket.IOサーバーの設定
 const io = new SocketIOServer({
   cors: {
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        const localIpPattern = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.)/;
-        if (localIpPattern.test(origin)) {
-          callback(null, true);
-        } else {
-          console.log('Socket.IO CORS blocked origin:', origin);
-          callback(new Error('Not allowed by CORS'));
-        }
-      }
-    },
+    origin: true, // 全てのオリジンを許可
     methods: ['GET', 'POST'],
     credentials: true
   }
