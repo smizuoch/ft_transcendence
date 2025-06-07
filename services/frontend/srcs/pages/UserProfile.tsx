@@ -37,17 +37,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   // フォロー状態の切り替え
   const toggleFollow = () => {
     setIsFollowing(!isFollowing);
-  };
-  return (
-    <div className="bg-[#FFFFFF] min-h-screen p-12 relative font-sans text-[#5C5E7A]">
+  };  return (
+    <div className="bg-[#FFFFFF] min-h-screen p-4 relative font-sans text-[#5C5E7A]">
 
       {/* 左上の装飾的な四角 */}
-      {/* <div className="absolute top-12 left-0 w-16 h-16 bg-[#E9E9F0]"></div> */}
+      {/* <div className="absolute top-4 left-0 w-16 h-16 bg-[#E9E9F0]"></div> */}
 
-      <main className="max-w-7xl mx-auto flex justify-center items-start gap-24">
-
-        {/* 左側: アバターと名前 */}
-        <section className="flex flex-col items-center justify-start pt-24 space-y-6">
+      <main className="max-w-7xl mx-auto flex justify-center items-start gap-12 pt-8">        {/* 左側: アバターと名前 */}
+        <section className="flex flex-col items-center justify-start pt-12 space-y-6">
           <div className="relative">
             {/* アバターコンテナ */}
             <div className={`w-56 h-56 rounded-full border-[8px] ${
@@ -74,10 +71,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             )}
           </div>
           <h1 className="text-6xl font-medium tracking-wider text-gray-600 text-center">{mockData.name}</h1>
-        </section>
-
-        {/* 中央: ランキング、グラフ、戦績 */}
-        <section className="flex-1 max-w-2xl flex flex-col space-y-12 pt-8">
+        </section>        {/* 中央: ランキング、グラフ、戦績 */}
+        <section className="flex-1 max-w-2xl flex flex-col space-y-8 pt-4">
           {/* PONG42ランキング */}
           <div className="flex justify-center items-center space-x-4">
              {/* <div className="w-24 h-24 bg-[#E9E9F0]"></div> */}
@@ -131,22 +126,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
           </div>
         </section>
 
-      </main>
-
-      {/* 右下: マイページボタン */}
+      </main>      {/* 右下: マイページボタン */}
       <button
         onClick={() => navigate('MyPage')}
-        className="absolute bottom-12 right-12 transition-transform hover:scale-105"
+        className="absolute bottom-4 right-4 transition-transform hover:scale-105"
       >
         <img
           src="/images/icons/mypage.svg"
           alt="MyPage"
           className="w-16 h-16"
         />
-      </button>
-
-      {/* デバッグ用のコントロールパネル（開発時のみ表示） */}
-      <div className="absolute top-4 right-4 space-y-2 text-sm">
+      </button>      {/* デバッグ用のコントロールパネル（開発時のみ表示） */}
+      <div className="absolute top-2 right-2 space-y-2 text-sm">
         <button
           onClick={() => setAvatarBorderColor(avatarBorderColor === 'green' ? 'gray' : 'green')}
           className="block px-3 py-1 bg-blue-500 text-white rounded"
@@ -163,6 +154,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
 
     </div>
   );
+};
+
+// Preview.js用のデフォルトプロップス
+UserProfile.defaultProps = {
+  navigate: (page: string) => console.log(`Navigate to: ${page}`),
+  userId: "SampleUser"
 };
 
 export default UserProfile;
