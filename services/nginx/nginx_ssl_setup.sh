@@ -9,7 +9,7 @@ STATE="Tokyo"
 LOCALITY="Tokyo"
 ORG_NAME="42Tokyo"
 ORG_UNIT="student"
-COMMON_NAME="localhost" # または実際のドメイン名
+COMMON_NAME="*" # ワイルドカード証明書（全てのドメインで使用可能）
 EMAIL="student@student.42tokyo.jp"
 
 # Check if certificate and key already exist

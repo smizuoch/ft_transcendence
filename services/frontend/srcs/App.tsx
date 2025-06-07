@@ -13,6 +13,7 @@ import UserProfile from '@/pages/UserProfile';
 interface RouteState {
   page: string;
   userId?: string;
+  roomNumber?: string;
 }
 
 const App: React.FC = () => {
@@ -20,9 +21,9 @@ const App: React.FC = () => {
   const [showBackNavigationPopup, setShowBackNavigationPopup] = useState(false);
 
   /** -------- routing helper -------- */
-  const navigate = (page: string, userId?: string) => {
-    setCurrentRoute({ page, userId });
-    window.history.pushState({ page, userId }, '', '/');
+  const navigate = (page: string, userId?: string, roomNumber?: string) => {
+    setCurrentRoute({ page, userId, roomNumber });
+    window.history.pushState({ page, userId, roomNumber }, '', '/');
   };
 
   /** -------- back-navigation block -------- */
@@ -58,7 +59,7 @@ const App: React.FC = () => {
       case 'GameSelect':
         return <GameSelect navigate={navigate} />;
       case 'GamePong2':
-        return <GamePong2 navigate={navigate} />;
+        return <GamePong2 navigate={navigate} roomNumber={currentRoute?.roomNumber} />;
       case 'GamePong42':
         return <GamePong42 navigate={navigate} />;
       case 'GameResult':
