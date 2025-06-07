@@ -3,8 +3,33 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { MediasoupService } from './mediasoup-service';
 import { RoomManager } from './room-manager';
 import { GameState } from './types';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const app = fastify({ logger: true });
+// SSL証明書の設定
+const getSSLOptions = () => {
+  const certDir = '/app/certs';
+  const keyPath = path.join(certDir, 'server-san.key');
+  const certPath = path.join(certDir, 'server-san.crt');
+  
+  try {
+    if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+      return {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+      };
+    }
+  } catch (error: any) {
+    console.warn('SSL certificates not found, falling back to HTTP:', error?.message || error);
+  }
+  return null;
+};
+
+const sslOptions = getSSLOptions();
+const app = fastify({ 
+  logger: true,
+  ...(sslOptions && { https: sslOptions })
+});
 
 // CORSの設定 - 全世界からのアクセスを許可
 // Fastify CORS設定
@@ -256,10 +281,17 @@ async function startServer() {
     });
 
     const PORT = process.env.PORT || 3001;
+    const protocol = sslOptions ? 'HTTPS' : 'HTTP';
 
     // Fastifyサーバーを起動
     await app.listen({ port: Number(PORT), host: '0.0.0.0' });
-    console.log(`SFU Server running on port ${PORT}`);
+    console.log(`${protocol} SFU Server running on port ${PORT}`);
+    
+    if (sslOptions) {
+      console.log('WSS (WebSocket Secure) connections enabled');
+    } else {
+      console.log('WS (WebSocket) connections enabled');
+    }
 
     // Socket.IOをFastifyサーバーに接続
     io.attach(app.server);
