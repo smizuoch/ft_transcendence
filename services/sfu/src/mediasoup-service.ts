@@ -93,16 +93,30 @@ export class MediasoupService {
       throw new Error('Router not initialized');
     }
 
+    // ローカルネットワーク対応のためのlistenIps設定
+    const listenIps = [
+      {
+        ip: '0.0.0.0',
+        announcedIp: process.env.ANNOUNCED_IP || this.getLocalIpAddress(),
+      },
+    ];
+
+    // Dockerコンテナ内の場合は追加のlistenIpを設定
+    if (process.env.DOCKER_ENV === 'true') {
+      listenIps.push({
+        ip: '0.0.0.0',
+        announcedIp: process.env.HOST_IP || this.getLocalIpAddress(),
+      });
+    }
+
     const transport = await this.router.createWebRtcTransport({
-      listenIps: [
-        {
-          ip: '0.0.0.0',
-          announcedIp: process.env.ANNOUNCED_IP || '127.0.0.1',
-        },
-      ],
+      listenIps,
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,
+      // ICE候補の追加設定
+      enableSctp: false,
+      numSctpStreams: { OS: 1024, MIS: 1024 },
     });
 
     this.transports.set(socketId, transport);
@@ -286,5 +300,22 @@ export class MediasoupService {
     if (this.worker) {
       this.worker.close();
     }
+  }
+
+  private getLocalIpAddress(): string {
+    const { networkInterfaces } = require('os');
+    const nets = networkInterfaces();
+    
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name]) {
+        // IPv4で内部ネットワークでないものを探す
+        if (net.family === 'IPv4' && !net.internal) {
+          return net.address;
+        }
+      }
+    }
+    
+    // フォールバック
+    return '127.0.0.1';
   }
 }
