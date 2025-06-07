@@ -39,10 +39,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
     setIsFollowing(!isFollowing);
   };  return (
     <div className="bg-[#FFFFFF] min-h-screen p-4 relative font-sans text-[#5C5E7A]">
-
-      {/* 左上の装飾的な四角 */}
-      {/* <div className="absolute top-4 left-0 w-16 h-16 bg-[#E9E9F0]"></div> */}
-
       <main className="max-w-7xl mx-auto flex justify-center items-start gap-12 pt-8">        {/* 左側: アバターと名前 */}
         <section className="flex flex-col items-center justify-start pt-12 space-y-6">
           <div className="relative">
@@ -75,7 +71,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
         <section className="flex-1 max-w-2xl flex flex-col space-y-8 pt-4">
           {/* PONG42ランキング */}
           <div className="flex justify-center items-center space-x-4">
-             {/* <div className="w-24 h-24 bg-[#E9E9F0]"></div> */}
              <p className="text-8xl font-light text-gray-500 text-center">
                #{mockData.rank.toFixed(2)}
              </p>
@@ -154,12 +149,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
 
     </div>
   );
-};
-
-// Preview.js用のデフォルトプロップス
-UserProfile.defaultProps = {
-  navigate: (page: string) => console.log(`Navigate to: ${page}`),
-  userId: "SampleUser"
 };
 
 export default UserProfile;
