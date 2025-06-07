@@ -1,13 +1,10 @@
-import express, { Request, Response } from 'express';
-import { createServer } from 'http';
+import fastify from 'fastify';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import cors from 'cors';
 import { MediasoupService } from './mediasoup-service';
 import { RoomManager } from './room-manager';
 import { GameState } from './types';
 
-const app = express();
-const server = createServer(app);
+const app = fastify({ logger: true });
 
 // CORSの設定 - 動的にoriginを許可
 const allowedOrigins = [
@@ -17,8 +14,9 @@ const allowedOrigins = [
   'https://10.16.2.9:8443'
 ];
 
-app.use(cors({
-  origin: (origin, callback) => {
+// Fastify CORS設定
+app.register(require('@fastify/cors'), {
+  origin: (origin: string, callback: (err: Error | null, allow?: boolean) => void) => {
     // originがundefined（同一オリジン）または許可リストに含まれている場合は許可
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -34,12 +32,10 @@ app.use(cors({
     }
   },
   credentials: true
-}));
-
-app.use(express.json());
+});
 
 // Socket.IOサーバーの設定
-const io = new SocketIOServer(server, {
+const io = new SocketIOServer({
   cors: {
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
@@ -276,24 +272,28 @@ async function startServer() {
     });
 
     // ヘルスチェックエンドポイント
-    app.get('/health', (req, res) => {
-      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    app.get('/health', async (request, reply) => {
+      return { status: 'ok', timestamp: new Date().toISOString() };
     });
 
     // サーバー情報エンドポイント
-    app.get('/info', (req, res) => {
-      res.json({
+    app.get('/info', async (request, reply) => {
+      return {
         service: 'pong-sfu-server',
         version: '1.0.0',
         rooms: roomManager.getRoomCount(),
         activePlayers: roomManager.getTotalPlayers()
-      });
+      };
     });
 
     const PORT = process.env.PORT || 3001;
-    server.listen(PORT, () => {
-      console.log(`SFU Server running on port ${PORT}`);
-    });
+
+    // Fastifyサーバーを起動
+    await app.listen({ port: Number(PORT), host: '0.0.0.0' });
+    console.log(`SFU Server running on port ${PORT}`);
+
+    // Socket.IOをFastifyサーバーに接続
+    io.attach(app.server);
 
   } catch (error) {
     console.error('Failed to start server:', error);
