@@ -38,4 +38,11 @@ export class UserService {
       where: { email },
     });
   }
+
+  // ユーザー名でユーザーを検索するメソッドを追加
+  async findByUsername(username: string) {
+    return this.prisma.user.findUnique({
+      where: { username },
+    });
+  }
 }

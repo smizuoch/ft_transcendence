@@ -37,7 +37,7 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
   // フォーム送信ハンドラー
   const handleSubmit = async () => {
     if (!formData.username || !formData.email || !formData.password) {
-      setMessage('すべてのフィールドを入力してください');
+      setMessage('Please fill in all fields');
       return;
     }
 
@@ -54,16 +54,16 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
       });
 
       if (response.ok) {
-        setMessage('ユーザー登録が完了しました！');
+        setMessage('User registration completed successfully!');
         setFormData({ username: '', email: '', password: '' });
         // 登録成功後、2要素認証画面に遷移
         setTimeout(() => navigate('TwoFactorAuth'), 1000);
       } else {
         const errorData = await response.json();
-        setMessage(errorData.message || '登録に失敗しました');
+        setMessage(errorData.message || 'Registration failed');
       }
     } catch (error) {
-      setMessage('ネットワークエラーが発生しました');
+      setMessage('Network error occurred');
     } finally {
       setLoading(false);
     }
@@ -77,7 +77,7 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
           {/* メッセージ表示 */}
           {message && (
             <div className={`mb-4 p-3 rounded-lg text-center ${
-              message.includes('完了') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              message.includes('successfully') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
             }`}>
               {message}
             </div>

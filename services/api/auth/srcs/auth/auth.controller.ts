@@ -34,21 +34,27 @@ export class AuthController {
       // メールアドレスの重複チェック
       const existingUser = await this.userService.findByEmail(createUserDto.email);
       if (existingUser) {
-        throw new HttpException('このメールアドレスは既に使用されています', HttpStatus.BAD_REQUEST);
+        throw new HttpException('This email address is already in use', HttpStatus.BAD_REQUEST);
+      }
+
+      // ユーザー名の重複チェック
+      const existingUsername = await this.userService.findByUsername(createUserDto.username);
+      if (existingUsername) {
+        throw new HttpException('This username is already taken', HttpStatus.BAD_REQUEST);
       }
 
       // ユーザー作成
       const user = await this.userService.create(createUserDto);
       
       return {
-        message: 'ユーザー登録が完了しました',
+        message: 'User registration completed successfully',
         user,
       };
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
       }
-      throw new HttpException('登録処理中にエラーが発生しました', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException('An error occurred during registration', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }
