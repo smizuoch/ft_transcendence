@@ -1,5 +1,4 @@
-import type { Config } from 'tailwindcss'
-
+/** @type {import('tailwindcss').Config} */
 export default {
   content: [
     "./index.html", // public/index.html から変更
@@ -13,4 +12,4 @@ export default {
     },
   },
   plugins: [],
-} satisfies Config
+}
