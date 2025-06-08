@@ -120,9 +120,11 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
                 src="/images/icons/authentication_code_input_field.svg"
                 alt="Input field"
                 className="absolute inset-0 w-full h-full"
-              />
-              <input
-                ref={(el) => (inputRefs.current[index] = el)}
+              />              <input
+                ref={(el) => {
+                  if (el) inputRefs.current[index] = el;
+                  return undefined;
+                }}
                 type="text"
                 inputMode="numeric"
                 maxLength={1}
