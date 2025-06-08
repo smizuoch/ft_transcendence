@@ -2,11 +2,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import { GameEngine, GameConfig } from './gameEngine';
 
 export const useGameEngine = (
-  canvasRef: React.RefObject<HTMLCanvasElement>,
+  canvasRef: React.RefObject<HTMLCanvasElement | null>,
   config?: GameConfig
 ) => {
   const engineRef = useRef<GameEngine | null>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
 
   const initializeEngine = useCallback(() => {
     const canvas = canvasRef.current;
