@@ -85,7 +85,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     pid?: { error: number; p: number; i: number; d: number; output: number };
   } | null>(null);
 
-  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
   // engineRefの未使用警告を抑制（NPC機能が無効化されているため）
   void engineRef;  // ============= 通信対戦のセットアップ =============
