@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 interface GameSelectProps {
-  navigate: (page: string) => void;
+  navigate: (page: string, userId?: string, roomNumber?: string) => void;
 }
 
 const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
@@ -54,13 +54,12 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
       }
     }
   };
-
   // Pong2ゲームへの遷移
   const navigateToPong2 = (roomNumberStr?: string) => {
     // 指定された部屋番号か、入力欄の値を使用（空欄は0とみなす）
-    const roomCode = roomNumberStr || roomNumber.join('') || '000000';
+    const roomCode = roomNumberStr || roomNumber.map(digit => digit || '0').join('');
     console.log(`Navigating to Pong2 with room number: ${roomCode}`);
-    navigate('GamePong2');
+    navigate('GamePong2', undefined, roomCode);
   };
 
   // Pong42ゲームへの遷移
@@ -138,9 +137,11 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
                       src="/images/icons/room_number_input_field.svg"
                       alt="Input field"
                       className="absolute inset-0 w-full h-full"
-                    />
-                    <input
-                      ref={(el) => (inputRefs.current[index] = el)}
+                    />                    <input
+                      ref={(el) => {
+                        if (el) inputRefs.current[index] = el;
+                        return undefined;
+                      }}
                       type="text"
                       inputMode="numeric"
                       maxLength={1}

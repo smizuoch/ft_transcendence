@@ -3,8 +3,8 @@
 [ -d ./services/webserv ] || git clone -b develop https://github.com/tobeshota/webserv ./services/webserv
 cd ./services/webserv
 
-# webservの設定ファイルを作成する
-[ -f ./webserv.conf ] || cat << EOF > ./conf/webserv.conf
+# webservの設定ファイルを更新する
+cat << EOF > ./conf/webserv.conf
 [localhost]
 listen = [8001]
 root = "/app/html"
@@ -49,7 +49,7 @@ echo -e "${GREEN}$(cat << 'EOF'
 /*                                                                                            */
 /* ****************************************************************************************** */
 
-🚀 http://localhost:8001/ on webserv
+🏠 http://localhost:8001/ on webserv
 
 EOF
 )${RESET}"

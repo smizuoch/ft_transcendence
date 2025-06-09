@@ -2,11 +2,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import { GameEngine, GameConfig } from './gameEngine';
 
 export const useGameEngine = (
-  canvasRef: React.RefObject<HTMLCanvasElement>,
+  canvasRef: React.RefObject<HTMLCanvasElement | null>,
   config?: GameConfig
 ) => {
   const engineRef = useRef<GameEngine | null>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
 
   const initializeEngine = useCallback(() => {
     const canvas = canvasRef.current;
@@ -24,7 +24,9 @@ export const useGameEngine = (
     onScore: (scorer: 'player1' | 'player2') => void,
     gameStarted: boolean,
     keysRef: React.RefObject<{ [key: string]: boolean }>,
-    paddleAndBallColor?: string // 色パラメータを追加
+    paddleAndBallColor?: string, // 色パラメータ
+    isPVEMode?: boolean, // PVEモードかどうか
+    remotePlayerInput?: { up: boolean; down: boolean; timestamp: number } | null // マルチプレイヤー入力
   ) => {
     if (!engineRef.current || !canvasRef.current) return;
 
@@ -37,14 +39,49 @@ export const useGameEngine = (
         const state = engineRef.current.getState();
         const speed = 8; // paddleSpeed
 
-        // Player 1はPID NPCが制御するため削除
+        if (isPVEMode) {
+          // PVEモード: Player1 = NPC, Player2 = プレイヤー
+          // Player 2 controls (下のパドル)
+          if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
+            state.paddle2.x -= speed;
+          }
+          if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+            state.paddle2.x += speed;
+          }
+        } else if (remotePlayerInput) {
+          // マルチプレイヤーモード: リモートプレイヤーの入力を適用
+          // ローカルプレイヤー（Player2）の制御
+          if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
+            state.paddle2.x -= speed;
+          }
+          if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+            state.paddle2.x += speed;
+          }
 
-        // Player 2 controls
-        if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
-          state.paddle2.x -= speed;
-        }
-        if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
-          state.paddle2.x += speed;
+          // リモートプレイヤー（Player1）の制御
+          if (remotePlayerInput.up && state.paddle1.x > 0) {
+            state.paddle1.x -= speed; // upは左移動
+          }
+          if (remotePlayerInput.down && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
+            state.paddle1.x += speed; // downは右移動
+          }
+        } else {
+          // PVPモード: Player1 = プレイヤー, Player2 = プレイヤー
+          // Player 1 controls (上のパドル)
+          if (keysRef.current['a'] && state.paddle1.x > 0) {
+            state.paddle1.x -= speed;
+          }
+          if (keysRef.current['d'] && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
+            state.paddle1.x += speed;
+          }
+
+          // Player 2 controls (下のパドル)
+          if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
+            state.paddle2.x -= speed;
+          }
+          if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+            state.paddle2.x += speed;
+          }
         }
 
         const result = engineRef.current.update();

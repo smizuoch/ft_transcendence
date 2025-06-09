@@ -7,8 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: nginx
     ports:
-      - "8080:80"  # ホストの8080をコンテナの80へ
-      - "8443:443" # ホストの8443をコンテナの443へ
+      - "8080:80"  # HTTP - 全世界からアクセス可能（ホスト8080 -> コンテナ80）
+      - "8443:443" # HTTPS - 全世界からアクセス可能（ホスト8443 -> コンテナ443）
     volumes:
       - ./services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - frontend_dist:/usr/share/nginx/html:ro # frontendのビルド成果物をマウント
@@ -29,6 +29,22 @@ services:
     networks:
       - transcendence_net
     # このサービスはビルド後終了するため、restartポリシーは不要
+
+  sfu:
+    build:
+      context: ./services/sfu
+      dockerfile: Dockerfile
+    container_name: sfu
+    ports:
+      - "3001:3001"
+      - "10000-10100:10000-10100/udp" # RTC用ポート範囲
+    environment:
+      - PORT=3001
+      - DOCKER_ENV=true
+      - HOST_IP=${HOST_IP:-192.168.1.100}  # ホストマシンのローカルIPアドレス
+    networks:
+      - transcendence_net
+    restart: unless-stopped
 
   auth:
     build: ./services/api/auth

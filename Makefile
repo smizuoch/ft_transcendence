@@ -2,14 +2,14 @@
 COMPOSE_FILE = compose.yml
 PROJECT_NAME = ft_transcendence
 
-.PHONY: all up build start down stop logs ps re clean fclean help
+.PHONY: all up build start down stop logs ps re RE clean fclean bals status help
 
 all: up
 
 up:
 	@echo "Starting up $(PROJECT_NAME) services..."
 	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) up --build -d
-	@printf "\e[32m🚀 https://localhost:8443/ on nginx\e[m\n"
+	@printf "\e[32m🏠 https://localhost:8443/ on nginx\e[m\n"
 
 build:
 	@echo "Building $(PROJECT_NAME) services..."
@@ -18,6 +18,7 @@ build:
 start:
 	@echo "Starting $(PROJECT_NAME) services (without rebuilding)..."
 	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) up -d
+	@printf "\e[32m🏠 https://localhost:8443/ on nginx\e[m\n"
 
 down:
 	@echo "Stopping $(PROJECT_NAME) services..."
@@ -53,14 +54,20 @@ fclean:
 	docker system prune -af || true
 
 bals:
-	docker stop $(docker ps -q) || true
-	docker compose down --volumes --remove-orphans || true
-	docker rm -f $(docker ps -a -q) || true
-	docker image prune -a -f || true
-	docker volume prune -f || true
-	docker network prune -f || true
-	docker system prune -a -f --volumes || true
-	@echo "bals"
+	@docker stop $$(docker ps -q) 2>/dev/null || true
+	@docker rm -f $$(docker ps -a -q) 2>/dev/null || true
+	@docker rmi -f $$(docker images -q) 2>/dev/null || true
+	@docker volume rm $$(docker volume ls -q) 2>/dev/null || true
+	@docker network rm $$(docker network ls -q --filter type=custom) 2>/dev/null || true
+	@docker system prune -a -f --volumes > /dev/null 2>&1 || true
+	@echo "bals!"
+
+status:
+	@docker images ; echo
+	@docker ps -a ; echo
+	@docker volume ls ; echo
+	@docker network ls ; echo
+	@docker system df ; echo
 
 # webserv:
 # 	@ ./secrets/.webserv.sh
@@ -78,6 +85,7 @@ help:
 	@echo "  make re          - Rebuild and restart all services (down then up)."
 	@echo "  make clean       - Stop and remove containers, and remove named volumes."
 	@echo "  make fclean      - Stop containers, remove volumes, remove images used by services, and remove orphans. Also prunes system."
+	@echo "  make status      - Show Docker system status."
 	@echo "  make help        - Show this help message."
 
 # Prevent .PHONY targets from interfering with files of the same name

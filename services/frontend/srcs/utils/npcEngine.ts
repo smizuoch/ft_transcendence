@@ -71,7 +71,7 @@ export class NPCEngine {
     // アルゴリズムが変更された場合は新しいインスタンスを作成
     if (config.mode && config.mode !== this.config.mode) {
       this.currentAlgorithm = NPCFactory.createAlgorithm(config.mode, this.config);
-    } else {
+    } else if (this.currentAlgorithm) {
       // 既存のアルゴリズムの設定を更新
       this.currentAlgorithm.updateConfig(config);
     }

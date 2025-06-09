@@ -30,7 +30,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   // ミニゲーム状態
   const [miniGames, setMiniGames] = useState<MiniGame[]>([]);
 
-  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
 
   // ミニゲーム初期化
