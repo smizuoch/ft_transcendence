@@ -30,7 +30,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = { sub: user.id, email: user.email, username: user.username };
+    const payload = { 
+      sub: user.username, 
+      username: user.username
+    };
     
     return {
       access_token: this.jwtService.sign(payload),
@@ -45,5 +48,32 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid token');
     }
+  }
+
+  async googleLogin(req: any) {
+    if (!req.user) {
+      throw new UnauthorizedException('No user from Google');
+    }
+
+    const { email, username } = req.user;
+
+    // 既存ユーザーをチェック
+    let user = await this.userService.findByEmail(email);
+
+    // ユーザーが存在しない場合は新規作成
+    if (!user) {
+      // Google認証専用メソッドを使用してユーザーを作成
+      user = await this.userService.createGoogleUser(email, username);
+    }
+
+    const payload = { sub: user.username, username: user.username };
+    
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        username: user.username,
+        email: user.email,
+      },
+    };
   }
 }

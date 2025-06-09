@@ -45,4 +45,19 @@ export class UserService {
       where: { username },
     });
   }
+
+  // Google認証用のユーザー作成メソッド
+  async createGoogleUser(email: string, username: string) {
+    const user = await this.prisma.user.create({
+      data: {
+        username,
+        email,
+        password: '', // Google認証の場合はパスワードは空
+      },
+    });
+    
+    // パスワードを除外して返す
+    const { password: _, ...result } = user;
+    return result;
+  }
 }

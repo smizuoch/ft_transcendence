@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Get, UseGuards, Request, ValidationPipe, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, ValidationPipe, HttpException, HttpStatus, Req, Res } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { LoginDto } from './login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -56,5 +57,21 @@ export class AuthController {
       }
       throw new HttpException('An error occurred during registration', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  async googleAuth(@Req() req) {
+    // Googleにリダイレクトされるため、ここは実行されない
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleAuthRedirect(@Req() req, @Res() res) {
+    const result = await this.authService.googleLogin(req);
+    
+    // フロントエンドにリダイレクトしてトークンを渡す
+    const redirectUrl = `https://localhost:8443/auth/callback?token=${result.access_token}`;
+    return res.redirect(redirectUrl);
   }
 }

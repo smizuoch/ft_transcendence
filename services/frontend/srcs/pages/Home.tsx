@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { apiClient } from '../utils/api';
 // import { Link } from 'react-router-dom'; // 削除
 
 interface HomeProps {
@@ -47,6 +48,11 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
     }
   }, [isMuted]);
 
+  const handleGoogleAuth = () => {
+    // Google認証URLにリダイレクト
+    window.location.href = apiClient.getGoogleAuthUrl();
+  };
+
   const toggleMute = () => {
     setIsMuted(!isMuted);
   };
@@ -77,7 +83,7 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
 
           {/* Icons positioned in plus shape - doubled size */}
           <button
-            onClick={() => navigate('MyPage')} // Google認証成功後はMyPageへ遷移すると仮定
+            onClick={handleGoogleAuth}
             className="absolute top-0 left-1/2 transform -translate-x-1/2 hover:bg-slate-100 rounded transition-colors p-2"
             aria-label="Sign in with Google"
           >
