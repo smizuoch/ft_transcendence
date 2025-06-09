@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiClient } from '../utils/apiClient';
 
 interface UserRegistrationProps {
   navigate: (page: string) => void;
@@ -42,25 +43,20 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
     }
 
     setLoading(true);
-    setMessage('');
-
-    try {
-      const response = await fetch('http://auth:3000/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+    setMessage('');    try {
+      const result = await apiClient.register({
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
       });
 
-      if (response.ok) {
+      if (result.success) {
         setMessage('User registration completed successfully!');
         setFormData({ username: '', email: '', password: '' });
         // 登録成功後、2要素認証画面に遷移
         setTimeout(() => navigate('TwoFactorAuth'), 1000);
       } else {
-        const errorData = await response.json();
-        setMessage(errorData.message || 'Registration failed');
+        setMessage(result.message || 'Registration failed');
       }
     } catch (error) {
       setMessage('Network error occurred');

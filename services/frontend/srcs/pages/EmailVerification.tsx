@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiClient } from '../utils/apiClient';
 
 interface EmailVerificationProps {
   navigate: (page: string) => void;
@@ -42,23 +43,17 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ navigate }) => {
     }
 
     setLoading(true);
-    setMessage('');
-
-    try {
-      const response = await fetch('http://auth:3000/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+    setMessage('');    try {
+      const result = await apiClient.login({
+        email: formData.email,
+        password: formData.password,
       });
 
-      if (response.ok) {
+      if (result.success) {
         // 認証成功時のみTwoFactorAuthページに遷移
         navigate('TwoFactorAuth');
       } else {
-        const errorData = await response.json();
-        setMessage(errorData.message || 'Authentication failed');
+        setMessage(result.message || 'Authentication failed');
       }
     } catch (error) {
       setMessage('Network error occurred');
