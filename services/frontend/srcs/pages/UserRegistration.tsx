@@ -17,9 +17,9 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
     username: '',
     email: '',
     password: ''
-  });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  });  const [loading, setLoading] = useState(false);
+  // エラー時の振動アニメーション用の状態
+  const [isShaking, setIsShaking] = useState(false);
 
   // Tailwind CSSクラスを使った色の定義
   const inputIconColor = "text-slate-500";
@@ -34,16 +34,20 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
       [field]: value
     }));
   };
-
   // フォーム送信ハンドラー
   const handleSubmit = async () => {
     if (!formData.username || !formData.email || !formData.password) {
-      setMessage('Please fill in all fields');
+      // 振動アニメーションを実行
+      setIsShaking(true);
+      setTimeout(() => {
+        setIsShaking(false);
+      }, 500);
       return;
     }
 
     setLoading(true);
-    setMessage('');    try {
+
+    try {
       const result = await apiClient.register({
         username: formData.username,
         email: formData.email,
@@ -51,15 +55,24 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
       });
 
       if (result.success) {
-        setMessage('User registration completed successfully!');
         setFormData({ username: '', email: '', password: '' });
         // 登録成功後、2要素認証画面に遷移
         setTimeout(() => navigate('TwoFactorAuth'), 1000);
       } else {
-        setMessage(result.message || 'Registration failed');
+        // 振動アニメーションを実行
+        setIsShaking(true);
+        setTimeout(() => {
+          setIsShaking(false);
+          setFormData({ username: '', email: '', password: '' });
+        }, 500);
       }
     } catch (error) {
-      setMessage('Network error occurred');
+      // 振動アニメーションを実行
+      setIsShaking(true);
+      setTimeout(() => {
+        setIsShaking(false);
+        setFormData({ username: '', email: '', password: '' });
+      }, 500);
     } finally {
       setLoading(false);
     }
@@ -67,17 +80,12 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-white p-4">
-      <div className="flex flex-col sm:flex-row items-center">
-        {/* 入力フォーム群のコンテナ */}
-        <div className="w-full max-w-sm sm:max-w-md mb-12 sm:mb-0 sm:mr-16 md:mr-20 lg:mr-24">
-          {/* メッセージ表示 */}
-          {message && (
-            <div className={`mb-4 p-3 rounded-lg text-center ${
-              message.includes('successfully') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-            }`}>
-              {message}
-            </div>
-          )}
+      <div className="flex flex-col sm:flex-row items-center">        {/* 入力フォーム群のコンテナ */}
+        <div className={`w-full max-w-sm sm:max-w-md mb-12 sm:mb-0 sm:mr-16 md:mr-20 lg:mr-24 ${isShaking ? 'animate-shake' : ''}`}
+          style={{
+            animationDuration: isShaking ? '0.5s' : '0',
+          }}
+        >
 
           {/* ユーザー名入力フィールド */}
           <div className={`flex items-center ${inputBorderColor} border rounded-lg py-4 px-5 mb-5 bg-white`}>
@@ -139,9 +147,22 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
             src="/images/icons/check.svg"
             alt="Submit registration"
             className={`w-40 h-40 sm:w-48 sm:h-48 ${checkmarkIconColor} ${loading ? 'animate-pulse' : ''}`}
-          />
-        </button>
+          />        </button>
       </div>
+
+      {/* 振動アニメーション用のスタイル */}
+      <style>
+        {`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+          20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+        .animate-shake {
+          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        `}
+      </style>
     </div>
   );
 };
