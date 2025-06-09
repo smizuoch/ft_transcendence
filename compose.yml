@@ -52,8 +52,6 @@ services:
     restart: unless-stopped
     networks:
       - transcendence_net
-    ports:
-      - "3000:3000" 
     volumes:
       - auth_data:/app/data
     env_file:
