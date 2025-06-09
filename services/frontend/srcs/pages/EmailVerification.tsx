@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiClient } from '../utils/apiClient';
+import { apiClient } from '../utils/authApiClient';
 
 interface EmailVerificationProps {
   navigate: (page: string) => void;
