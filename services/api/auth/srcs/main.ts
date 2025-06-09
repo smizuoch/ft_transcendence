@@ -18,7 +18,12 @@ async function bootstrap() {
   }));
   
   // 異なるオリジンとの通信をするためのCORSを有効化
-  app.enableCors();
+  app.enableCors({
+    origin: ['https://localhost:8443', 'http://localhost:8080'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true,
+  });
   
   await app.listen(3000, '0.0.0.0'); // 全てのインターフェースでリッスン
   console.log(`Auth service is running on ${await app.getUrl()}`);

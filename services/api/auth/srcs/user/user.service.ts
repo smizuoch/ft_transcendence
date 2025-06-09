@@ -31,4 +31,18 @@ export class UserService {
     const users = await this.prisma.user.findMany();
     return users.map(({ password: _, ...user }) => user);
   }
+
+  // メールアドレスでユーザーを検索するメソッドを追加
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: { email },
+    });
+  }
+
+  // ユーザー名でユーザーを検索するメソッドを追加
+  async findByUsername(username: string) {
+    return this.prisma.user.findUnique({
+      where: { username },
+    });
+  }
 }

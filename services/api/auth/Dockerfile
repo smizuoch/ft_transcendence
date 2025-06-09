@@ -27,8 +27,5 @@ RUN mkdir -p /app/data
 # Prismaクライアントを生成してビルド
 RUN npx prisma generate && pnpm run build
 
-# ボリューム設定 - SQLiteデータベースファイル用
-VOLUME ["/app/data"]
-
 # マイグレーション実行、シード処理、そして起動
-CMD ["sh", "-c", "npx prisma migrate dev --name init --create-only && npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate dev --name init && npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
