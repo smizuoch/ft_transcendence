@@ -5,6 +5,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { UserService } from '../user/user.service';
 import { CreateUserDto } from '../user/create-user.dto';
 import { GoogleOAuthService } from './google-oauth.service';
+import { FastifyReply } from 'fastify';
 
 @Controller('auth')
 export class AuthController {
@@ -61,13 +62,13 @@ export class AuthController {
   }
 
   @Get('google')
-  async googleAuth(@Res() res) {
+  async googleAuth(@Res({ passthrough: false }) res: FastifyReply) {
     const authUrl = this.googleOAuthService.getAuthUrl();
-    return res.redirect(authUrl);
+    return res.redirect(302, authUrl);
   }
 
   @Get('google/callback')
-  async googleAuthRedirect(@Query('code') code: string, @Res() res) {
+  async googleAuthRedirect(@Query('code') code: string, @Res({ passthrough: false }) res: FastifyReply) {
     try {
       if (!code) {
         throw new HttpException('Authorization code not provided', HttpStatus.BAD_REQUEST);
@@ -91,10 +92,10 @@ export class AuthController {
       
       // フロントエンドにリダイレクトしてトークンを渡す
       const redirectUrl = `https://localhost:8443/auth/callback?token=${result.access_token}`;
-      return res.redirect(redirectUrl);
+      return res.redirect(302, redirectUrl);
     } catch (error) {
       console.error('Google authentication error:', error);
-      return res.redirect('https://localhost:8443/?error=auth_failed');
+      return res.redirect(302, 'https://localhost:8443/?error=auth_failed');
     }
   }
 }
