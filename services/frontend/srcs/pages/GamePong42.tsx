@@ -28,7 +28,8 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const [showSurvivorsAlert, setShowSurvivorsAlert] = useState(false);
   const [attackAnimation, setAttackAnimation] = useState<{ targetIndex: number; duration: number } | null>(null);
   const [miniGamesReady, setMiniGamesReady] = useState(false); // ミニゲーム初期化完了フラグ
-  
+  const [miniGamesDataReady, setMiniGamesDataReady] = useState(false); // ミニゲームデータ取得完了フラグ
+
   // ミニゲーム状態
   const [miniGames, setMiniGames] = useState<MiniGame[]>([]);
 
@@ -36,10 +37,12 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const npcManager = useNPCManager();
 
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
-  const keysRef = useKeyboardControls();  // ミニゲーム初期化（npc_managerサービス使用）
+  const keysRef = useKeyboardControls();
+
+  // ミニゲーム初期化（npc_managerサービス使用）
   useEffect(() => {
     if (miniGames.length > 0) return; // 既に初期化済みの場合はスキップ
-    
+
     const initMiniGames = async () => {
       console.log('🎮 Starting miniGames initialization...');
       const games: MiniGame[] = [];
@@ -99,32 +102,68 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
             canvasSize: miniCanvasSize,
           });
         }
-      }      console.log(`🏁 MiniGames initialization complete. Created ${games.filter(g => g.active).length} active games.`);
+      }
+
+      console.log(`🏁 MiniGames initialization complete. Created ${games.filter(g => g.active).length} active games.`);
       setMiniGames(games);
       setMiniGamesReady(true); // ミニゲーム初期化完了
-    };    // コンポーネントマウント時に即座に初期化開始
+
+      // 初回ゲーム状態データを取得
+      console.log('🔄 Fetching initial game state data...');
+      try {
+        const result = await npcManager.getAllActiveGames();
+        if (result.success && result.data) {
+          const activeGamesData = result.data;
+          console.log('📥 Initial game state data received:', activeGamesData.length, 'games');
+
+          const updatedGames = games.map(game => {
+            if (!game.gameId) return game;
+            const gameData = activeGamesData.find(data => data.gameId === game.gameId);
+            return gameData ? { ...game, gameState: gameData } : game;
+          });
+
+          setMiniGames(updatedGames);
+          setMiniGamesDataReady(true); // データ取得完了
+          console.log('✅ Initial mini games data loaded successfully');
+        } else {
+          console.warn('❌ Failed to get initial active games:', result.error);
+          // データ取得に失敗してもゲームは開始可能
+          setMiniGamesDataReady(true);
+        }
+      } catch (error) {
+        console.error('💥 Error fetching initial game state:', error);
+        // エラーが発生してもゲームは開始可能
+        setMiniGamesDataReady(true);
+      }
+    };
+
+    // コンポーネントマウント時に即座に初期化開始
     initMiniGames();
-  }, []); // 依存関係を空配列にして初回マウント時のみ実行// ミニゲーム更新ループ（npc_managerサービス使用）
+  }, []); // 依存関係を空配列にして初回マウント時のみ実行
+
+  // ミニゲーム更新ループ（npc_managerサービス使用）
   useEffect(() => {
-    if (!gameStarted || gameOver) return;    const updateMiniGames = async () => {
+    if (!miniGamesReady || gameOver) return; // ミニゲーム初期化完了後に開始
+
+    const updateMiniGames = async () => {
       try {
         console.log('🔄 Updating mini games...');
         // 全てのアクティブなゲーム状態を一度に取得
         const result = await npcManager.getAllActiveGames();
-        
+
         console.log('📥 getAllActiveGames result:', result);
-        
+
         if (result.success && result.data) {
           const activeGamesData = result.data;
           console.log('🎮 Active games data:', activeGamesData);
-          
+
           setMiniGames(prev => {
             return prev.map(game => {
               if (!game.gameId) return game;
-              
+
               // 対応するゲーム状態を検索
               const gameData = activeGamesData.find(data => data.gameId === game.gameId);
-              
+
               if (gameData) {
                 // ゲーム終了チェック
                 if (gameData.winner === 'player1') {
@@ -152,7 +191,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
     const interval = setInterval(updateMiniGames, 2000); // 2秒間隔で更新
     return () => clearInterval(interval);
-  }, [gameStarted, gameOver, npcManager]);
+  }, [miniGamesReady, gameOver, npcManager]);
 
   // 生存者数の更新
   useEffect(() => {
@@ -186,7 +225,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       // プレイヤーがNPCに勝利 - 自動攻撃実行
       executeAutoAttack();
     }
-  }, [selectedTarget, survivors]);  const executeAutoAttack = useCallback(async () => {
+  }, [selectedTarget, survivors]);
+
+  const executeAutoAttack = useCallback(async () => {
     if (selectedTarget !== null) {
       // Show attack animation from center to target opponent
       setAttackAnimation({ targetIndex: selectedTarget, duration: 1000 });
@@ -229,9 +270,10 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     setGameOver(false);
     setWinner(null);
   }, [engineRef]); // getCurrentNPCの依存関係を削除
+
   // カウントダウン開始（ミニゲーム初期化完了後）
   useEffect(() => {
-    if (!miniGamesReady) return; // ミニゲーム初期化未完了の場合は待機
+    if (!miniGamesReady || !miniGamesDataReady) return; // ミニゲーム初期化とデータ取得完了を待機
 
     const timer = setInterval(() => {
       setCountdown(prev => {
@@ -245,7 +287,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [handleStartGame, miniGamesReady]);
+  }, [handleStartGame, miniGamesReady, miniGamesDataReady]);
 
   // ゲームループの統一管理
   useEffect(() => {
@@ -276,6 +318,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       stopGameLoop();
     };
   }, [initializeEngine, stopGameLoop]);
+
   useEffect(() => {
     if (gameOver && winner) {
       // ゲーム終了時にすべてのミニゲームを停止
@@ -340,18 +383,13 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       {/* Left side opponents - 21 tables in 7x3 grid */}
       {gameStarted && (
         <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
-          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>            {Array.from({ length: Math.min(21, miniGames.length) }).map((_, i) => {
+          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
+            {Array.from({ length: Math.min(21, miniGames.length) }).map((_, i) => {
               const game = miniGames[i];
-              if (!game?.active) return null;              const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
-              const isUnderAttack = false; // スピードブースト状態は別途管理が必要              // デバッグログを詳細化
-              console.log(`Left game ${i}:`, { 
-                gameId: game.gameId, 
-                active: game.active, 
-                hasGameState: !!game.gameState,
-                gameStateKeys: game.gameState ? Object.keys(game.gameState) : null,
-                actualGameState: gameState,
-                gameStateValid: !!gameState
-              });
+              if (!game?.active) return null;
+
+              const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
+              const isUnderAttack = false; // スピードブースト状態は別途管理が必要
 
               return (
                 <div
@@ -439,11 +477,13 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       {/* Right side opponents - 21 tables in 7x3 grid */}
       {gameStarted && (
         <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
-          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>            {Array.from({ length: Math.min(21, Math.max(0, miniGames.length - 21)) }).map((_, i) => {
+          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
+            {Array.from({ length: Math.min(21, Math.max(0, miniGames.length - 21)) }).map((_, i) => {
               const gameIndex = 21 + i;
-              const game = miniGames[gameIndex];              if (!game?.active) return null;
+              const game = miniGames[gameIndex];
+              if (!game?.active) return null;
 
-              const gameState = game.gameState?.gameState; // NPCGameResponse から gameState を取得
+              const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要
 
               return (
@@ -468,7 +508,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                     <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
                       BOOST
                     </div>
-                  )}                  {/* NPC Manager-based mini pong game */}
+                  )}
+
+                  {/* NPC Manager-based mini pong game */}
                   <div className="w-full h-full border border-white relative overflow-hidden" style={{
                     backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
                   }}>
@@ -532,7 +574,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         {/* play square */}
         <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
           <canvas ref={canvasRef} className="w-full h-full border border-white" />
-        </div>        {/* countdown screen */}
+        </div>
+
+        {/* countdown screen */}
         {!gameStarted && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             {!miniGamesReady ? (
@@ -542,6 +586,15 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                 </div>
                 <div className="text-xl text-white opacity-80">
                   {miniGames.filter(g => g.active).length} / 42 games ready
+                </div>
+              </>
+            ) : !miniGamesDataReady ? (
+              <>
+                <div className="text-4xl font-bold text-white mb-4">
+                  Loading Game Data...
+                </div>
+                <div className="text-xl text-white opacity-80">
+                  Fetching initial game states...
                 </div>
               </>
             ) : countdown > 0 ? (
