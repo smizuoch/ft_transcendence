@@ -187,9 +187,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       } catch (error) {
         console.error('Error updating mini games:', error);
       }
-    };
-
-    const interval = setInterval(updateMiniGames, 2000); // 2秒間隔で更新
+    };    const interval = setInterval(updateMiniGames, 16); // 60FPS（16ms間隔）でリアルタイム更新
     return () => clearInterval(interval);
   }, [miniGamesReady, gameOver, npcManager]);
 
@@ -383,13 +381,21 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       {/* Left side opponents - 21 tables in 7x3 grid */}
       {gameStarted && (
         <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
-          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
-            {Array.from({ length: Math.min(21, miniGames.length) }).map((_, i) => {
+          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>            {Array.from({ length: Math.min(21, miniGames.length) }).map((_, i) => {
               const game = miniGames[i];
               if (!game?.active) return null;
 
               const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要
+
+              // デバッグ: パドル位置情報をログに出力
+              if (gameState && i === 0) { // 最初のゲームのみログ出力
+                console.log(`🎯 Game ${i} paddle positions:`, {
+                  paddle1: { x: gameState.paddle1.x, y: gameState.paddle1.y },
+                  paddle2: { x: gameState.paddle2.x, y: gameState.paddle2.y },
+                  ball: { x: gameState.ball.x, y: gameState.ball.y }
+                });
+              }
 
               return (
                 <div
@@ -423,7 +429,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                       <>
                         {/* Player1 paddle */}
                         <div
-                          className="absolute rounded transition-all duration-75"
+                          className="absolute rounded"
                           style={{
                             left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
                             top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
@@ -435,7 +441,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
                         {/* Player2 paddle */}
                         <div
-                          className="absolute rounded transition-all duration-75"
+                          className="absolute rounded"
                           style={{
                             left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
                             top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
@@ -447,7 +453,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
                         {/* Ball with attack effect */}
                         <div
-                          className={`absolute rounded-full transition-all duration-50 ${
+                          className={`absolute rounded-full  ${
                             isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
                           }`}
                           style={{
@@ -518,7 +524,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                       <>
                         {/* Player1 paddle */}
                         <div
-                          className="absolute rounded transition-all duration-75"
+                          className="absolute rounded"
                           style={{
                             left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
                             top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
@@ -530,7 +536,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
                         {/* Player2 paddle */}
                         <div
-                          className="absolute rounded transition-all duration-75"
+                          className="absolute rounded"
                           style={{
                             left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
                             top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
@@ -542,7 +548,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
                         {/* Ball with attack effect */}
                         <div
-                          className={`absolute rounded-full transition-all duration-50 ${
+                          className={`absolute rounded-full  ${
                             isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
                           }`}
                           style={{
