@@ -38,6 +38,9 @@ export class NPCGameManager {
     const deltaTime = (currentTime - session.lastUpdate) / 1000;
     session.lastUpdate = currentTime;
 
+    // パドルのNPC更新
+    this.updateNPCPaddles(session, deltaTime);
+
     // ボールの位置更新
     const ball = session.gameState.ball;
     ball.x += ball.dx * deltaTime * 60;
@@ -48,6 +51,9 @@ export class NPCGameManager {
       ball.dy = -ball.dy;
       ball.y = ball.y <= ball.radius ? ball.radius : session.gameState.canvasHeight - ball.radius;
     }
+
+    // パドルとの衝突判定
+    this.checkPaddleCollisions(session);
 
     // 左右の壁との衝突（得点）
     if (ball.x <= ball.radius) {
@@ -69,6 +75,96 @@ export class NPCGameManager {
     } else if (session.score.player2 >= session.config.winningScore) {
       console.log(`🏆 Player2 wins! Final score: ${session.score.player1}-${session.score.player2}`);
       session.isRunning = false;
+    }
+  }
+
+  private checkPaddleCollisions(session: NPCGameSession): void {
+    const gameState = session.gameState;
+    const ball = gameState.ball;
+    const paddle1 = gameState.paddle1;
+    const paddle2 = gameState.paddle2;
+
+    // Player1 (上のパドル) との衝突
+    if (ball.dy < 0 && // ボールが上向きに移動している
+        ball.y - ball.radius <= paddle1.y + paddle1.height &&
+        ball.y - ball.radius >= paddle1.y &&
+        ball.x >= paddle1.x &&
+        ball.x <= paddle1.x + paddle1.width) {
+      
+      // 衝突反射
+      ball.dy = -ball.dy;
+      ball.y = paddle1.y + paddle1.height + ball.radius;
+      
+      // パドルの位置に基づく角度変更
+      const hitPosition = (ball.x - (paddle1.x + paddle1.width / 2)) / (paddle1.width / 2);
+      ball.dx += hitPosition * ball.speed * 0.3;
+      
+      gameState.paddleHits++;
+    }
+
+    // Player2 (下のパドル) との衝突
+    if (ball.dy > 0 && // ボールが下向きに移動している
+        ball.y + ball.radius >= paddle2.y &&
+        ball.y + ball.radius <= paddle2.y + paddle2.height &&
+        ball.x >= paddle2.x &&
+        ball.x <= paddle2.x + paddle2.width) {
+      
+      // 衝突反射
+      ball.dy = -ball.dy;
+      ball.y = paddle2.y - ball.radius;
+      
+      // パドルの位置に基づく角度変更
+      const hitPosition = (ball.x - (paddle2.x + paddle2.width / 2)) / (paddle2.width / 2);
+      ball.dx += hitPosition * ball.speed * 0.3;
+      
+      gameState.paddleHits++;
+    }
+
+    // 速度制限
+    const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+    const maxSpeed = ball.speed * 3; // 最大3倍速まで
+    if (currentSpeed > maxSpeed) {
+      const ratio = maxSpeed / currentSpeed;
+      ball.dx *= ratio;
+      ball.dy *= ratio;
+    }
+  }
+
+  private updateNPCPaddles(session: NPCGameSession, deltaTime: number): void {
+    const gameState = session.gameState;
+    const ball = gameState.ball;
+    
+    // Player1 (上のパドル) のNPC更新 - ボールを追跡
+    const paddle1CenterX = gameState.paddle1.x + gameState.paddle1.width / 2;
+    const ballCenterX = ball.x;
+    const paddle1Speed = 200 * deltaTime; // ピクセル/秒 * deltaTime
+    
+    if (Math.abs(ballCenterX - paddle1CenterX) > 2) { // 2ピクセルの許容範囲
+      if (ballCenterX > paddle1CenterX) {
+        // ボールが右にある場合は右に移動
+        gameState.paddle1.x = Math.min(
+          gameState.canvasWidth - gameState.paddle1.width,
+          gameState.paddle1.x + paddle1Speed
+        );
+      } else {
+        // ボールが左にある場合は左に移動
+        gameState.paddle1.x = Math.max(0, gameState.paddle1.x - paddle1Speed);
+      }
+    }
+    
+    // Player2 (下のパドル) のNPC更新 - より積極的にボールを追跡
+    const paddle2CenterX = gameState.paddle2.x + gameState.paddle2.width / 2;
+    const paddle2Speed = 250 * deltaTime; // より速く移動
+    
+    if (Math.abs(ballCenterX - paddle2CenterX) > 1) { // より精密な追跡
+      if (ballCenterX > paddle2CenterX) {
+        gameState.paddle2.x = Math.min(
+          gameState.canvasWidth - gameState.paddle2.width,
+          gameState.paddle2.x + paddle2Speed
+        );
+      } else {
+        gameState.paddle2.x = Math.max(0, gameState.paddle2.x - paddle2Speed);
+      }
     }
   }
 
