@@ -60,6 +60,10 @@ export class AuthService {
 
     // 既存ユーザーをチェック
     let user = await this.userService.findByEmail(email);
+    // 名前もチェック
+    if (!user) {
+      user = await this.userService.findByUsername(username);
+    }
 
     // ユーザーが存在しない場合は新規作成
     if (!user) {

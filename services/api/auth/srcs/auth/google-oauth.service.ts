@@ -15,12 +15,12 @@ export class GoogleOAuthService {
 
   getAuthUrl(): string {
     const params = new URLSearchParams({
-      client_id: this.clientId,
-      redirect_uri: this.redirectUri,
-      response_type: 'code',
-      scope: 'email profile',
-      access_type: 'offline',
-      prompt: 'consent',
+      client_id: this.clientId,         // Google APIで取得したクライアントID
+      redirect_uri: this.redirectUri,   // 認証後にリダイレクトするURL
+      response_type: 'code',            // 認証コードを取得する方式
+      scope: 'email profile',           // アクセス許可を求める範囲（メールアドレスとプロフィール）
+      access_type: 'offline',           // リフレッシュトークンを取得するために「offline」
+      prompt: 'consent',                // 毎回ユーザーに同意を求める
     });
 
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;

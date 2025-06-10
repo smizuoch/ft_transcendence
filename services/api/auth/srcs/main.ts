@@ -1,10 +1,14 @@
 import { NestFactory } from '@nestjs/core';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
-  // Expressアダプターを使用してNestアプリケーションを作成（Google認証との互換性のため）
-  const app = await NestFactory.create(AppModule);
+  // Fastifyアダプターを使用してNestアプリケーションを作成
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter()
+  );
   
   // バリデーションパイプを追加
   app.useGlobalPipes(new ValidationPipe({

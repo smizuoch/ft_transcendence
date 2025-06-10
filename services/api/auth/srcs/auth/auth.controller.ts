@@ -64,7 +64,7 @@ export class AuthController {
   @Get('google')
   async googleAuth(@Res({ passthrough: false }) res: FastifyReply) {
     const authUrl = this.googleOAuthService.getAuthUrl();
-    return res.redirect(302, authUrl);
+    return res.redirect(authUrl, 302);
   }
 
   @Get('google/callback')
@@ -92,10 +92,10 @@ export class AuthController {
       
       // フロントエンドにリダイレクトしてトークンを渡す
       const redirectUrl = `https://localhost:8443/auth/callback?token=${result.access_token}`;
-      return res.redirect(302, redirectUrl);
+      return res.redirect(redirectUrl, 302);
     } catch (error) {
       console.error('Google authentication error:', error);
-      return res.redirect(302, 'https://localhost:8443/?error=auth_failed');
+      return res.redirect('https://localhost:8443/?error=auth_failed', 302);
     }
   }
 }
