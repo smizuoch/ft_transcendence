@@ -9,6 +9,7 @@ import GamePong2 from '@/pages/GamePong2';
 import GamePong42 from '@/pages/GamePong42';
 import GameResult from '@/pages/GameResult';
 import UserProfile from '@/pages/UserProfile';
+import AuthCallback from '@/pages/AuthCallback';
 
 interface RouteState {
   page: string;
@@ -45,6 +46,11 @@ const App: React.FC = () => {
 
   /** -------- page renderer -------- */
   const renderPage = () => {
+    // Google認証コールバック処理
+    if (window.location.pathname === '/auth/callback') {
+      return <AuthCallback navigate={navigate} />;
+    }
+
     switch (currentRoute.page) {
       case 'Home':
         return <Home navigate={navigate} />;
@@ -66,6 +72,8 @@ const App: React.FC = () => {
         return <GameResult navigate={navigate} />;
       case 'UserProfile':
         return <UserProfile navigate={navigate} userId={currentRoute?.userId} />;
+      case 'AuthCallback':
+        return <AuthCallback navigate={navigate} />;
       default:
         return <Home navigate={navigate} />;
     }
