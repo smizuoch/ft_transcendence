@@ -52,6 +52,8 @@ export interface NPCConfig {
 }
 
 export interface GameConfig {
+  canvasWidth?: number;
+  canvasHeight?: number;
   winningScore: number;
   maxBallSpeed: number;
   paddleSpeed: number;
@@ -117,10 +119,10 @@ export const DEFAULT_CONFIG: GameConfig = {
   winningScore: 11,
   maxBallSpeed: 12,
   paddleSpeed: 8,
-  ballRadius: 8,
-  paddleWidth: 80,
-  paddleHeight: 12,
-  initialBallSpeed: 2, // より遅い初期速度
+  ballRadius: 2, // フロントエンドに合わせて変更
+  paddleWidth: 8, // フロントエンドに合わせて変更
+  paddleHeight: 1.5, // より小さなパドル高さ
+  initialBallSpeed: 1.5, // フロントエンドに合わせて変更
   npc: DEFAULT_NPC_CONFIG,
 };
 

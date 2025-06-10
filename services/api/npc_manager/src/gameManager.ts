@@ -90,15 +90,15 @@ export class NPCGameManager {
         ball.y - ball.radius >= paddle1.y &&
         ball.x >= paddle1.x &&
         ball.x <= paddle1.x + paddle1.width) {
-      
+
       // 衝突反射
       ball.dy = -ball.dy;
       ball.y = paddle1.y + paddle1.height + ball.radius;
-      
+
       // パドルの位置に基づく角度変更
       const hitPosition = (ball.x - (paddle1.x + paddle1.width / 2)) / (paddle1.width / 2);
       ball.dx += hitPosition * ball.speed * 0.3;
-      
+
       gameState.paddleHits++;
     }
 
@@ -108,15 +108,15 @@ export class NPCGameManager {
         ball.y + ball.radius <= paddle2.y + paddle2.height &&
         ball.x >= paddle2.x &&
         ball.x <= paddle2.x + paddle2.width) {
-      
+
       // 衝突反射
       ball.dy = -ball.dy;
       ball.y = paddle2.y - ball.radius;
-      
+
       // パドルの位置に基づく角度変更
       const hitPosition = (ball.x - (paddle2.x + paddle2.width / 2)) / (paddle2.width / 2);
       ball.dx += hitPosition * ball.speed * 0.3;
-      
+
       gameState.paddleHits++;
     }
 
@@ -133,13 +133,13 @@ export class NPCGameManager {
   private updateNPCPaddles(session: NPCGameSession, deltaTime: number): void {
     const gameState = session.gameState;
     const ball = gameState.ball;
-    
+
     // Player1 (上のパドル) のNPC更新 - ボールを追跡
     const paddle1CenterX = gameState.paddle1.x + gameState.paddle1.width / 2;
     const ballCenterX = ball.x;
-    const paddle1Speed = 200 * deltaTime; // ピクセル/秒 * deltaTime
-    
-    if (Math.abs(ballCenterX - paddle1CenterX) > 2) { // 2ピクセルの許容範囲
+    const paddle1Speed = 180 * deltaTime; // やや遅めの移動速度に調整
+
+    if (Math.abs(ballCenterX - paddle1CenterX) > 3) { // 3ピクセルの許容範囲に拡大
       if (ballCenterX > paddle1CenterX) {
         // ボールが右にある場合は右に移動
         gameState.paddle1.x = Math.min(
@@ -151,11 +151,11 @@ export class NPCGameManager {
         gameState.paddle1.x = Math.max(0, gameState.paddle1.x - paddle1Speed);
       }
     }
-    
+
     // Player2 (下のパドル) のNPC更新 - より積極的にボールを追跡
     const paddle2CenterX = gameState.paddle2.x + gameState.paddle2.width / 2;
-    const paddle2Speed = 250 * deltaTime; // より速く移動
-    
+    const paddle2Speed = 300 * deltaTime; // より速く移動するよう調整
+
     if (Math.abs(ballCenterX - paddle2CenterX) > 1) { // より精密な追跡
       if (ballCenterX > paddle2CenterX) {
         gameState.paddle2.x = Math.min(
@@ -188,9 +188,13 @@ export class NPCGameManager {
     const gameId = this.generateGameId();
     const fullConfig = { ...DEFAULT_CONFIG, ...config };
 
+    // キャンバスサイズを設定から取得（デフォルトは400x600）
+    const canvasWidth = (config as any).canvasWidth || 400;
+    const canvasHeight = (config as any).canvasHeight || 600;
+
     const session: NPCGameSession = {
       id: gameId,
-      gameState: this.createInitialGameState(400, 600, fullConfig),
+      gameState: this.createInitialGameState(canvasWidth, canvasHeight, fullConfig),
       config: fullConfig,
       score: { player1: 0, player2: 0 },
       isRunning: true,
@@ -216,13 +220,13 @@ export class NPCGameManager {
       },
       paddle1: {
         x: canvasWidth / 2 - config.paddleWidth / 2,
-        y: 20,
+        y: 2, // 上端から2ピクセルの位置に移動
         width: config.paddleWidth,
         height: config.paddleHeight,
       },
       paddle2: {
         x: canvasWidth / 2 - config.paddleWidth / 2,
-        y: canvasHeight - 20 - config.paddleHeight,
+        y: canvasHeight - 2 - config.paddleHeight, // 下端から2ピクセルの位置に移動
         width: config.paddleWidth,
         height: config.paddleHeight,
       },

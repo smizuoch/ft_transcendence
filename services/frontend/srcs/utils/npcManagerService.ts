@@ -35,6 +35,8 @@ export interface NPCGameResponse {
 }
 
 export interface NPCGameConfig {
+  canvasWidth?: number;
+  canvasHeight?: number;
   winningScore?: number;
   maxBallSpeed?: number;
   paddleSpeed?: number;

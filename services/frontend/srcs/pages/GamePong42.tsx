@@ -46,14 +46,11 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     const initMiniGames = async () => {
       console.log('🎮 Starting miniGames initialization...');
       const games: MiniGame[] = [];
-      const miniCanvasSize = { width: 100, height: 100 };
-
-      // 42個のNPC vs NPCゲームを作成
-      for (let i = 0; i < 42; i++) {
-        const gameConfig: NPCGameConfig = {
-          paddleWidth: 12,
-          paddleHeight: 2,
-          ballRadius: 1,
+      const miniCanvasSize = { width: 100, height: 100 };      // 42個のNPC vs NPCゲームを作成
+      for (let i = 0; i < 42; i++) {        const gameConfig: NPCGameConfig = {          canvasWidth: 100, // ミニゲーム用キャンバス横幅
+          canvasHeight: 100, // ミニゲーム用キャンバス縦幅          paddleWidth: 10, // パドル幅をより小さく
+          paddleHeight: 1.5, // パドル高さをより小さく
+          ballRadius: 2, // ボールサイズをより小さく
           paddleSpeed: 6,
           initialBallSpeed: 1.5,
           npc: {
