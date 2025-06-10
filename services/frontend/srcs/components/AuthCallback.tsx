@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { apiClient } from '../utils/api';
+import { apiClient } from '../utils/authApiClient';
 
 interface AuthCallbackProps {
   navigate?: (page: string) => void;

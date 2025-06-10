@@ -14,7 +14,8 @@ export class AuthService {
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.userService.findByEmail(email);
     
-    if (user && await bcrypt.compare(password, user.password)) {
+    // Google認証ユーザー（passwordがnull）の場合は通常ログインを拒否
+    if (user && user.password && await bcrypt.compare(password, user.password)) {
       const { password, ...result } = user;
       return result;
     }
@@ -63,7 +64,12 @@ export class AuthService {
     // ユーザーが存在しない場合は新規作成
     if (!user) {
       // Google認証専用メソッドを使用してユーザーを作成
-      user = await this.userService.createGoogleUser(email, username);
+      const newUser = await this.userService.createGoogleUser(email, username);
+      user = {
+        username: newUser.username,
+        email: newUser.email,
+        password: null, // Google認証ユーザーはパスワードがnull
+      };
     }
 
     const payload = { sub: user.username, username: user.username };

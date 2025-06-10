@@ -1,16 +1,18 @@
-import { Controller, Post, Body, Get, UseGuards, Request, ValidationPipe, HttpException, HttpStatus, Req, Res } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Post, Body, Get, UseGuards, Request, ValidationPipe, HttpException, HttpStatus, Req, Res, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { UserService } from '../user/user.service';
 import { CreateUserDto } from '../user/create-user.dto';
+import { GoogleOAuthService } from './google-oauth.service';
+import { FastifyReply } from 'fastify';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly userService: UserService,
+    private readonly googleOAuthService: GoogleOAuthService,
   ) {}
 
   @Post('login')
@@ -60,18 +62,40 @@ export class AuthController {
   }
 
   @Get('google')
-  @UseGuards(AuthGuard('google'))
-  async googleAuth(@Req() req) {
-    // Googleにリダイレクトされるため、ここは実行されない
+  async googleAuth(@Res({ passthrough: false }) res: FastifyReply) {
+    const authUrl = this.googleOAuthService.getAuthUrl();
+    return res.redirect(302, authUrl);
   }
 
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  async googleAuthRedirect(@Req() req, @Res() res) {
-    const result = await this.authService.googleLogin(req);
-    
-    // フロントエンドにリダイレクトしてトークンを渡す
-    const redirectUrl = `https://localhost:8443/auth/callback?token=${result.access_token}`;
-    return res.redirect(redirectUrl);
+  async googleAuthRedirect(@Query('code') code: string, @Res({ passthrough: false }) res: FastifyReply) {
+    try {
+      if (!code) {
+        throw new HttpException('Authorization code not provided', HttpStatus.BAD_REQUEST);
+      }
+
+      // 認証コードをアクセストークンに交換
+      const tokens = await this.googleOAuthService.exchangeCodeForTokens(code);
+      
+      // ユーザー情報を取得
+      const userInfo = await this.googleOAuthService.getUserInfo(tokens.access_token);
+      
+      // ユーザーをログインまたは作成
+      const user = {
+        email: userInfo.email,
+        username: `${userInfo.given_name}_${userInfo.family_name}`,
+        firstName: userInfo.given_name,
+        lastName: userInfo.family_name,
+      };
+
+      const result = await this.authService.googleLogin({ user });
+      
+      // フロントエンドにリダイレクトしてトークンを渡す
+      const redirectUrl = `https://localhost:8443/auth/callback?token=${result.access_token}`;
+      return res.redirect(302, redirectUrl);
+    } catch (error) {
+      console.error('Google authentication error:', error);
+      return res.redirect(302, 'https://localhost:8443/?error=auth_failed');
+    }
   }
 }

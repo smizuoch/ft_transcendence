@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { apiClient } from '../utils/api';
+import { apiClient } from '../utils/authApiClient';
 // import { Link } from 'react-router-dom'; // 削除
 
 interface HomeProps {

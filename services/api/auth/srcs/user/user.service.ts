@@ -52,12 +52,15 @@ export class UserService {
       data: {
         username,
         email,
-        password: '', // Google認証の場合はパスワードは空
+        password: null, // Google認証の場合はパスワードはnull
       },
     });
     
     // パスワードを除外して返す
     const { password: _, ...result } = user;
-    return result;
+    return {
+      username: result.username,
+      email: result.email,
+    };
   }
 }
