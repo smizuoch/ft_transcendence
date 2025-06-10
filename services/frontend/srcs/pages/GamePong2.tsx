@@ -366,8 +366,29 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     return () => clearInterval(interval);
   }, [gameStarted, npcEnabled]);
 
-  const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
-    const pts = idx === 1 ? score.player1 : score.player2;
+  const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {    // 自分のプレイヤー番号に基づいてスコアとアバターを決定
+    let displayedScore;
+    let avatarPlayerKey: "player1" | "player2";
+    
+    if (isMultiplayer && playerNumber) {
+      // マルチプレイヤーの場合：左=自分、右=相手
+      const isMyScore = (side === "left");
+      if (isMyScore) {
+        // 自分のスコアとアバター
+        displayedScore = playerNumber === 1 ? score.player1 : score.player2;
+        avatarPlayerKey = playerNumber === 1 ? "player1" : "player2";
+      } else {
+        // 相手のスコアとアバター  
+        displayedScore = playerNumber === 1 ? score.player2 : score.player1;
+        avatarPlayerKey = playerNumber === 1 ? "player2" : "player1";
+      }
+    } else {
+      // ローカルゲーム/NPCモードの場合は従来通り
+      displayedScore = idx === 1 ? score.player1 : score.player2;
+      avatarPlayerKey = idx === 1 ? "player1" : "player2";
+    }
+    
+    const pts = displayedScore;
     const translateClass = side === "left"
       ? (iconsDocked ? "-translate-x-full" : "")
       : (iconsDocked ? "translate-x-full" : "");
@@ -387,10 +408,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           <img src={`${ICON_PATH}win.svg`} alt="win" className="w-12 h-12 lg:w-16 lg:h-16" />
         ) : (
           <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
-        )}
-        {/* inner avatar */}
+        )}        {/* inner avatar */}
         <img
-          src={players[idx === 1 ? "player1" : "player2"].avatar}
+          src={players[avatarPlayerKey].avatar}
           alt="avatar"
           className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
         />
@@ -496,13 +516,21 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           <canvas 
             ref={canvasRef} 
             className={`w-full h-full border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
-          />
-
-          {/* avatar groups */}
+          />          {/* avatar groups */}
           {gameStarted && !gameOver && (
-            <>
-              {renderAvatarGroup(1, "right")}
-              {renderAvatarGroup(2, "left")}
+            <>              {isMultiplayer && playerNumber ? (
+                <>
+                  {/* マルチプレイヤー：常に左=自分、右=相手 */}
+                  {renderAvatarGroup(1, "left")}   {/* 左側は自分 */}
+                  {renderAvatarGroup(1, "right")}  {/* 右側は相手 */}
+                </>
+              ) : (
+                <>
+                  {/* ローカルゲーム/NPCモード：従来通り */}
+                  {renderAvatarGroup(1, "right")}
+                  {renderAvatarGroup(2, "left")}
+                </>
+              )}
             </>
           )}
         </div>        {/* opening screen */}
