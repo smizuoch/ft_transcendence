@@ -9,7 +9,7 @@ import GamePong2 from '@/pages/GamePong2';
 import GamePong42 from '@/pages/GamePong42';
 import GameResult from '@/pages/GameResult';
 import UserProfile from '@/pages/UserProfile';
-import AuthCallback from '@/components/AuthCallback';
+import AuthCallback from '@/pages/AuthCallback';
 
 interface RouteState {
   page: string;
