@@ -1,14 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
-  // FastifyAdapterを使用してNestアプリケーションを作成
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    new FastifyAdapter()
-  );
+  // Expressアダプターを使用してNestアプリケーションを作成（Google認証との互換性のため）
+  const app = await NestFactory.create(AppModule);
   
   // バリデーションパイプを追加
   app.useGlobalPipes(new ValidationPipe({
@@ -26,6 +22,6 @@ async function bootstrap() {
   });
   
   await app.listen(3000, '0.0.0.0'); // 全てのインターフェースでリッスン
-  console.log(`Auth service is running on ${await app.getUrl()}`);
+  console.log('Auth service is running on http://127.0.0.1:3000');
 }
 bootstrap();
