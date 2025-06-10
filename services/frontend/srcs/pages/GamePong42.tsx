@@ -21,8 +21,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<number | null>(null);
-  const [countdown, setCountdown] = useState(5);
-  // GamePong42特有の状態
+  const [countdown, setCountdown] = useState(5);  // GamePong42特有の状態
   const [survivors, setSurvivors] = useState(42);
   const [selectedTarget, setSelectedTarget] = useState<number | null>(Math.floor(Math.random() * 41));
   const [showSurvivorsAlert, setShowSurvivorsAlert] = useState(false);
@@ -46,8 +45,8 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     const initMiniGames = async () => {
       console.log('🎮 Starting miniGames initialization...');
       const games: MiniGame[] = [];
-      const miniCanvasSize = { width: 100, height: 100 };      // 42個のNPC vs NPCゲームを作成
-      for (let i = 0; i < 42; i++) {        const gameConfig: NPCGameConfig = {          canvasWidth: 100, // ミニゲーム用キャンバス横幅
+      const miniCanvasSize = { width: 100, height: 100 };      // 41個のNPC vs NPCゲームを作成
+      for (let i = 0; i < 41; i++) {const gameConfig: NPCGameConfig = {          canvasWidth: 100, // ミニゲーム用キャンバス横幅
           canvasHeight: 100, // ミニゲーム用キャンバス縦幅          paddleWidth: 10, // パドル幅をより小さく
           paddleHeight: 1.5, // パドル高さをより小さく
           ballRadius: 2, // ボールサイズをより小さく
@@ -187,14 +186,16 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     };    const interval = setInterval(updateMiniGames, 16); // 60FPS（16ms間隔）でリアルタイム更新
     return () => clearInterval(interval);
   }, [miniGamesReady, gameOver, npcManager]);
-
   // 生存者数の更新
   useEffect(() => {
     const activeMiniGames = miniGames.filter(game => game.active).length;
-    if (activeMiniGames !== survivors && gameStarted) {
-      setSurvivors(activeMiniGames);
+    const centralCanvasActive = gameStarted && !gameOver ? 1 : 0; // 中央キャンバスがアクティブかどうか
+    const totalSurvivors = activeMiniGames + centralCanvasActive;
+
+    if (totalSurvivors !== survivors && gameStarted) {
+      setSurvivors(totalSurvivors);
     }
-  }, [miniGames, gameStarted, survivors]);
+  }, [miniGames, gameStarted, gameOver, survivors]);
 
   // 背景画像の取得
   const getBackgroundImage = () => {
@@ -336,9 +337,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     if (miniGames[index]?.active) {
       setSelectedTarget(index);
     }
-  };
-
-  // Calculate target position for ray animation
+  };  // Calculate target position for ray animation
   const getTargetPosition = (targetIndex: number) => {
     const isLeftSide = targetIndex < 21;
     const gridIndex = isLeftSide ? targetIndex : targetIndex - 21;
@@ -373,9 +372,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       }}
     >
       {/* Background overlay */}
-      <div className="absolute inset-0 bg-black bg-opacity-40"></div>
-
-      {/* Left side opponents - 21 tables in 7x3 grid */}
+      <div className="absolute inset-0 bg-black bg-opacity-40"></div>      {/* Left side opponents - 21 tables in 7x3 grid (21 out of 41) */}
       {gameStarted && (
         <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
           <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>            {Array.from({ length: Math.min(21, miniGames.length) }).map((_, i) => {
@@ -475,13 +472,11 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
             })}
           </div>
         </div>
-      )}
-
-      {/* Right side opponents - 21 tables in 7x3 grid */}
+      )}      {/* Right side opponents - 20 tables in 7x3 grid (remaining 20 out of 41) */}
       {gameStarted && (
         <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
           <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
-            {Array.from({ length: Math.min(21, Math.max(0, miniGames.length - 21)) }).map((_, i) => {
+            {Array.from({ length: Math.min(20, Math.max(0, miniGames.length - 21)) }).map((_, i) => {
               const gameIndex = 21 + i;
               const game = miniGames[gameIndex];
               if (!game?.active) return null;
@@ -586,8 +581,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
               <>
                 <div className="text-4xl font-bold text-white mb-4">
                   Initializing Mini Games...
-                </div>
-                <div className="text-xl text-white opacity-80">
+                </div>                <div className="text-xl text-white opacity-80">
                   {miniGames.filter(g => g.active).length} / 42 games ready
                 </div>
               </>
