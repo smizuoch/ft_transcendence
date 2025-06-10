@@ -6,6 +6,12 @@ export class GameRoom implements Room {
   public createdAt: Date;
   public lastActivity: Date;
 
+  // ゲーム状態の管理
+  public gameStarted: boolean = false;
+  public scores: { player1: number; player2: number } = { player1: 0, player2: 0 };
+  public gameOver: boolean = false;
+  public winner: number | null = null;
+
   constructor(id: string) {
     this.id = id;
     this.players = new Map();
@@ -74,6 +80,51 @@ export class GameRoom implements Room {
     if (!usedNumbers.has(1)) return 1;
     if (!usedNumbers.has(2)) return 2;
     return null;
+  }
+
+  // ゲーム管理メソッド
+  startGame(): void {
+    this.gameStarted = true;
+    this.gameOver = false;
+    this.scores = { player1: 0, player2: 0 };
+    this.winner = null;
+    this.lastActivity = new Date();
+  }
+
+  updateScore(scorer: 'player1' | 'player2', winningScore: number = 11): boolean {
+    this.scores[scorer]++;
+    this.lastActivity = new Date();
+    
+    // ゲーム終了判定
+    if (this.scores[scorer] >= winningScore) {
+      this.gameOver = true;
+      this.winner = scorer === 'player1' ? 1 : 2;
+      return true; // ゲーム終了
+    }
+    
+    return false; // ゲーム継続
+  }
+
+  getGameState(): {
+    gameStarted: boolean;
+    scores: { player1: number; player2: number };
+    gameOver: boolean;
+    winner: number | null;
+  } {
+    return {
+      gameStarted: this.gameStarted,
+      scores: this.scores,
+      gameOver: this.gameOver,
+      winner: this.winner
+    };
+  }
+
+  resetGame(): void {
+    this.gameStarted = false;
+    this.gameOver = false;
+    this.scores = { player1: 0, player2: 0 };
+    this.winner = null;
+    this.lastActivity = new Date();
   }
 }
 

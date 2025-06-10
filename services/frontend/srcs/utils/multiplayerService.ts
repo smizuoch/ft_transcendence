@@ -147,6 +147,11 @@ export class MultiplayerService {
       this.emit('playerInputUpdate', data);
     });
 
+    // 完全なゲーム状態の同期
+    this.socket.on('full-game-state-update', (data: { playerId: string; gameState: GameState }) => {
+      this.emit('fullGameStateUpdate', data);
+    });
+
     this.socket.on('score-updated', (data: { scorer: 'player1' | 'player2'; playerId: string }) => {
       this.emit('scoreUpdated', data);
     });
@@ -319,6 +324,19 @@ export class MultiplayerService {
       this.socket.emit('game-end', {
         roomNumber: this.roomNumber,
         winner
+      });
+    }
+  }
+
+  // 新しいメソッド: ゲーム状態の完全同期
+  sendFullGameState(gameState: GameState) {
+    if (this.socket && this.roomNumber) {
+      this.socket.emit('full-game-state', {
+        roomNumber: this.roomNumber,
+        gameState: {
+          ...gameState,
+          timestamp: Date.now()
+        }
       });
     }
   }

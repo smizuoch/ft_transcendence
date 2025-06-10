@@ -39,6 +39,8 @@ export interface GameState {
     y: number;
     dx: number;
     dy: number;
+    vx: number; // multiplayerService.tsとの互換性のため
+    vy: number; // multiplayerService.tsとの互換性のため
     radius: number;
     speed: number;
     speedMultiplier: number;
@@ -58,6 +60,26 @@ export interface GameState {
   canvasWidth: number;
   canvasHeight: number;
   paddleHits: number;
+  
+  // multiplayerService.tsとの互換性のため
+  players: {
+    player1: {
+      x: number;
+      y: number;
+    };
+    player2: {
+      x: number;
+      y: number;
+    };
+  };
+  score: {
+    player1: number;
+    player2: number;
+  };
+  gameStarted: boolean;
+  gameOver: boolean;
+  winner: number | null;
+  timestamp: number;
 }
 
 export interface NPCDebugInfo {

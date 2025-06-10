@@ -159,6 +159,21 @@ async function startServer() {
         }
       });
 
+      // 完全なゲーム状態の同期（ボール、パドル、スコア含む）
+      socket.on('full-game-state', (data: { roomNumber: string; gameState: GameState }) => {
+        const { roomNumber, gameState } = data;
+        const room = roomManager.getRoom(roomNumber);
+
+        if (room && room.hasPlayer(socket.id)) {
+          console.log(`Full game state update from player ${socket.id} in room ${roomNumber}`);
+          // 他のプレイヤーに完全なゲーム状態を送信（送信者以外）
+          socket.to(roomNumber).emit('full-game-state-update', {
+            playerId: socket.id,
+            gameState
+          });
+        }
+      });
+
       // プレイヤーの入力状態
       socket.on('player-input', (data: { roomNumber: string; input: any }) => {
         const { roomNumber, input } = data;
@@ -180,11 +195,30 @@ async function startServer() {
         const room = roomManager.getRoom(roomNumber);
 
         if (room && room.hasPlayer(socket.id)) {
+          console.log(`Score update from player ${socket.id}: ${scorer} scored in room ${roomNumber}`);
+          
+          // サーバー側でスコアを管理
+          const gameEnded = room.updateScore(scorer);
+          const gameState = room.getGameState();
+          
           // 全プレイヤーにスコア更新を送信
           io.to(roomNumber).emit('score-updated', {
             scorer,
-            playerId: socket.id
+            playerId: socket.id,
+            scores: gameState.scores,
+            gameOver: gameState.gameOver,
+            winner: gameState.winner
           });
+          
+          // ゲーム終了の場合
+          if (gameEnded) {
+            console.log(`Game ended in room ${roomNumber}, winner: player ${gameState.winner}`);
+            io.to(roomNumber).emit('game-ended', {
+              winner: gameState.winner,
+              playerId: socket.id,
+              finalScores: gameState.scores
+            });
+          }
         }
       });
 
@@ -199,11 +233,16 @@ async function startServer() {
           // 部屋に2人いる場合のみゲーム開始
           if (room.getPlayerCount() === 2) {
             console.log(`Starting game in room ${roomNumber}`);
+            
+            // サーバー側でゲーム開始
+            room.startGame();
+            
             // 全プレイヤーにゲーム開始を送信
             io.to(roomNumber).emit('game-started', {
               roomNumber,
               players: room.getPlayers(),
-              initiator: socket.id
+              initiator: socket.id,
+              gameState: room.getGameState()
             });
           } else {
             // プレイヤーが不足している場合
