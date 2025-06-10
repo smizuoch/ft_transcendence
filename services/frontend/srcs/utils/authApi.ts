@@ -108,6 +108,36 @@ export class ApiClient {
       },
     });
   }
+
+  // Google認証開始
+  getGoogleAuthUrl(): string {
+    return `${this.baseUrl}/auth/google`;
+  }
+
+  // 認証コールバック処理（トークンをURLパラメータから取得）
+  handleAuthCallback(): string | null {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+      // トークンをlocalStorageに保存
+      localStorage.setItem('authToken', token);
+      // URLからトークンパラメータを削除
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
+    return token;
+  }
+
+  // 保存されたトークンを取得
+  getStoredToken(): string | null {
+    return localStorage.getItem('authToken');
+  }
+
+  // ログアウト
+  logout(): void {
+    localStorage.removeItem('authToken');
+  }
 }
 
 // シングルトンインスタンスをエクスポート
