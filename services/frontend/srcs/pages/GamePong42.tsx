@@ -51,7 +51,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
           paddleHeight: 1.5, // パドル高さをより小さく
           ballRadius: 2, // ボールサイズをより小さく          paddleSpeed: 6, // パドル速度を下げてより長いラリーを実現
           initialBallSpeed: 1.0, // 初期ボール速度を下げる
-          maxBallSpeed: 3, // ボール最大速度を3に制限
+          maxBallSpeed: 2.5, // ボール最大速度を2.5に制限
           npc: {
             enabled: true,
             player: 1,
