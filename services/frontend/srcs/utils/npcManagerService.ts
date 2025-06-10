@@ -141,6 +141,26 @@ class NPCManagerService {
   }
 
   /**
+   * 特定のゲームにスピードブーストを適用
+   */
+  async applySpeedBoostToGame(gameId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/games/${gameId}/speed-boost`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to apply speed boost to game:', error);
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  /**
    * ゲームを停止
    */
   async stopGame(gameId: string): Promise<{ success: boolean; error?: string }> {
@@ -201,6 +221,7 @@ export const useNPCManager = () => {
     getGameState: npcManagerService.getGameState.bind(npcManagerService),
     getAllActiveGames: npcManagerService.getAllActiveGames.bind(npcManagerService),
     applySpeedBoost: npcManagerService.applySpeedBoost.bind(npcManagerService),
+    applySpeedBoostToGame: npcManagerService.applySpeedBoostToGame.bind(npcManagerService),
     stopGame: npcManagerService.stopGame.bind(npcManagerService),
     getStats: npcManagerService.getStats.bind(npcManagerService),
     healthCheck: npcManagerService.healthCheck.bind(npcManagerService),

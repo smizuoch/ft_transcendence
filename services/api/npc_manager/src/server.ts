@@ -138,6 +138,60 @@ fastify.post('/speed-boost', async (request: any, reply: any) => {
   }
 });
 
+// 特定のゲームにスピードブーストを適用
+fastify.post('/speed-boost/:gameId', async (request: any, reply: any) => {
+  try {
+    const { gameId } = request.params;
+    const success = gameManager.applySpeedBoostToGame(gameId);
+
+    if (!success) {
+      reply.status(404).send({
+        success: false,
+        error: 'Game not found or not running'
+      });
+      return;
+    }
+
+    reply.send({
+      success: true,
+      message: 'Speed boost applied to game'
+    });
+  } catch (error) {
+    request.log.error(error);
+    reply.status(500).send({
+      success: false,
+      error: 'Failed to apply speed boost'
+    });
+  }
+});
+
+// 特定のゲームにスピードブーストを適用（代替パス）
+fastify.post('/games/:gameId/speed-boost', async (request: any, reply: any) => {
+  try {
+    const { gameId } = request.params;
+    const success = gameManager.applySpeedBoostToGame(gameId);
+
+    if (!success) {
+      reply.status(404).send({
+        success: false,
+        error: 'Game not found or not running'
+      });
+      return;
+    }
+
+    reply.send({
+      success: true,
+      message: 'Speed boost applied to game'
+    });
+  } catch (error) {
+    request.log.error(error);
+    reply.status(500).send({
+      success: false,
+      error: 'Failed to apply speed boost'
+    });
+  }
+});
+
 // ゲームを停止
 fastify.delete('/games/:gameId', async (request: any, reply: any) => {
   try {

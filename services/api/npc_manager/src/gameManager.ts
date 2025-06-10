@@ -197,6 +197,20 @@ export class NPCGameManager {
     return true;
   }
 
+  public applySpeedBoostToGame(gameId: string): boolean {
+    const session = this.games.get(gameId);
+    if (!session || !session.isRunning) {
+      return false;
+    }
+
+    // スピードブーストを適用
+    session.gameState.ball.speedMultiplier *= 1.5;
+    session.gameState.ball.dx *= 1.5;
+    session.gameState.ball.dy *= 1.5;
+
+    return true;
+  }
+
   public stopGame(gameId: string): boolean {
     const session = this.games.get(gameId);
     if (!session) {
