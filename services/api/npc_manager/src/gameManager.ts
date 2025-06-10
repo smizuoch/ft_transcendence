@@ -120,9 +120,9 @@ export class NPCGameManager {
       gameState.paddleHits++;
     }
 
-    // 速度制限
+    // 速度制限を強化してより長いラリーを実現
     const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
-    const maxSpeed = ball.speed * 3; // 最大3倍速まで
+    const maxSpeed = Math.min(ball.speed * 2.0, session.config.maxBallSpeed || 6); // 最大2倍速まで & maxBallSpeed制限
     if (currentSpeed > maxSpeed) {
       const ratio = maxSpeed / currentSpeed;
       ball.dx *= ratio;
@@ -134,12 +134,12 @@ export class NPCGameManager {
     const gameState = session.gameState;
     const ball = gameState.ball;
 
-    // Player1 (上のパドル) のNPC更新 - ボールを追跡
+    // Player1 (上のパドル) のNPC更新 - より控えめな追跡
     const paddle1CenterX = gameState.paddle1.x + gameState.paddle1.width / 2;
     const ballCenterX = ball.x;
-    const paddle1Speed = 180 * deltaTime; // やや遅めの移動速度に調整
+    const paddle1Speed = 120 * deltaTime; // さらに遅い移動速度
 
-    if (Math.abs(ballCenterX - paddle1CenterX) > 3) { // 3ピクセルの許容範囲に拡大
+    if (Math.abs(ballCenterX - paddle1CenterX) > 5) { // 許容範囲を拡大してミスを増やす
       if (ballCenterX > paddle1CenterX) {
         // ボールが右にある場合は右に移動
         gameState.paddle1.x = Math.min(
@@ -152,11 +152,11 @@ export class NPCGameManager {
       }
     }
 
-    // Player2 (下のパドル) のNPC更新 - より積極的にボールを追跡
+    // Player2 (下のパドル) のNPC更新 - バランス調整
     const paddle2CenterX = gameState.paddle2.x + gameState.paddle2.width / 2;
-    const paddle2Speed = 300 * deltaTime; // より速く移動するよう調整
+    const paddle2Speed = 200 * deltaTime; // 速度を少し下げる
 
-    if (Math.abs(ballCenterX - paddle2CenterX) > 1) { // より精密な追跡
+    if (Math.abs(ballCenterX - paddle2CenterX) > 2) { // 許容範囲を少し拡大
       if (ballCenterX > paddle2CenterX) {
         gameState.paddle2.x = Math.min(
           gameState.canvasWidth - gameState.paddle2.width,

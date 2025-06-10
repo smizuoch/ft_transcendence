@@ -49,20 +49,19 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       for (let i = 0; i < 41; i++) {const gameConfig: NPCGameConfig = {          canvasWidth: 100, // ミニゲーム用キャンバス横幅
           canvasHeight: 100, // ミニゲーム用キャンバス縦幅          paddleWidth: 10, // パドル幅をより小さく
           paddleHeight: 1.5, // パドル高さをより小さく
-          ballRadius: 2, // ボールサイズをより小さく
-          paddleSpeed: 8, // 中央キャンバスと同じ移動速度
-          initialBallSpeed: 1.5,
+          ballRadius: 2, // ボールサイズをより小さく          paddleSpeed: 6, // パドル速度を下げてより長いラリーを実現
+          initialBallSpeed: 1.0, // 初期ボール速度を下げる
+          maxBallSpeed: 3, // ボール最大速度を3に制限
           npc: {
             enabled: true,
             player: 1,
             mode: 'pid',
             difficulty: 'Easy',
-          },
-          npc2: {
+          },          npc2: {
             enabled: true,
             player: 2,
             mode: 'pid',
-            difficulty: 'Nightmare',
+            difficulty: 'Nightmare', // HardからNightmareに変更
           },
         };
 

@@ -117,12 +117,12 @@ export const DEFAULT_NPC_CONFIG: NPCConfig = {
 
 export const DEFAULT_CONFIG: GameConfig = {
   winningScore: 11,
-  maxBallSpeed: 12,
+  maxBallSpeed: 6, // ボール最大速度を大幅に制限
   paddleSpeed: 8,
   ballRadius: 2, // フロントエンドに合わせて変更
   paddleWidth: 8, // フロントエンドに合わせて変更
   paddleHeight: 1.5, // より小さなパドル高さ
-  initialBallSpeed: 1.5, // フロントエンドに合わせて変更
+  initialBallSpeed: 1.0, // 初期ボール速度をさらに低く
   npc: DEFAULT_NPC_CONFIG,
 };
 
