@@ -207,9 +207,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       if (isMultiplayer && multiplayerService.isInRoom()) {
         // 自分の入力を他のプレイヤーに送信
         const sendInputs = () => {          if (keysRef.current) {
-            const input: PlayerInput = {
-              up: keysRef.current.arrowLeft,  // 左移動をupにマッピング
-              down: keysRef.current.arrowRight, // 右移動をdownにマッピング
+            // P1は画面が180度回転しているので、送信する入力も反転
+            const input: PlayerInput = playerNumber === 1 ? {
+              up: keysRef.current.arrowRight,  // P1: 右キー→upとして送信（実際は左移動）
+              down: keysRef.current.arrowLeft, // P1: 左キー→downとして送信（実際は右移動）
+              timestamp: Date.now()
+            } : {
+              up: keysRef.current.arrowLeft,   // P2: 左移動をupにマッピング
+              down: keysRef.current.arrowRight, // P2: 右移動をdownにマッピング
               timestamp: Date.now()
             };
             multiplayerService.sendPlayerInput(input);
@@ -219,14 +224,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         // ゲームループでの入力送信
         const inputInterval = setInterval(sendInputs, 16); // 60fps
 
-        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, remotePlayerInput);
+        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, remotePlayerInput, playerNumber);
 
         return () => {
           clearInterval(inputInterval);
           stopGameLoop();
         };
       } else {        // 通常のゲームループ（ローカル/NPC対戦）
-        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, null);
+        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, null, playerNumber);
       }
     } else {
       stopGameLoop();
@@ -430,7 +435,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       <div className="relative z-10 w-full h-full flex items-center justify-center">
         {/* play square */}
         <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
-          <canvas ref={canvasRef} className="w-full h-full border border-white" />
+          <canvas 
+            ref={canvasRef} 
+            className={`w-full h-full border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
+          />
 
           {/* avatar groups */}
           {gameStarted && !gameOver && (
