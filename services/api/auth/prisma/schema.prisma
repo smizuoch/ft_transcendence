@@ -14,7 +14,7 @@ datasource db {
 model User {
   username    String    @id // ユーザー名を主キーとして使用
   email       String    @unique
-  password    String
+  password    String?   // Google認証ユーザーの場合はパスワードが不要なのでオプショナルに
   
   @@map("users")
 }

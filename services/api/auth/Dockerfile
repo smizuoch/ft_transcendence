@@ -28,4 +28,4 @@ RUN mkdir -p /app/data
 RUN npx prisma generate && pnpm run build
 
 # マイグレーション実行、シード処理、そして起動
-CMD ["sh", "-c", "npx prisma migrate dev --name init && npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && (npx prisma db seed || echo 'Seed skipped') && node dist/main.js"]
