@@ -91,12 +91,23 @@ export class TechnicianNPC implements NPCAlgorithm {
       courseAccuracy: 1.0 // デバッグ用：コース精度も最大に設定
     };
     this.gameState = {
-      ball: { x: 0, y: 0, dx: 0, dy: 0, radius: 8, speed: 4, speedMultiplier: 1 },
+      ball: { x: 0, y: 0, dx: 0, dy: 0, vx: 0, vy: 0, radius: 8, speed: 4, speedMultiplier: 1 },
       paddle1: { x: 0, y: 0, width: 80, height: 12 },
       paddle2: { x: 0, y: 0, width: 80, height: 12 },
       canvasWidth: 800,
       canvasHeight: 400,
-      paddleHits: 0
+      paddleHits: 0,
+      
+      // 必須プロパティを追加
+      players: {
+        player1: { x: 0, y: 0 },
+        player2: { x: 0, y: 0 }
+      },
+      score: { player1: 0, player2: 0 },
+      gameStarted: false,
+      gameOver: false,
+      winner: null,
+      timestamp: Date.now(),
     };
 
     // 試合開始後すぐに権利を付与

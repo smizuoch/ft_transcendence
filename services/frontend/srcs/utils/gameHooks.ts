@@ -103,6 +103,11 @@ export const useGameEngine = (
           }
         }
 
+        // パドル位置とplayers同期
+        if (engineRef.current) {
+          engineRef.current.syncPlayersPosition();
+        }
+
         const result = engineRef.current.update();
         if (result !== 'none') {
           onScore(result);

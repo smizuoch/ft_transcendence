@@ -37,14 +37,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   const [showRoomInput, setShowRoomInput] = useState(true);
   const [hoverClose, setHoverClose] = useState(false);
   const [iconsDocked, setIconsDocked] = useState(false);
-  const ICON_LAUNCH_DELAY = 600;
-  // ============= 通信対戦関連の状態 =============
+  const ICON_LAUNCH_DELAY = 600;  // ============= 通信対戦関連の状態 =============
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [multiplayerConnected, setMultiplayerConnected] = useState(false);
   const [roomPlayers, setRoomPlayers] = useState<any[]>([]);
   const [isGameReady, setIsGameReady] = useState(false);
   const [playerNumber, setPlayerNumber] = useState<1 | 2 | null>(null);
   const [remotePlayerInput, setRemotePlayerInput] = useState<PlayerInput | null>(null);
+  const [isAuthoritativeClient, setIsAuthoritativeClient] = useState(false); // 権威クライアントかどうか
 
   // 未使用変数の警告を抑制（将来的なUI表示用）
   void multiplayerConnected;
@@ -113,6 +113,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setIsGameReady(data.isGameReady);
           console.log(`Joined as player ${data.playerNumber}`);
           setShowRoomInput(false); // 部屋入力画面を隠す
+          
+          // Player1を権威クライアント（ゲーム状態の管理者）に設定
+          const isAuth = data.playerNumber === 1;
+          setIsAuthoritativeClient(isAuth);
+          if (engineRef.current) {
+            engineRef.current.setAuthoritativeClient(isAuth);
+          }
         });
 
         multiplayerService.on('playerJoined', (data: any) => {
@@ -150,6 +157,39 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         multiplayerService.on('playerLeft', () => {
           setIsGameReady(false);
           setRoomPlayers([]);
+        });
+
+        // 完全なゲーム状態の同期
+        multiplayerService.on('fullGameStateUpdate', (data: { playerId: string; gameState: any }) => {
+          if (engineRef.current && !isAuthoritativeClient) {
+            // 非権威クライアントのみリモート状態を適用
+            engineRef.current.syncGameState(data.gameState);
+          }
+        });        // サーバーからのスコア更新
+        multiplayerService.on('scoreUpdated', (data: { 
+          scorer: 'player1' | 'player2'; 
+          playerId: string; 
+          scores: { player1: number; player2: number };
+          gameOver: boolean;
+          winner: number | null;
+        }) => {
+          // サーバー管理のスコアを直接適用
+          setScore(data.scores);
+          if (data.gameOver) {
+            setGameOver(true);
+            setWinner(data.winner);
+          }
+        });
+
+        // サーバーからのゲーム終了
+        multiplayerService.on('gameEnded', (data: { 
+          winner: number; 
+          playerId: string; 
+          finalScores: { player1: number; player2: number };
+        }) => {
+          setScore(data.finalScores);
+          setGameOver(true);
+          setWinner(data.winner);
         });
 
       } catch (error) {
@@ -252,7 +292,25 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       const t = setTimeout(() => navigate("GameResult"), 1200);
       return () => clearTimeout(t);
     }
-  }, [gameOver, winner, navigate]);  const handleStartGame = useCallback(() => {
+  }, [gameOver, winner, navigate]);
+
+  // マルチプレイヤー時のゲームエンジンコールバック設定
+  useEffect(() => {
+    if (gameStarted && isMultiplayer && engineRef.current) {      // 権威クライアントのみゲーム状態送信コールバックを設定
+      if (isAuthoritativeClient) {
+        engineRef.current.setGameStateUpdateCallback((gameState) => {
+          multiplayerService.sendFullGameState(gameState);
+        });
+
+        engineRef.current.setScoreUpdateCallback((scorer) => {
+          multiplayerService.sendScoreUpdate(scorer);
+        });
+      }
+    }
+  }, [gameStarted, isMultiplayer, isAuthoritativeClient]);
+
+  // ============= ハンドラー関数 =============
+  const handleStartGame = useCallback(() => {
     // マルチプレイヤーモードの場合、サーバーにゲーム開始要求を送信
     if (isMultiplayer && isGameReady) {
       console.log('Requesting to start multiplayer game...');
