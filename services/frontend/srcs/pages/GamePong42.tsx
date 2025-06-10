@@ -203,10 +203,10 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     if (survivors >= 6) return '/images/background/late_night.png';
     return '/images/background/daybreak.png';
   };
-
   // パドルとボールの色を取得
   const getPaddleAndBallColor = () => {
-    return survivors >= 6 && survivors < 22 ? '#ffffff' : '#212121';
+    if (survivors < 33) return '#ffffff';
+    return '#212121';
   };
 
   const handleScore = useCallback((scorer: 'player1' | 'player2') => {
