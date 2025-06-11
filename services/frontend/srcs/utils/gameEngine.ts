@@ -282,7 +282,7 @@ export class GameEngine {
 
     // 【速度増加システム】
     this.state.paddleHits += 1;
-    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 4); // 最大4倍まで加速
+    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 6); // 最大6倍まで加速
   }
 
   private checkGoals(): 'none' | 'player1' | 'player2' {

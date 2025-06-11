@@ -33,7 +33,8 @@ export class AuthService {
 
     const payload = { 
       sub: user.username, 
-      username: user.username
+      username: user.username,
+      email: user.email  // JWTペイロードにemailを追加
     };
     
     return {
@@ -76,7 +77,11 @@ export class AuthService {
       };
     }
 
-    const payload = { sub: user.username, username: user.username };
+    const payload = { 
+      sub: user.username, 
+      username: user.username,
+      email: user.email  // Google認証でもJWTペイロードにemailを追加
+    };
     
     return {
       access_token: this.jwtService.sign(payload),
