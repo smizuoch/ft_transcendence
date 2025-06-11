@@ -111,31 +111,37 @@ async function startServer() {
           }
 
           // 部屋に参加
-          const room = roomManager.joinRoom(roomNumber, socket.id, playerInfo);
+          const { room, role } = roomManager.joinRoom(roomNumber, socket.id, playerInfo);
           socket.join(roomNumber);
 
-          console.log(`Player ${socket.id} successfully joined room ${roomNumber} as player ${room.getPlayerNumber(socket.id)}`);
+          console.log(`Player ${socket.id} successfully joined room ${roomNumber} as ${role === 'spectator' ? 'spectator' : `player ${role}`}`);
 
-          // プレイヤー情報を送信
+          // 参加者情報を送信
+          const roomData = room.getAllParticipants();
           socket.emit('room-joined', {
             playerId: socket.id,
-            playerNumber: room.getPlayerNumber(socket.id),
-            players: room.getPlayers(),
-            isGameReady: room.getPlayerCount() === 2
+            playerNumber: role,
+            players: roomData.players,
+            spectators: roomData.spectators,
+            isGameReady: room.getPlayerCount() === 2,
+            isSpectator: role === 'spectator'
           });
 
-          // 他のプレイヤーに新しいプレイヤーの参加を通知
-          socket.to(roomNumber).emit('player-joined', {
+          // 他の参加者に新しい参加者を通知
+          socket.to(roomNumber).emit('participant-joined', {
             playerId: socket.id,
             playerInfo,
-            playerNumber: room.getPlayerNumber(socket.id),
+            role: role,
+            players: roomData.players,
+            spectators: roomData.spectators,
             isGameReady: room.getPlayerCount() === 2
           });
 
           // 2人揃ったらゲーム開始準備
           if (room.getPlayerCount() === 2) {
             io.to(roomNumber).emit('game-ready', {
-              players: room.getPlayers()
+              players: roomData.players,
+              spectators: roomData.spectators
             });
           }
 
@@ -151,7 +157,7 @@ async function startServer() {
         const room = roomManager.getRoom(roomNumber);
 
         if (room && room.hasPlayer(socket.id)) {
-          // 他のプレイヤーにゲーム状態を送信（送信者以外）
+          // 他のプレイヤーと観戦者にゲーム状態を送信（送信者以外）
           socket.to(roomNumber).emit('game-state-update', {
             playerId: socket.id,
             gameState
@@ -166,7 +172,7 @@ async function startServer() {
 
         if (room && room.hasPlayer(socket.id)) {
           console.log(`Full game state update from player ${socket.id} in room ${roomNumber}`);
-          // 他のプレイヤーに完全なゲーム状態を送信（送信者以外）
+          // 他のプレイヤーと観戦者に完全なゲーム状態を送信（送信者以外）
           socket.to(roomNumber).emit('full-game-state-update', {
             playerId: socket.id,
             gameState
@@ -180,7 +186,7 @@ async function startServer() {
         const room = roomManager.getRoom(roomNumber);
 
         if (room && room.hasPlayer(socket.id)) {
-          // 他のプレイヤーに入力状態を送信
+          // 他のプレイヤーと観戦者に入力状態を送信
           socket.to(roomNumber).emit('player-input-update', {
             playerId: socket.id,
             playerNumber: room.getPlayerNumber(socket.id),

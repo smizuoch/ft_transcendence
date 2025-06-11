@@ -27,7 +27,7 @@ export const useGameEngine = (
     paddleAndBallColor?: string, // 色パラメータ
     isPVEMode?: boolean, // PVEモードかどうか
     remotePlayerInput?: { up: boolean; down: boolean; timestamp: number } | null, // マルチプレイヤー入力
-    playerNumber?: 1 | 2 | null // プレイヤー番号
+    playerNumber?: 1 | 2 | 'spectator' | null // プレイヤー番号（観戦者を含む）
   ) => {
     if (!engineRef.current || !canvasRef.current) return;
 
@@ -40,43 +40,59 @@ export const useGameEngine = (
         const state = engineRef.current.getState();
         const speed = 8; // paddleSpeed
 
-        if (isPVEMode) {
+        // 観戦者モードの場合はキー入力を一切受け付けない
+        if (playerNumber === 'spectator') {
+          // 観戦者モード: キー入力は完全に無効
+          // ゲーム状態の更新のみ行う（パドル移動なし）
+        } else if (isPVEMode) {
           // PVEモード: Player1 = NPC, Player2 = プレイヤー
           // Player 2 controls (下のパドル)
-          if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
-            state.paddle2.x -= speed;
+          if (keysRef.current['arrowLeft'] || keysRef.current['a']) {
+            if (state.paddle2.x > 0) {
+              state.paddle2.x -= speed;
+            }
           }
-          if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
-            state.paddle2.x += speed;
+          if (keysRef.current['arrowRight'] || keysRef.current['d']) {
+            if (state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+              state.paddle2.x += speed;
+            }
           }
-        } else if (remotePlayerInput && playerNumber) {
-          // マルチプレイヤーモード: プレイヤー番号に基づいて制御
+        } else if (remotePlayerInput && playerNumber && typeof playerNumber === 'number') {
+          // マルチプレイヤーモード: プレイヤー番号に基づいて制御（観戦者を除く）
           if (playerNumber === 1) {
             // 自分がPlayer1（上のパドル）- 画面が180度回転しているので入力も反転
-            if (keysRef.current['arrowLeft'] && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
-              state.paddle1.x += speed; // 左キー → 右移動（画面回転により視覚的には右）
+            if (keysRef.current['arrowLeft'] || keysRef.current['a']) {
+              if (state.paddle1.x + state.paddle1.width < state.canvasWidth) {
+                state.paddle1.x += speed; // 左キー → 右移動（画面回転により視覚的には左）
+              }
             }
-            if (keysRef.current['arrowRight'] && state.paddle1.x > 0) {
-              state.paddle1.x -= speed; // 右キー → 左移動（画面回転により視覚的には右）
+            if (keysRef.current['arrowRight'] || keysRef.current['d']) {
+              if (state.paddle1.x > 0) {
+                state.paddle1.x -= speed; // 右キー → 左移動（画面回転により視覚的には右）
+              }
             }
 
-            // リモートPlayer2（下のパドル）
+            // リモートPlayer2（下のパドル）の入力を反映
             if (remotePlayerInput.up && state.paddle2.x > 0) {
               state.paddle2.x -= speed; // P2のup（左）
             }
             if (remotePlayerInput.down && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
               state.paddle2.x += speed; // P2のdown（右）
             }
-          } else {
-            // 自分がPlayer2（下のパドル）- ローカル制御
-            if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
-              state.paddle2.x -= speed;
+          } else if (playerNumber === 2) {
+            // 自分がPlayer2（下のパドル）- 通常の制御
+            if (keysRef.current['arrowLeft'] || keysRef.current['a']) {
+              if (state.paddle2.x > 0) {
+                state.paddle2.x -= speed;
+              }
             }
-            if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
-              state.paddle2.x += speed;
+            if (keysRef.current['arrowRight'] || keysRef.current['d']) {
+              if (state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+                state.paddle2.x += speed;
+              }
             }
 
-            // リモートPlayer1（上のパドル）
+            // リモートPlayer1（上のパドル）の入力を反映
             if (remotePlayerInput.up && state.paddle1.x > 0) {
               state.paddle1.x -= speed; // P1のup（左）
             }
@@ -85,21 +101,29 @@ export const useGameEngine = (
             }
           }
         } else {
-          // PVPモード: Player1 = プレイヤー, Player2 = プレイヤー
-          // Player 1 controls (上のパドル)
-          if (keysRef.current['a'] && state.paddle1.x > 0) {
-            state.paddle1.x -= speed;
+          // ローカルPVPモード: Player1 = プレイヤー, Player2 = プレイヤー
+          // Player 1 controls (上のパドル) - WASDキー
+          if (keysRef.current['a']) {
+            if (state.paddle1.x > 0) {
+              state.paddle1.x -= speed;
+            }
           }
-          if (keysRef.current['d'] && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
-            state.paddle1.x += speed;
+          if (keysRef.current['d']) {
+            if (state.paddle1.x + state.paddle1.width < state.canvasWidth) {
+              state.paddle1.x += speed;
+            }
           }
 
-          // Player 2 controls (下のパドル)
-          if (keysRef.current['arrowLeft'] && state.paddle2.x > 0) {
-            state.paddle2.x -= speed;
+          // Player 2 controls (下のパドル) - 矢印キー
+          if (keysRef.current['arrowLeft']) {
+            if (state.paddle2.x > 0) {
+              state.paddle2.x -= speed;
+            }
           }
-          if (keysRef.current['arrowRight'] && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
-            state.paddle2.x += speed;
+          if (keysRef.current['arrowRight']) {
+            if (state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+              state.paddle2.x += speed;
+            }
           }
         }
 

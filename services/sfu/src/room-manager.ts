@@ -3,6 +3,7 @@ import { Room, PlayerInfo } from './types';
 export class GameRoom implements Room {
   public id: string;
   public players: Map<string, { playerInfo: PlayerInfo; playerNumber: 1 | 2 }>;
+  public spectators: Map<string, { playerInfo: PlayerInfo; joinedAt: Date }>; // 観戦者を追加
   public createdAt: Date;
   public lastActivity: Date;
 
@@ -15,11 +16,12 @@ export class GameRoom implements Room {
   constructor(id: string) {
     this.id = id;
     this.players = new Map();
+    this.spectators = new Map(); // 観戦者マップを初期化
     this.createdAt = new Date();
     this.lastActivity = new Date();
   }
 
-  addPlayer(playerId: string, playerInfo: PlayerInfo): 1 | 2 {
+  addPlayer(playerId: string, playerInfo: PlayerInfo): 1 | 2 | 'spectator' {
     this.lastActivity = new Date();
 
     // 既に参加している場合は既存のプレイヤー番号を返す
@@ -29,10 +31,19 @@ export class GameRoom implements Room {
       return existingPlayerNumber;
     }
 
+    // 既に観戦者として参加している場合
+    if (this.spectators.has(playerId)) {
+      console.log(`Player ${playerId} already in room ${this.id} as spectator`);
+      return 'spectator';
+    }
+
     // 空いているプレイヤー番号を割り当て
     const playerNumber = this.getAvailablePlayerNumber();
     if (playerNumber === null) {
-      throw new Error('Room is full');
+      // プレイヤー枠が満杯の場合は観戦者として追加
+      this.spectators.set(playerId, { playerInfo, joinedAt: new Date() });
+      console.log(`Added player ${playerId} to room ${this.id} as spectator`);
+      return 'spectator';
     }
 
     this.players.set(playerId, { playerInfo, playerNumber });
@@ -42,20 +53,35 @@ export class GameRoom implements Room {
 
   removePlayer(playerId: string): boolean {
     this.lastActivity = new Date();
-    return this.players.delete(playerId);
+    // プレイヤーと観戦者の両方から削除を試行
+    const removedFromPlayers = this.players.delete(playerId);
+    const removedFromSpectators = this.spectators.delete(playerId);
+    return removedFromPlayers || removedFromSpectators;
   }
 
   hasPlayer(playerId: string): boolean {
-    return this.players.has(playerId);
+    return this.players.has(playerId) || this.spectators.has(playerId);
   }
 
-  getPlayerNumber(playerId: string): 1 | 2 | null {
+  getPlayerNumber(playerId: string): 1 | 2 | 'spectator' | null {
     const player = this.players.get(playerId);
-    return player ? player.playerNumber : null;
+    if (player) return player.playerNumber;
+    
+    if (this.spectators.has(playerId)) return 'spectator';
+    
+    return null;
   }
 
   getPlayerCount(): number {
     return this.players.size;
+  }
+
+  getSpectatorCount(): number {
+    return this.spectators.size;
+  }
+
+  getTotalParticipants(): number {
+    return this.players.size + this.spectators.size;
   }
 
   getPlayers(): Array<{ playerId: string; playerInfo: PlayerInfo; playerNumber: 1 | 2 }> {
@@ -66,12 +92,30 @@ export class GameRoom implements Room {
     }));
   }
 
+  getSpectators(): Array<{ playerId: string; playerInfo: PlayerInfo; joinedAt: Date }> {
+    return Array.from(this.spectators.entries()).map(([playerId, data]) => ({
+      playerId,
+      playerInfo: data.playerInfo,
+      joinedAt: data.joinedAt
+    }));
+  }
+
+  getAllParticipants(): {
+    players: Array<{ playerId: string; playerInfo: PlayerInfo; playerNumber: 1 | 2 }>;
+    spectators: Array<{ playerId: string; playerInfo: PlayerInfo; joinedAt: Date }>;
+  } {
+    return {
+      players: this.getPlayers(),
+      spectators: this.getSpectators()
+    };
+  }
+
   isFull(): boolean {
     return this.players.size >= 2;
   }
 
   isEmpty(): boolean {
-    return this.players.size === 0;
+    return this.players.size === 0 && this.spectators.size === 0;
   }
 
   private getAvailablePlayerNumber(): 1 | 2 | null {
@@ -131,7 +175,7 @@ export class GameRoom implements Room {
 export class RoomManager {
   private rooms: Map<string, GameRoom> = new Map();
 
-  joinRoom(roomNumber: string, playerId: string, playerInfo: PlayerInfo): GameRoom {
+  joinRoom(roomNumber: string, playerId: string, playerInfo: PlayerInfo): { room: GameRoom; role: 1 | 2 | 'spectator' } {
     let room = this.rooms.get(roomNumber);
 
     if (!room) {
@@ -140,14 +184,10 @@ export class RoomManager {
       console.log(`Created new room: ${roomNumber}`);
     }
 
-    if (room.isFull() && !room.hasPlayer(playerId)) {
-      throw new Error('Room is full');
-    }
+    const role = room.addPlayer(playerId, playerInfo);
+    console.log(`Player ${playerId} joined room ${roomNumber} as ${role === 'spectator' ? 'spectator' : `player ${role}`}`);
 
-    room.addPlayer(playerId, playerInfo);
-    console.log(`Player ${playerId} joined room ${roomNumber} as player ${room.getPlayerNumber(playerId)}`);
-
-    return room;
+    return { room, role };
   }
 
   getRoom(roomNumber: string): GameRoom | undefined {
@@ -185,7 +225,7 @@ export class RoomManager {
   }
 
   getTotalPlayers(): number {
-    return Array.from(this.rooms.values()).reduce((total, room) => total + room.getPlayerCount(), 0);
+    return Array.from(this.rooms.values()).reduce((total, room) => total + room.getTotalParticipants(), 0);
   }
 
   // 非アクティブな部屋をクリーンアップ

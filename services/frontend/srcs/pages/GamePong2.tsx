@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG } from "@/utils/gameEngine";
 import type { NPCConfig } from "@/utils/npcTypes";
 import { NPCSettingsPanel } from "@/utils/NPCSettingsPanel";
 import { NPCDebugPanel } from "@/utils/NPCDebugPanel";
+import { SpectatorPanel } from "@/utils/SpectatorPanel";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
 // NPCアルゴリズムの登録を確実に行うためにインポート
 import "@/utils/npcAlgorithmRegistry";
@@ -41,14 +42,17 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [multiplayerConnected, setMultiplayerConnected] = useState(false);
   const [roomPlayers, setRoomPlayers] = useState<any[]>([]);
+  const [roomSpectators, setRoomSpectators] = useState<any[]>([]); // 観戦者リスト
   const [isGameReady, setIsGameReady] = useState(false);
-  const [playerNumber, setPlayerNumber] = useState<1 | 2 | null>(null);
+  const [playerNumber, setPlayerNumber] = useState<1 | 2 | 'spectator' | null>(null);
   const [remotePlayerInput, setRemotePlayerInput] = useState<PlayerInput | null>(null);
   const [isAuthoritativeClient, setIsAuthoritativeClient] = useState(false); // 権威クライアントかどうか
+  const [isSpectator, setIsSpectator] = useState(false); // 観戦者モードかどうか
 
   // 未使用変数の警告を抑制（将来的なUI表示用）
   void multiplayerConnected;
   void roomPlayers;
+  void roomSpectators;
   void isGameReady;// ============= NPC関連の状態 =============
   const [npcEnabled, setNpcEnabled] = useState(false);
   const [npcSettings, setNpcSettings] = useState<NPCConfig>({
@@ -104,17 +108,17 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         }
 
         await multiplayerService.connect();
-        setMultiplayerConnected(true);
-
-        // 通信対戦のイベントリスナーを設定
+        setMultiplayerConnected(true);        // 通信対戦のイベントリスナーを設定
         multiplayerService.on('roomJoined', (data: RoomState) => {
           setPlayerNumber(data.playerNumber);
           setRoomPlayers(data.players);
+          setRoomSpectators(data.spectators || []);
           setIsGameReady(data.isGameReady);
-          console.log(`Joined as player ${data.playerNumber}`);
+          setIsSpectator(data.isSpectator || data.playerNumber === 'spectator');
+          console.log(`Joined as ${data.isSpectator ? 'spectator' : `player ${data.playerNumber}`}`);
           setShowRoomInput(false); // 部屋入力画面を隠す
           
-          // Player1を権威クライアント（ゲーム状態の管理者）に設定
+          // Player1を権威クライアント（ゲーム状態の管理者）に設定、観戦者は非権威
           const isAuth = data.playerNumber === 1;
           setIsAuthoritativeClient(isAuth);
           if (engineRef.current) {
@@ -124,10 +128,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
 
         multiplayerService.on('playerJoined', (data: any) => {
           setRoomPlayers(data.players || []);
+          setRoomSpectators(data.spectators || []);
           setIsGameReady(data.isGameReady);
         });        multiplayerService.on('gameReady', (data: any) => {
+          console.log('Game ready data:', data);
           setIsGameReady(true);
           setRoomPlayers(data.players);
+          console.log(`Game is now ready! Players: ${data.players.length}`);
         });
 
         multiplayerService.on('gameStarted', (data: { roomNumber: string; players: any[]; initiator: string }) => {
@@ -157,15 +164,17 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         multiplayerService.on('playerLeft', () => {
           setIsGameReady(false);
           setRoomPlayers([]);
+        });        // 完全なゲーム状態の同期
+        multiplayerService.on('fullGameStateUpdate', (data: { playerId: string; gameState: any }) => {
+          if (engineRef.current) {
+            // 観戦者または非権威クライアントはリモート状態を適用
+            if (isSpectator || !isAuthoritativeClient) {
+              engineRef.current.syncGameState(data.gameState);
+            }
+          }
         });
 
-        // 完全なゲーム状態の同期
-        multiplayerService.on('fullGameStateUpdate', (data: { playerId: string; gameState: any }) => {
-          if (engineRef.current && !isAuthoritativeClient) {
-            // 非権威クライアントのみリモート状態を適用
-            engineRef.current.syncGameState(data.gameState);
-          }
-        });        // サーバーからのスコア更新
+        // サーバーからのスコア更新
         multiplayerService.on('scoreUpdated', (data: { 
           scorer: 'player1' | 'player2'; 
           playerId: string; 
@@ -244,33 +253,44 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     });  }, []);  useEffect(() => {
     if (gameStarted) {
       // 通信対戦時は入力送信とゲーム状態同期を行う
-      if (isMultiplayer && multiplayerService.isInRoom()) {
-        // 自分の入力を他のプレイヤーに送信
-        const sendInputs = () => {          if (keysRef.current) {
-            // P1は画面が180度回転しているので、送信する入力も反転
-            const input: PlayerInput = playerNumber === 1 ? {
-              up: keysRef.current.arrowRight,  // P1: 右キー→upとして送信（実際は左移動）
-              down: keysRef.current.arrowLeft, // P1: 左キー→downとして送信（実際は右移動）
-              timestamp: Date.now()
-            } : {
-              up: keysRef.current.arrowLeft,   // P2: 左移動をupにマッピング
-              down: keysRef.current.arrowRight, // P2: 右移動をdownにマッピング
-              timestamp: Date.now()
-            };
-            multiplayerService.sendPlayerInput(input);
-          }
-        };
+      if (isMultiplayer && multiplayerService.isInRoom()) {        // 観戦者の場合は入力を送信しない
+        if (!isSpectator && multiplayerService.isPlayer()) {
+          const sendInputs = () => {
+            if (keysRef.current) {
+              let up = false;
+              let down = false;              if (playerNumber === 1) {
+                // P1は画面が180度回転しているので、送信する入力も反転
+                up = keysRef.current['arrowLeft'] || keysRef.current['a'];
+                down = keysRef.current['arrowRight'] || keysRef.current['d'];
+              } else if (playerNumber === 2) {
+                // P2は通常の制御
+                up = keysRef.current['arrowLeft'] || keysRef.current['a'];
+                down = keysRef.current['arrowRight'] || keysRef.current['d'];
+              }
 
-        // ゲームループでの入力送信
-        const inputInterval = setInterval(sendInputs, 16); // 60fps
+              multiplayerService.sendPlayerInput({
+                up: up || false,
+                down: down || false,
+                timestamp: Date.now()
+              });
+            }
+          };
+          
+          // ゲームループでの入力送信
+          const inputInterval = setInterval(sendInputs, 16); // 60fps
 
-        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, remotePlayerInput, playerNumber);
+          startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, remotePlayerInput, playerNumber);
 
-        return () => {
-          clearInterval(inputInterval);
-          stopGameLoop();
-        };
-      } else {        // 通常のゲームループ（ローカル/NPC対戦）
+          return () => {
+            clearInterval(inputInterval);
+            stopGameLoop();
+          };        } else if (isSpectator) {
+          // 観戦者モードの場合は入力を完全に無効化してゲームループのみ実行
+          const emptyKeysRef = { current: {} }; // 空のキーリファレンス
+          startGameLoop(handleScore, gameStarted, emptyKeysRef, '#212121', false, remotePlayerInput, 'spectator');
+        }
+      } else {
+        // 通常のゲームループ（ローカル/NPC対戦）
         startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, null, playerNumber);
       }
     } else {
@@ -278,7 +298,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     }
 
     return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, npcEnabled, isMultiplayer, remotePlayerInput]);
+  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, npcEnabled, isMultiplayer, isSpectator, remotePlayerInput, playerNumber]);
 
   useEffect(() => {
     if (!gameStarted) return;
@@ -567,12 +587,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
                   onMouseEnter={() => setHoverClose(true)}
                   onMouseLeave={() => setHoverClose(false)}
                   onClick={handleStartGame}
-                />
-
-                {/* マルチプレイヤー待機メッセージ */}
+                />                {/* マルチプレイヤー待機メッセージ */}
                 {isMultiplayer && !isGameReady && (
                   <div className="text-2xl text-white mt-4">
                     他のプレイヤーを待っています...
+                    <div className="text-sm text-gray-300 mt-2">
+                      デバッグ: Players: {roomPlayers.length}, Ready: {isGameReady.toString()}
+                    </div>
                   </div>
                 )}
 
@@ -586,9 +607,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             )}
           </div>
         )}
-      </div>
-
-      {/* ============= NPC設定パネル ============= */}
+      </div>      {/* ============= NPC設定パネル ============= */}
       <NPCSettingsPanel
         npcEnabled={npcEnabled}
         setNpcEnabled={setNpcEnabled}
@@ -603,7 +622,16 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         npcEnabled={npcEnabled}
         npcSettings={npcSettings}
         npcDebugInfo={npcDebugInfo}
-      />
+      />      {/* ============= 観戦者パネル ============= */}
+      {isSpectator && (
+        <SpectatorPanel
+          roomPlayers={roomPlayers}
+          roomSpectators={roomSpectators}
+          currentUserId={multiplayerService.getPlayerId() || undefined}
+          score={score}
+          gameStarted={gameStarted}
+        />
+      )}
     </div>
   );
 };
