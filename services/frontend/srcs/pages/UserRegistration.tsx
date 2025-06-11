@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { apiClient } from '../utils/authApiClient';
 
 interface UserRegistrationProps {
-  navigate: (page: string) => void;
+  navigate: (
+    page: string,
+    userId?: string,
+    roomNumber?: string,
+    userToken?: string
+  ) => void;
 }
 
 interface FormData {
@@ -45,19 +50,30 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
       return;
     }
 
-    setLoading(true);
-
-    try {
+    setLoading(true);    try {
       const result = await apiClient.register({
         username: formData.username,
         email: formData.email,
         password: formData.password,
-      });
+      });      if (result.success) {
+        // 登録成功時、JWTトークンを取得
+        const token = result.data?.token;
 
-      if (result.success) {
+        console.log('Registration API response:', result);
+        console.log('Extracted token:', token);
+
+        if (token) {
+          // JWTトークンをlocalStorageに保存
+          localStorage.setItem('authToken', token);
+          console.log('Token saved to localStorage');
+        }
+
+        console.log('Registration successful, passing token to TwoFactorAuth:', token);
+
         setFormData({ username: '', email: '', password: '' });
-        // 登録成功後、2要素認証画面に遷移
-        setTimeout(() => navigate('TwoFactorAuth'), 1000);
+
+        // 登録成功後、2要素認証画面にJWTトークンを渡して遷移
+        setTimeout(() => navigate('TwoFactorAuth', undefined, undefined, token), 1000);
       } else {
         // 振動アニメーションを実行
         setIsShaking(true);

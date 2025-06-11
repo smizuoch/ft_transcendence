@@ -1,10 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 interface TwoFactorAuthProps {
-  navigate: (page: string) => void;
+  navigate: (
+    page: string,
+    userId?: string,
+    roomNumber?: string,
+    userToken?: string
+  ) => void;
+  userToken?: string;
 }
 
-const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
+const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate, userToken }) => {
 
   const iconColor = '#6D6F8C';
 
@@ -47,7 +53,6 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
       verifyCode(newCode);
     }
   };
-
   // 検証関数 - 現在のcodeまたは渡された配列を使用
   const verifyCode = (codeToVerify?: string[]) => {
     // 引数が渡された場合はそれを使用、そうでなければcodeステートを使用
@@ -55,8 +60,8 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
     console.log('Full Code:', fullCode);
 
     if (fullCode === '000000') {
-      // 正しいコードの場合
-      navigate('MyPage');
+      // 正しいコードの場合、userInfoをMyPageに渡す
+      navigate('MyPage', undefined, undefined, userToken);
     } else {
       // 間違ったコードの場合、振動アニメーションを実行
       setIsShaking(true);

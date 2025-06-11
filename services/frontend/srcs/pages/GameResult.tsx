@@ -1,10 +1,16 @@
 import React from 'react';
 
 interface GameResultProps {
-  navigate: (page: string) => void;
+  navigate: (
+    page: string,
+    userId?: string,
+    roomNumber?: string,
+    userToken?: string
+  ) => void;
+  userToken?: string;
 }
 
-const GameResult: React.FC<GameResultProps> = ({ navigate }) => {
+const GameResult: React.FC<GameResultProps> = ({ navigate, userToken }) => {
   // GamePong42用のモックデータ - 生存者数に基づく順位
   const playerRank = Math.floor(Math.random() * 42) + 1;
   const isVictory = playerRank === 1; // 1位なら勝利
@@ -33,10 +39,8 @@ const GameResult: React.FC<GameResultProps> = ({ navigate }) => {
           {isVictory && (
             <p className="text-lg text-green-400 mt-4">You are the last survivor!</p>
           )}
-        </div>
-
-        <button
-          onClick={() => navigate('MyPage')}
+        </div>        <button
+          onClick={() => navigate('MyPage', undefined, undefined, userToken)}
           className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 px-8 rounded-lg text-2xl transition duration-150"
         >
           Back to My Page

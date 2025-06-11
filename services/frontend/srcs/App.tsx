@@ -15,6 +15,7 @@ interface RouteState {
   page: string;
   userId?: string;
   roomNumber?: string;
+  userToken?: string; // token のみ保持
 }
 
 const App: React.FC = () => {
@@ -22,9 +23,14 @@ const App: React.FC = () => {
   const [showBackNavigationPopup, setShowBackNavigationPopup] = useState(false);
 
   /** -------- routing helper -------- */
-  const navigate = (page: string, userId?: string, roomNumber?: string) => {
-    setCurrentRoute({ page, userId, roomNumber });
-    window.history.pushState({ page, userId, roomNumber }, '', '/');
+  const navigate = (
+    page: string,
+    userId?: string,
+    roomNumber?: string,
+    userToken?: string
+  ) => {
+    setCurrentRoute({ page, userId, roomNumber, userToken });
+    window.history.pushState({ page, userId, roomNumber, userToken }, '', '/');
   };
 
   /** -------- back-navigation block -------- */
@@ -59,19 +65,19 @@ const App: React.FC = () => {
       case 'EmailVerification':
         return <EmailVerification navigate={navigate} />;
       case 'TwoFactorAuth':
-        return <TwoFactorAuth navigate={navigate} />;
+        return <TwoFactorAuth navigate={navigate} userToken={currentRoute.userToken} />;
       case 'MyPage':
-        return <MyPage navigate={navigate} />;
+        return <MyPage navigate={navigate} userToken={currentRoute.userToken} />;
       case 'GameSelect':
-        return <GameSelect navigate={navigate} />;
+        return <GameSelect navigate={navigate} userToken={currentRoute.userToken} />;
       case 'GamePong2':
         return <GamePong2 navigate={navigate} roomNumber={currentRoute?.roomNumber} />;
       case 'GamePong42':
-        return <GamePong42 navigate={navigate} />;
+        return <GamePong42 navigate={navigate} userToken={currentRoute.userToken} />;
       case 'GameResult':
-        return <GameResult navigate={navigate} />;
+        return <GameResult navigate={navigate} userToken={currentRoute.userToken} />;
       case 'UserProfile':
-        return <UserProfile navigate={navigate} userId={currentRoute?.userId} />;
+        return <UserProfile navigate={navigate} userId={currentRoute?.userId} userToken={currentRoute.userToken} />;
       case 'AuthCallback':
         return <AuthCallback navigate={navigate} />;
       default:

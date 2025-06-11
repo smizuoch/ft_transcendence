@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
+import { apiClient } from '../utils/authApiClient';
 
 interface MyPageProps {
   /**
@@ -6,7 +7,16 @@ interface MyPageProps {
    * @param page  – destination page key
    * @param userId – optional user identifier
    */
-  navigate: (page: string, userId?: string) => void;
+  navigate: (
+    page: string,
+    userId?: string,
+    roomNumber?: string,
+    userToken?: string
+  ) => void;
+  /**
+   * User token for authentication
+   */
+  userToken?: string;
 }
 
 /**
@@ -23,12 +33,73 @@ interface MyPageProps {
  *
  *  Tailwind utility classes + inline styles → no external stylesheets needed.
  */
-const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
+const MyPage: React.FC<MyPageProps> = ({ navigate, userToken }) => {
   /* ------------------------------------------------------------------ */
   // State & refs
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [username, setUsername] = useState<string>("NAME");
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);  /* ------------------------------------------------------------------ */  // Load user profile on component mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        setIsLoadingProfile(true);
+
+        // まずuserTokenがpropsから渡されているかチェック
+        if (userToken) {
+          console.log('Using userToken from props');
+
+          // トークンを保存
+          localStorage.setItem('authToken', userToken);
+
+          // トークンを使ってプロフィール取得
+          const response = await apiClient.getProfile();
+          console.log('Profile API response:', response);
+
+          if (response.success && response.data) {
+            const newUsername = response.data.username || "NAME";
+            console.log('Setting username to:', newUsername);
+            setUsername(newUsername);
+            console.log('Profile loaded successfully from token:', response.data);
+            return;
+          }
+        }
+
+        // userTokenがない場合、既存のトークンチェック
+        const token = apiClient.getStoredToken();
+        console.log('Current stored token:', token ? token.substring(0, 50) + '...' : 'No token');
+
+        if (!token) {
+          // トークンがない場合はデフォルトのままで処理終了
+          console.log('No authentication token found, using default name');
+          setUsername("NAME");
+          return;
+        }
+
+        const response = await apiClient.getProfile();
+        console.log('Profile API response:', response);
+
+        if (response.success && response.data) {
+          // JWTトークンのペイロードから username を取得
+          const newUsername = response.data.username || "NAME";
+          console.log('Setting username to:', newUsername);          setUsername(newUsername);
+          console.log('Profile loaded successfully:', response.data);
+        } else {
+          console.error('Failed to load profile:', response.message);
+          // プロフィール取得に失敗した場合は "NAME" のまま
+          setUsername("NAME");
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        setUsername("NAME");
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    loadUserProfile();
+  }, [userToken]); // userTokenが変わったら再実行
 
   /* ------------------------------------------------------------------ */
   // Event handlers
@@ -47,6 +118,13 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
     if (!searchTerm.trim()) return;
     alert(`Searching for: ${searchTerm}`);
     // Future: navigate("UserProfile", searchTerm)
+  };
+
+  // デバッグ用：トークンをクリアして再読み込み
+  const handleClearToken = () => {
+    apiClient.logout();
+    console.log('Token cleared, reloading...');
+    window.location.reload();
   };
 
   /* ------------------------------------------------------------------ */
@@ -102,14 +180,12 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
              the bottom of the avatar.  NAME font-size = 88 px so we move the
              whole stack down by (AVATAR - NAME_SIZE) = 232 px. */
           style={{ transform: `translateY(${AVATAR - NAME_SIZE}px)` }}
-        >
-          {/* NAME */}
-          <button
-            onClick={() => navigate("UserProfile", "myusername")}
+        >          {/* NAME */}          <button
+            onClick={() => navigate("UserProfile", username.toLowerCase(), undefined, userToken)}
             className="whitespace-nowrap text-left font-medium transition-opacity hover:opacity-80"
             style={{ color: accent, fontSize: NAME_SIZE, lineHeight: 1 }}
           >
-            NAME
+            {isLoadingProfile ? "Loading..." : username}
           </button>
 
           {/* Search bar */}
@@ -142,9 +218,8 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
 
       {/* ---------------------------------------------------------------- */}
       {/* Pong icon – centred vertically, 20 % from the right               */}
-      {/* ---------------------------------------------------------------- */}
-      <button
-        onClick={() => navigate("GameSelect")}
+      {/* ---------------------------------------------------------------- */}      <button
+        onClick={() => navigate("GameSelect", undefined, undefined, userToken)}
         className="absolute transition-opacity hover:opacity-80"
         style={{ top: "50%", right: "20%", width: 160, transform: "translateY(-50%)" }}
       >
@@ -154,6 +229,17 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
       {/* ---------------------------------------------------------------- */}
       {/* DevOps icon – bottom‑right with wider margin                       */}
       {/* ---------------------------------------------------------------- */}
+
+      {/* Debug button - temporary for testing authentication */}
+      <button
+        onClick={handleClearToken}
+        className="absolute transition-opacity hover:opacity-80 bg-red-500 text-white px-3 py-1 rounded text-sm"
+        style={{ top: 10, right: 10 }}
+        title="Clear token and reload"
+      >
+        Clear Token
+      </button>
+
       <a
         href="https://localhost:5601"
         target="_blank"

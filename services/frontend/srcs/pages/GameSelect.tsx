@@ -1,10 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 interface GameSelectProps {
-  navigate: (page: string, userId?: string, roomNumber?: string) => void;
+  navigate: (
+    page: string,
+    userId?: string,
+    roomNumber?: string,
+    userToken?: string
+  ) => void;
+  userToken?: string;
 }
 
-const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
+const GameSelect: React.FC<GameSelectProps> = ({ navigate, userToken }) => {
   // 色の定義
   const iconColor = '#6D6F8C';
 
@@ -53,23 +59,22 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
         prevInput.focus();
       }
     }
-  };
-  // Pong2ゲームへの遷移
+  };  // Pong2ゲームへの遷移
   const navigateToPong2 = (roomNumberStr?: string) => {
     // 指定された部屋番号か、入力欄の値を使用（空欄は0とみなす）
     const roomCode = roomNumberStr || roomNumber.map(digit => digit || '0').join('');
     console.log(`Navigating to Pong2 with room number: ${roomCode}`);
-    navigate('GamePong2', undefined, roomCode);
+    navigate('GamePong2', undefined, roomCode, userToken);
   };
 
   // Pong42ゲームへの遷移
   const navigateToPong42 = () => {
-    navigate('GamePong42');
+    navigate('GamePong42', undefined, undefined, userToken);
   };
 
   // MyPageへの遷移
   const navigateToMyPage = () => {
-    navigate('MyPage');
+    navigate('MyPage', undefined, undefined, userToken);
   };
 
   return (

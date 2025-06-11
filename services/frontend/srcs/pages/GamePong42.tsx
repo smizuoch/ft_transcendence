@@ -4,7 +4,13 @@ import { DEFAULT_CONFIG } from "@/utils/gameEngine";
 import { useNPCManager, NPCGameConfig, NPCGameResponse } from "@/utils/npcManagerService";
 
 interface GamePong42Props {
-  navigate: (page: string) => void;
+  navigate: (
+    page: string,
+    userId?: string,
+    roomNumber?: string,
+    userToken?: string
+  ) => void;
+  userToken?: string;
 }
 
 // ミニゲーム用のインターフェイス（npc_managerサービス対応）
@@ -16,7 +22,7 @@ interface MiniGame {
   canvasSize: { width: number; height: number };
 }
 
-const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
+const GamePong42: React.FC<GamePong42Props> = ({ navigate, userToken }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
@@ -327,7 +333,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         }
       });
 
-      const t = setTimeout(() => navigate("GameResult"), 1200);
+      const t = setTimeout(() => navigate("GameResult", undefined, undefined, userToken), 1200);
       return () => clearTimeout(t);
     }
   }, [gameOver, winner, navigate, miniGames, npcManager]);

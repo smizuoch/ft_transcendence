@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { apiClient } from '../utils/authApiClient';
 
 interface EmailVerificationProps {
-  navigate: (page: string) => void;
+  navigate: (
+    page: string,
+    userId?: string,
+    roomNumber?: string,
+    userToken?: string
+  ) => void;
 }
 
 interface FormData {
@@ -45,17 +50,19 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ navigate }) => {
       return;
     }
 
-    setLoading(true);
-
-    try {
+    setLoading(true);    try {
       const result = await apiClient.login({
         email: formData.email,
         password: formData.password,
       });
 
-      if (result.success) {
-        // 認証成功時のみTwoFactorAuthページに遷移
-        navigate('TwoFactorAuth');
+      if (result.success) {        // ログイン成功時、トークンのみを取得
+        const token = result.data?.token || apiClient.getStoredToken();
+
+        console.log('Login successful, passing token to TwoFactorAuth');
+
+        // TwoFactorAuthページにトークンを渡して遷移
+        navigate('TwoFactorAuth', undefined, undefined, token);
       } else {
         // 振動アニメーションを実行
         setIsShaking(true);
