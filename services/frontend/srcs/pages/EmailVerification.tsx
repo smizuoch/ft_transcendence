@@ -51,10 +51,12 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ navigate }) => {
       const result = await apiClient.login({
         email: formData.email,
         password: formData.password,
-      });
-
-      if (result.success) {
-        // 認証成功時のみTwoFactorAuthページに遷移
+      });      if (result.success) {
+        // 認証成功時にトークンを保存してTwoFactorAuthページに遷移
+        if (result.data && result.data.access_token) {
+          // トークンをローカルストレージに保存
+          localStorage.setItem('authToken', result.data.access_token);
+        }
         navigate('TwoFactorAuth');
       } else {
         // 振動アニメーションを実行

@@ -69,12 +69,7 @@ export class AuthService {
     // ユーザーが存在しない場合は新規作成
     if (!user) {
       // Google認証専用メソッドを使用してユーザーを作成
-      const newUser = await this.userService.createGoogleUser(email, username);
-      user = {
-        username: newUser.username,
-        email: newUser.email,
-        password: null, // Google認証ユーザーはパスワードがnull
-      };
+      user = await this.userService.createGoogleUser(email, username);
     }
 
     const payload = { 

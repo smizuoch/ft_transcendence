@@ -1,4 +1,5 @@
-const API_BASE_URL = 'https://localhost:8443';
+// 2FA API - Nginxプロキシを使用してMixed Content回避
+const API_BASE_URL = '/api';
 
 export interface VerifyTwoFactorCodeRequest {
   code: string; // emailはJWTから取得するため不要
@@ -16,7 +17,7 @@ export class TwoFactorApi {
    */
   static async sendTwoFactorCode(token: string): Promise<TwoFactorResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/2fa/send`, {
+      const response = await fetch(`${API_BASE_URL}/auth/2fa/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -41,7 +42,7 @@ export class TwoFactorApi {
    */
   static async verifyTwoFactorCode(token: string, code: string): Promise<TwoFactorResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/2fa/verify`, {
+      const response = await fetch(`${API_BASE_URL}/auth/2fa/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
