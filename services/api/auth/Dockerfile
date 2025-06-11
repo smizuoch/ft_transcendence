@@ -18,8 +18,10 @@ RUN npm install -g ts-node typescript
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --no-frozen-lockfile
 
-# ソースコードをコピー
-COPY . .
+# ソースコードをコピー（node_modulesは除外）
+COPY srcs ./srcs
+COPY prisma ./prisma
+COPY nest-cli.json tsconfig.json ./
 
 # データベースディレクトリを作成
 RUN mkdir -p /app/data

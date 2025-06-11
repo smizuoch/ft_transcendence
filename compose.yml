@@ -74,25 +74,25 @@ services:
     env_file:
       - ./secrets/.env
 
-  # --- ELK Stack Setup ---
-  elk_setup:
-    build:
-      context: ./services/elkstack/elk_setup
-      dockerfile: Dockerfile
-    container_name: elk_setup
-    user: "0"
-    volumes:
-      - elk_certs:/usr/share/elasticsearch/config/certs
-    env_file:
-      - ./secrets/.env
-    healthcheck:
-      test: ["CMD-SHELL", "[ -f config/certs/elasticsearch/elasticsearch.crt ]"]
-      interval: 1s
-      timeout: 5s
-      retries: 120
-    networks:
-      - transcendence_net
-    restart: "no"
+  # # --- ELK Stack Setup ---
+  # elk_setup:
+  #   build:
+  #     context: ./services/elkstack/elk_setup
+  #     dockerfile: Dockerfile
+  #   container_name: elk_setup
+  #   user: "0"
+  #   volumes:
+  #     - elk_certs:/usr/share/elasticsearch/config/certs
+  #   env_file:
+  #     - ./secrets/.env
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "[ -f config/certs/elasticsearch/elasticsearch.crt ]"]
+  #     interval: 1s
+  #     timeout: 5s
+  #     retries: 120
+  #   networks:
+  #     - transcendence_net
+  #   restart: "no"
 
   # # --- ELK Stack (Updated) ---
   # elasticsearch:
