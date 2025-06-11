@@ -12,15 +12,6 @@ NestJS + Fastifyの構成で2FA（Two-Factor Authentication）を実装してく
 - Database: SQLite (Prisma)
 - Email: Nodemailer
 
-**2FA用データベーステーブル:**
-- TwoFactorCode テーブルを追加
-  - id: 主キー
-  - email: ユーザーのメールアドレス（Userテーブルへの外部キー）
-  - code: 6桁の認証コード
-  - expiresAt: 有効期限（10分間）
-  - isUsed: 使用済みフラグ
-  - createdAt: 作成日時
-
 **実装してほしいファイル:**
 
 1. **Database Schema（Prisma）:**
