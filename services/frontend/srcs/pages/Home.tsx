@@ -13,10 +13,10 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
   useEffect(() => {
     // コンポーネントマウント時にオーディオ要素を作成
     audioRef.current = new Audio('/audio/siokaze.mp3');
-    
+
     if (audioRef.current) {
       audioRef.current.loop = true; // ループ再生を設定
-      
+
       // ミュート状態に応じて再生/ミュート
       if (!isMuted) {
         audioRef.current.play().catch(error => {
@@ -58,6 +58,13 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
   };
 
   const iconColor = '#6D6F8C';
+
+  // 環境変数でskipボタンの表示を制御
+  const showSkipButton = import.meta.env.VITE_SHOW_SKIP_BUTTON === 'true';
+
+  // デバッグ用: 環境変数の値をコンソールに出力
+  console.log('VITE_SHOW_SKIP_BUTTON:', import.meta.env.VITE_SHOW_SKIP_BUTTON);
+  console.log('showSkipButton:', showSkipButton);
 
   return (
     <div className="relative flex flex-col items-center justify-center min-h-screen bg-white text-slate-700 font-sans overflow-hidden">
@@ -119,6 +126,17 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
           </button>
         </div>
       </div>
+
+      {/* Skip button - 環境変数が設定されている場合のみ表示 */}
+      {showSkipButton && (
+        <button
+          onClick={() => navigate('MyPage')}
+          className="absolute bottom-4 right-4 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded border transition-colors"
+          aria-label="Skip to MyPage"
+        >
+          skip
+        </button>
+      )}
     </div>
   );
 };

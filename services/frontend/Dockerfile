@@ -2,6 +2,10 @@ FROM node:22-bookworm
 
 WORKDIR /app
 
+# ビルド時の環境変数を受け取る
+ARG VITE_SHOW_SKIP_BUTTON=false
+ENV VITE_SHOW_SKIP_BUTTON=${VITE_SHOW_SKIP_BUTTON}
+
 RUN npm install -g pnpm@10.11.0
 
 COPY ./package.json ./
