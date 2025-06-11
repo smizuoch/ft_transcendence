@@ -3,7 +3,7 @@ COMPOSE_FILE = compose.yml
 PROJECT_NAME = ft_transcendence
 ENV_FILE = ./secrets/.env
 
-.PHONY: all up build start down stop logs ps re RE clean fclean bals skip status help
+.PHONY: all up build start down stop logs ps re RE clean fclean bals status help
 
 all: up
 
@@ -63,9 +63,9 @@ bals:
 	@docker system prune -a -f --volumes > /dev/null 2>&1 || true
 	@echo "bals!"
 
-skip:
-	@sed -i 's/VITE_SHOW_SKIP_BUTTON=false/VITE_SHOW_SKIP_BUTTON=true/' $(ENV_FILE)
-	@echo "The door is open! Run 'make re' to apply changes."
+# skip:
+# 	@sed -i 's/VITE_SHOW_SKIP_BUTTON=false/VITE_SHOW_SKIP_BUTTON=true/' $(ENV_FILE)
+# 	@echo "The door is open! Run 'make re' to apply changes."
 
 status:
 	@docker images ; echo
