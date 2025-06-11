@@ -41,16 +41,18 @@ export interface PlayerInfo {
 
 export interface RoomState {
   playerId: string;
-  playerNumber: 1 | 2;
+  playerNumber: 1 | 2 | 'spectator';
   players: Array<{ playerId: string; playerInfo: PlayerInfo; playerNumber: 1 | 2 }>;
+  spectators: Array<{ playerId: string; playerInfo: PlayerInfo; joinedAt: Date }>;
   isGameReady: boolean;
+  isSpectator: boolean;
 }
 
 export class MultiplayerService {
   private socket: Socket | null = null;
   private roomNumber: string | null = null;
   private playerId: string | null = null;
-  private playerNumber: 1 | 2 | null = null;
+  private playerNumber: 1 | 2 | 'spectator' | null = null;
   private isConnected = false;
   private isConnecting = false; // 接続中かどうかのフラグ
   private isJoiningRoom = false; // 部屋参加中かどうかのフラグ
@@ -115,7 +117,12 @@ export class MultiplayerService {
     });
 
     this.socket.on('player-joined', (data: any) => {
-      console.log('Another player joined:', data);
+      console.log('Another participant joined:', data);
+      this.emit('playerJoined', data);
+    });
+
+    this.socket.on('participant-joined', (data: any) => {
+      console.log('Another participant joined:', data);
       this.emit('playerJoined', data);
     });
 
@@ -143,7 +150,7 @@ export class MultiplayerService {
       this.emit('gameStateUpdate', data);
     });
 
-    this.socket.on('player-input-update', (data: { playerId: string; playerNumber: 1 | 2; input: PlayerInput }) => {
+    this.socket.on('player-input-update', (data: { playerId: string; playerNumber: 1 | 2 | 'spectator'; input: PlayerInput }) => {
       this.emit('playerInputUpdate', data);
     });
 
@@ -380,12 +387,20 @@ export class MultiplayerService {
   }
 
   // ゲッター
+  getPlayerNumber(): 1 | 2 | 'spectator' | null {
+    return this.playerNumber;
+  }
+
   getPlayerId(): string | null {
     return this.playerId;
   }
 
-  getPlayerNumber(): 1 | 2 | null {
-    return this.playerNumber;
+  isSpectator(): boolean {
+    return this.playerNumber === 'spectator';
+  }
+
+  isPlayer(): boolean {
+    return this.playerNumber === 1 || this.playerNumber === 2;
   }
 
   getRoomNumber(): string | null {
