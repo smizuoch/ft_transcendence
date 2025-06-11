@@ -23,6 +23,8 @@ services:
     build:
       context: ./services/frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_SHOW_SKIP_BUTTON
     container_name: frontend # ビルド専用コンテナ
     volumes:
       - frontend_dist:/app/dist # ビルド成果物を名前付きボリュームに出力
