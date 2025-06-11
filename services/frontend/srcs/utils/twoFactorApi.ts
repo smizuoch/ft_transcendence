@@ -23,6 +23,7 @@ export class TwoFactorApi {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
+        body: JSON.stringify({}),
       });
 
       if (!response.ok) {
