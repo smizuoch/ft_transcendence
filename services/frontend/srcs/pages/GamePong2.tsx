@@ -37,14 +37,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   const [showRoomInput, setShowRoomInput] = useState(true);
   const [hoverClose, setHoverClose] = useState(false);
   const [iconsDocked, setIconsDocked] = useState(false);
-  const ICON_LAUNCH_DELAY = 600;
-  // ============= 通信対戦関連の状態 =============
+  const ICON_LAUNCH_DELAY = 600;  // ============= 通信対戦関連の状態 =============
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [multiplayerConnected, setMultiplayerConnected] = useState(false);
   const [roomPlayers, setRoomPlayers] = useState<any[]>([]);
   const [isGameReady, setIsGameReady] = useState(false);
   const [playerNumber, setPlayerNumber] = useState<1 | 2 | null>(null);
   const [remotePlayerInput, setRemotePlayerInput] = useState<PlayerInput | null>(null);
+  const [isAuthoritativeClient, setIsAuthoritativeClient] = useState(false); // 権威クライアントかどうか
 
   // 未使用変数の警告を抑制（将来的なUI表示用）
   void multiplayerConnected;
@@ -113,6 +113,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setIsGameReady(data.isGameReady);
           console.log(`Joined as player ${data.playerNumber}`);
           setShowRoomInput(false); // 部屋入力画面を隠す
+          
+          // Player1を権威クライアント（ゲーム状態の管理者）に設定
+          const isAuth = data.playerNumber === 1;
+          setIsAuthoritativeClient(isAuth);
+          if (engineRef.current) {
+            engineRef.current.setAuthoritativeClient(isAuth);
+          }
         });
 
         multiplayerService.on('playerJoined', (data: any) => {
@@ -150,6 +157,39 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         multiplayerService.on('playerLeft', () => {
           setIsGameReady(false);
           setRoomPlayers([]);
+        });
+
+        // 完全なゲーム状態の同期
+        multiplayerService.on('fullGameStateUpdate', (data: { playerId: string; gameState: any }) => {
+          if (engineRef.current && !isAuthoritativeClient) {
+            // 非権威クライアントのみリモート状態を適用
+            engineRef.current.syncGameState(data.gameState);
+          }
+        });        // サーバーからのスコア更新
+        multiplayerService.on('scoreUpdated', (data: { 
+          scorer: 'player1' | 'player2'; 
+          playerId: string; 
+          scores: { player1: number; player2: number };
+          gameOver: boolean;
+          winner: number | null;
+        }) => {
+          // サーバー管理のスコアを直接適用
+          setScore(data.scores);
+          if (data.gameOver) {
+            setGameOver(true);
+            setWinner(data.winner);
+          }
+        });
+
+        // サーバーからのゲーム終了
+        multiplayerService.on('gameEnded', (data: { 
+          winner: number; 
+          playerId: string; 
+          finalScores: { player1: number; player2: number };
+        }) => {
+          setScore(data.finalScores);
+          setGameOver(true);
+          setWinner(data.winner);
         });
 
       } catch (error) {
@@ -207,9 +247,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       if (isMultiplayer && multiplayerService.isInRoom()) {
         // 自分の入力を他のプレイヤーに送信
         const sendInputs = () => {          if (keysRef.current) {
-            const input: PlayerInput = {
-              up: keysRef.current.arrowLeft,  // 左移動をupにマッピング
-              down: keysRef.current.arrowRight, // 右移動をdownにマッピング
+            // P1は画面が180度回転しているので、送信する入力も反転
+            const input: PlayerInput = playerNumber === 1 ? {
+              up: keysRef.current.arrowRight,  // P1: 右キー→upとして送信（実際は左移動）
+              down: keysRef.current.arrowLeft, // P1: 左キー→downとして送信（実際は右移動）
+              timestamp: Date.now()
+            } : {
+              up: keysRef.current.arrowLeft,   // P2: 左移動をupにマッピング
+              down: keysRef.current.arrowRight, // P2: 右移動をdownにマッピング
               timestamp: Date.now()
             };
             multiplayerService.sendPlayerInput(input);
@@ -219,14 +264,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         // ゲームループでの入力送信
         const inputInterval = setInterval(sendInputs, 16); // 60fps
 
-        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, remotePlayerInput);
+        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, remotePlayerInput, playerNumber);
 
         return () => {
           clearInterval(inputInterval);
           stopGameLoop();
         };
       } else {        // 通常のゲームループ（ローカル/NPC対戦）
-        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, null);
+        startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, null, playerNumber);
       }
     } else {
       stopGameLoop();
@@ -247,7 +292,25 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       const t = setTimeout(() => navigate("GameResult"), 1200);
       return () => clearTimeout(t);
     }
-  }, [gameOver, winner, navigate]);  const handleStartGame = useCallback(() => {
+  }, [gameOver, winner, navigate]);
+
+  // マルチプレイヤー時のゲームエンジンコールバック設定
+  useEffect(() => {
+    if (gameStarted && isMultiplayer && engineRef.current) {      // 権威クライアントのみゲーム状態送信コールバックを設定
+      if (isAuthoritativeClient) {
+        engineRef.current.setGameStateUpdateCallback((gameState) => {
+          multiplayerService.sendFullGameState(gameState);
+        });
+
+        engineRef.current.setScoreUpdateCallback((scorer) => {
+          multiplayerService.sendScoreUpdate(scorer);
+        });
+      }
+    }
+  }, [gameStarted, isMultiplayer, isAuthoritativeClient]);
+
+  // ============= ハンドラー関数 =============
+  const handleStartGame = useCallback(() => {
     // マルチプレイヤーモードの場合、サーバーにゲーム開始要求を送信
     if (isMultiplayer && isGameReady) {
       console.log('Requesting to start multiplayer game...');
@@ -303,8 +366,29 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     return () => clearInterval(interval);
   }, [gameStarted, npcEnabled]);
 
-  const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
-    const pts = idx === 1 ? score.player1 : score.player2;
+  const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {    // 自分のプレイヤー番号に基づいてスコアとアバターを決定
+    let displayedScore;
+    let avatarPlayerKey: "player1" | "player2";
+    
+    if (isMultiplayer && playerNumber) {
+      // マルチプレイヤーの場合：左=自分、右=相手
+      const isMyScore = (side === "left");
+      if (isMyScore) {
+        // 自分のスコアとアバター
+        displayedScore = playerNumber === 1 ? score.player1 : score.player2;
+        avatarPlayerKey = playerNumber === 1 ? "player1" : "player2";
+      } else {
+        // 相手のスコアとアバター  
+        displayedScore = playerNumber === 1 ? score.player2 : score.player1;
+        avatarPlayerKey = playerNumber === 1 ? "player2" : "player1";
+      }
+    } else {
+      // ローカルゲーム/NPCモードの場合は従来通り
+      displayedScore = idx === 1 ? score.player1 : score.player2;
+      avatarPlayerKey = idx === 1 ? "player1" : "player2";
+    }
+    
+    const pts = displayedScore;
     const translateClass = side === "left"
       ? (iconsDocked ? "-translate-x-full" : "")
       : (iconsDocked ? "translate-x-full" : "");
@@ -324,10 +408,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           <img src={`${ICON_PATH}win.svg`} alt="win" className="w-12 h-12 lg:w-16 lg:h-16" />
         ) : (
           <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
-        )}
-        {/* inner avatar */}
+        )}        {/* inner avatar */}
         <img
-          src={players[idx === 1 ? "player1" : "player2"].avatar}
+          src={players[avatarPlayerKey].avatar}
           alt="avatar"
           className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
         />
@@ -430,13 +513,24 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       <div className="relative z-10 w-full h-full flex items-center justify-center">
         {/* play square */}
         <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
-          <canvas ref={canvasRef} className="w-full h-full border border-white" />
-
-          {/* avatar groups */}
+          <canvas 
+            ref={canvasRef} 
+            className={`w-full h-full border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
+          />          {/* avatar groups */}
           {gameStarted && !gameOver && (
-            <>
-              {renderAvatarGroup(1, "right")}
-              {renderAvatarGroup(2, "left")}
+            <>              {isMultiplayer && playerNumber ? (
+                <>
+                  {/* マルチプレイヤー：常に左=自分、右=相手 */}
+                  {renderAvatarGroup(1, "left")}   {/* 左側は自分 */}
+                  {renderAvatarGroup(1, "right")}  {/* 右側は相手 */}
+                </>
+              ) : (
+                <>
+                  {/* ローカルゲーム/NPCモード：従来通り */}
+                  {renderAvatarGroup(1, "right")}
+                  {renderAvatarGroup(2, "left")}
+                </>
+              )}
             </>
           )}
         </div>        {/* opening screen */}

@@ -48,6 +48,17 @@ export class GameEngine {
   private npcEngine: NPCEngine | null = null;
   private npcEngine2: NPCEngine | null = null;
 
+  // ゲーム状態管理
+  private score: { player1: number; player2: number } = { player1: 0, player2: 0 };
+  private gameStarted: boolean = false;
+  private gameOver: boolean = false;
+  private winner: number | null = null;
+
+  // マルチプレイヤー用の状態管理
+  private isAuthoritativeClient: boolean = false;
+  private gameStateUpdateCallback: ((gameState: GameState) => void) | null = null;
+  private scoreUpdateCallback: ((scorer: 'player1' | 'player2') => void) | null = null;
+
   // パドルの速度追跡用
   private paddleVelocity = {
     paddle1: { x: 0, prevX: 0, lastUpdateTime: 0 },
@@ -68,6 +79,8 @@ export class GameEngine {
         y: canvasHeight / 2,
         dx: 0,
         dy: 0,
+        vx: 0, // multiplayerService.tsとの互換性のため
+        vy: 0, // multiplayerService.tsとの互換性のため
         radius: config.ballRadius,
         speed: config.initialBallSpeed,
         speedMultiplier: 1,
@@ -87,6 +100,23 @@ export class GameEngine {
       canvasWidth,
       canvasHeight,
       paddleHits: 0,
+      
+      // multiplayerService.tsとの互換性のため
+      players: {
+        player1: {
+          x: canvasWidth / 2 - config.paddleWidth / 2,
+          y: 20,
+        },
+        player2: {
+          x: canvasWidth / 2 - config.paddleWidth / 2,
+          y: canvasHeight - 20 - config.paddleHeight,
+        },
+      },
+      score: { player1: 0, player2: 0 },
+      gameStarted: false,
+      gameOver: false,
+      winner: null,
+      timestamp: Date.now(),
     };
 
     this.resetBall();
@@ -135,6 +165,8 @@ export class GameEngine {
 
     this.state.ball.dy = this.state.ball.speed * Math.cos(angle) * verticalDirection;
     this.state.ball.dx = this.state.ball.speed * Math.sin(angle) * h;
+    this.state.ball.vy = this.state.ball.dy; // vyも設定
+    this.state.ball.vx = this.state.ball.dx; // vxも設定
     this.state.ball.speedMultiplier = 1;
     this.state.paddleHits = 0;
   }
@@ -164,8 +196,20 @@ export class GameEngine {
     }
 
     this.updatePaddles();
-    this.updateBall();
-    return this.checkGoals();
+    
+    // 権威クライアントまたはローカルゲームの場合のみボールを更新
+    if (this.isAuthoritativeClient || !this.gameStateUpdateCallback) {
+      this.updateBall();
+    }
+    
+    const result = this.checkGoals();
+    
+    // 権威クライアントのみゲーム状態を送信
+    if (this.isAuthoritativeClient && this.gameStateUpdateCallback) {
+      this.gameStateUpdateCallback(this.getGameState());
+    }
+    
+    return result;
   }
 
   private updatePaddleVelocities(): void {
@@ -219,12 +263,17 @@ export class GameEngine {
     const maxSpeed = Math.min(effectiveSpeedMultiplier, this.config.maxBallSpeed / ball.speed);
     ball.dx = (ball.dx / currentSpeed) * ball.speed * maxSpeed;
     ball.dy = (ball.dy / currentSpeed) * ball.speed * maxSpeed;
+    
+    // vx, vyも同期
+    ball.vx = ball.dx;
+    ball.vy = ball.dy;
 
     ball.x += ball.dx;
     ball.y += ball.dy;
 
     if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvasWidth) {
       ball.dx *= -1;
+      ball.vx = ball.dx; // vxも更新
       ball.x = Math.max(ball.radius, Math.min(ball.x, canvasWidth - ball.radius));
     }
 
@@ -267,11 +316,15 @@ export class GameEngine {
       // 上側パドル（Player1）との接触
       ball.dx = Math.sin(reflectionAngle) * speed; // 水平成分
       ball.dy = Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（下向き）
+      ball.vx = ball.dx; // vxも更新
+      ball.vy = ball.dy; // vyも更新
       ball.y = paddle.y + paddle.height + ball.radius;
     } else {
       // 下側パドル（Player2）との接触
       ball.dx = Math.sin(Math.PI - reflectionAngle) * speed; // 水平成分（反転）
       ball.dy = -Math.abs(Math.cos(reflectionAngle) * speed); // 垂直成分（上向き）
+      ball.vx = ball.dx; // vxも更新
+      ball.vy = ball.dy; // vyも更新
       ball.y = paddle.y - ball.radius;
     }
 
@@ -294,9 +347,21 @@ export class GameEngine {
         this.clearAttackEffect();
       }
       this.resetBall('player2');
+      
+      // マルチプレイヤー時: 権威クライアントのみスコア更新を送信
+      if (this.isAuthoritativeClient && this.scoreUpdateCallback) {
+        this.scoreUpdateCallback('player2');
+      }
+      
       return 'player2';
     } else if (ball.y + ball.radius > this.state.canvasHeight) {
       this.resetBall('player1');
+      
+      // マルチプレイヤー時: 権威クライアントのみスコア更新を送信
+      if (this.isAuthoritativeClient && this.scoreUpdateCallback) {
+        this.scoreUpdateCallback('player1');
+      }
+      
       return 'player1';
     }
 
@@ -366,12 +431,33 @@ export class GameEngine {
 
   private getGameState(): GameState {
     return {
-      ball: this.state.ball,
+      ball: {
+        ...this.state.ball,
+        vx: this.state.ball.dx, // multiplayerService.tsとの互換性のため
+        vy: this.state.ball.dy, // multiplayerService.tsとの互換性のため
+      },
       paddle1: this.state.paddle1,
       paddle2: this.state.paddle2,
       canvasWidth: this.state.canvasWidth,
       canvasHeight: this.state.canvasHeight,
       paddleHits: this.state.paddleHits || 0,
+      
+      // multiplayerService.tsとの互換性のため
+      players: {
+        player1: {
+          x: this.state.paddle1.x,
+          y: this.state.paddle1.y,
+        },
+        player2: {
+          x: this.state.paddle2.x,
+          y: this.state.paddle2.y,
+        },
+      },
+      score: this.score || { player1: 0, player2: 0 },
+      gameStarted: this.gameStarted,
+      gameOver: this.gameOver,
+      winner: this.winner,
+      timestamp: Date.now(),
     };
   }
 
@@ -395,5 +481,61 @@ export class GameEngine {
     ctx.fillStyle = paddleAndBallColor;
     ctx.fillRect(paddle1.x, paddle1.y, paddle1.width, paddle1.height);
     ctx.fillRect(paddle2.x, paddle2.y, paddle2.width, paddle2.height);
+  }
+
+  // マルチプレイヤー用メソッド
+  public setAuthoritativeClient(isAuthoritative: boolean): void {
+    this.isAuthoritativeClient = isAuthoritative;
+  }
+
+  public setGameStateUpdateCallback(callback: (gameState: GameState) => void): void {
+    this.gameStateUpdateCallback = callback;
+  }
+
+  public setScoreUpdateCallback(callback: (scorer: 'player1' | 'player2') => void): void {
+    this.scoreUpdateCallback = callback;
+  }
+
+  // パドル位置とplayers同期メソッド
+  public syncPlayersPosition(): void {
+    this.state.players.player1.x = this.state.paddle1.x;
+    this.state.players.player1.y = this.state.paddle1.y;
+    this.state.players.player2.x = this.state.paddle2.x;
+    this.state.players.player2.y = this.state.paddle2.y;
+  }
+
+  // リモートゲーム状態の同期（マルチプレイヤー用）
+  public syncGameState(remoteState: GameState): void {
+    // ボール状態の同期
+    this.state.ball.x = remoteState.ball.x;
+    this.state.ball.y = remoteState.ball.y;
+    this.state.ball.dx = remoteState.ball.vx;
+    this.state.ball.dy = remoteState.ball.vy;
+    this.state.ball.vx = remoteState.ball.vx;
+    this.state.ball.vy = remoteState.ball.vy;
+
+    // パドル状態の同期
+    if (remoteState.players) {
+      this.state.paddle1.x = remoteState.players.player1.x;
+      this.state.paddle1.y = remoteState.players.player1.y;
+      this.state.paddle2.x = remoteState.players.player2.x;
+      this.state.paddle2.y = remoteState.players.player2.y;
+      this.syncPlayersPosition();
+    }
+
+    // スコア・ゲーム状態の同期
+    if (remoteState.score) {
+      this.score = { ...remoteState.score };
+      this.state.score = { ...remoteState.score };
+    }
+    
+    this.gameStarted = remoteState.gameStarted;
+    this.gameOver = remoteState.gameOver;
+    this.winner = remoteState.winner;
+    
+    this.state.gameStarted = remoteState.gameStarted;
+    this.state.gameOver = remoteState.gameOver;
+    this.state.winner = remoteState.winner;
+    this.state.timestamp = remoteState.timestamp;
   }
 }

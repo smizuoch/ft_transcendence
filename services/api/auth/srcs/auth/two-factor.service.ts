@@ -95,6 +95,17 @@ export class TwoFactorService {
 
       // 新しい認証コードを生成
       const code = this.generateSixDigitCode();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10分後
+
+      // Userテーブルの2FA情報を直接更新
+      await this.prisma.user.update({
+        where: { email },
+        data: {
+          twoFactorCode: code,
+          twoFactorExpiresAt: expiresAt,
+          twoFactorIsUsed: false,
+        },
+      });
 
       // メール送信
       await this.sendEmailWithCode(email, code);
@@ -128,7 +139,32 @@ export class TwoFactorService {
         throw new BadRequestException('ユーザーが見つかりません');
       }
 
-      // 簡単な検証（実際の実装では適切なデータベース検証が必要）
+      // 2FA情報の確認
+      const currentTime = new Date();
+      
+      // コードが一致しない場合
+      if (user.twoFactorCode !== code) {
+        throw new BadRequestException('無効な認証コードです');
+      }
+
+      // 期限切れチェック
+      if (!user.twoFactorExpiresAt || user.twoFactorExpiresAt <= currentTime) {
+        throw new BadRequestException('認証コードの期限が切れています');
+      }
+
+      // 使用済みチェック
+      if (user.twoFactorIsUsed) {
+        throw new BadRequestException('認証コードは既に使用されています');
+      }
+
+      // コードを使用済みとしてマーク
+      await this.prisma.user.update({
+        where: { email },
+        data: {
+          twoFactorIsUsed: true,
+        },
+      });
+
       this.logger.log(`ユーザー ${user.username} の2FA認証が完了しました`);
 
       return {

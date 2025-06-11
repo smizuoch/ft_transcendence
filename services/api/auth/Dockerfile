@@ -15,7 +15,7 @@ RUN npm install -g pnpm@10.11.0
 RUN npm install -g ts-node typescript
 
 # パッケージ依存関係をコピーしてインストール
-COPY package.json ./
+COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --no-frozen-lockfile
 
 # ソースコードをコピー
@@ -24,8 +24,17 @@ COPY . .
 # データベースディレクトリを作成
 RUN mkdir -p /app/data
 
-# Prismaクライアントを生成してビルド
-RUN npx prisma generate && pnpm run build
+# NestJS CLIをインストール
+RUN npm install -g @nestjs/cli
+
+# Prismaクライアントを生成
+RUN npx prisma generate
+
+# TypeScriptファイルの構文チェック
+RUN npx tsc --noEmit
+
+# ビルド実行
+RUN pnpm run build
 
 # マイグレーション実行、シード処理、そして起動
 CMD ["sh", "-c", "npx prisma db push --accept-data-loss && (npx prisma db seed || echo 'Seed skipped') && node dist/main.js"]
