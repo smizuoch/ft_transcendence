@@ -7,6 +7,8 @@ interface NPCSettingsPanelProps {
   npcSettings: NPCConfig;
   setNpcSettings: React.Dispatch<React.SetStateAction<NPCConfig>>;
   gameStarted: boolean;
+  localEnabled?: boolean;
+  setLocalEnabled?: (enabled: boolean) => void;
 }
 
 export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
@@ -14,9 +16,27 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
   setNpcEnabled,
   npcSettings,
   setNpcSettings,
-  gameStarted
+  gameStarted,
+  localEnabled = false,
+  setLocalEnabled
 }) => {
   if (gameStarted) return null;
+
+  const handleNpcChange = (enabled: boolean) => {
+    setNpcEnabled(enabled);
+    if (enabled && setLocalEnabled) {
+      setLocalEnabled(false); // NPCを有効にしたらローカルを無効化
+    }
+  };
+
+  const handleLocalChange = (enabled: boolean) => {
+    if (setLocalEnabled) {
+      setLocalEnabled(enabled);
+      if (enabled) {
+        setNpcEnabled(false); // ローカルを有効にしたらNPCを無効化
+      }
+    }
+  };
 
   return (
     <div className="absolute top-4 left-4 z-20 bg-black bg-opacity-80 p-4 rounded-lg text-white max-w-sm">
@@ -24,11 +44,24 @@ export const NPCSettingsPanel: React.FC<NPCSettingsPanelProps> = ({
         <input
           type="checkbox"
           checked={npcEnabled}
-          onChange={(e) => setNpcEnabled(e.target.checked)}
+          onChange={(e) => handleNpcChange(e.target.checked)}
           className="w-4 h-4"
         />
         <label className="text-sm font-bold">🤖 NPC有効</label>
       </div>
+
+      {/* ローカル対戦チェックボックス */}
+      {setLocalEnabled && (
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="checkbox"
+            checked={localEnabled}
+            onChange={(e) => handleLocalChange(e.target.checked)}
+            className="w-4 h-4"
+          />
+          <label className="text-sm font-bold">🏠 ローカル</label>
+        </div>
+      )}
 
       {npcEnabled && (
         <div className="space-y-3 text-xs">
