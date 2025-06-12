@@ -90,5 +90,3 @@ secrets/certs/*
 
 # webserv
 services/webserv/
-
-*.md
