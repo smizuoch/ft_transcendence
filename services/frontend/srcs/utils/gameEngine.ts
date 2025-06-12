@@ -197,7 +197,7 @@ export class GameEngine {
 
     this.updatePaddles();
     
-    // 権威クライアントまたはローカルゲームの場合のみボールを更新
+    // ボールの更新（権威クライアントまたはローカルゲームのみ）
     if (this.isAuthoritativeClient || !this.gameStateUpdateCallback) {
       this.updateBall();
     }
@@ -342,10 +342,16 @@ export class GameEngine {
     const { ball } = this.state;
 
     if (ball.y - ball.radius < 0) {
-      // Player2が得点した場合、攻撃効果をクリア
+      // Player2が得点
       if (this.attackEffect.isActive) {
         this.clearAttackEffect();
       }
+      
+      // スコア更新
+      this.score.player2++;
+      this.state.score.player2++;
+      console.log('Player2 scored! New score:', this.score);
+      
       this.resetBall('player2');
       
       // マルチプレイヤー時: 権威クライアントのみスコア更新を送信
@@ -355,6 +361,11 @@ export class GameEngine {
       
       return 'player2';
     } else if (ball.y + ball.radius > this.state.canvasHeight) {
+      // Player1が得点
+      this.score.player1++;
+      this.state.score.player1++;
+      console.log('Player1 scored! New score:', this.score);
+      
       this.resetBall('player1');
       
       // マルチプレイヤー時: 権威クライアントのみスコア更新を送信
@@ -429,7 +440,7 @@ export class GameEngine {
     return this.npcEngine.getDebugInfo();
   }
 
-  private getGameState(): GameState {
+  public getGameState(): GameState {
     return {
       ball: {
         ...this.state.ball,
@@ -492,7 +503,8 @@ export class GameEngine {
     this.gameStateUpdateCallback = callback;
   }
 
-  public setScoreUpdateCallback(callback: (scorer: 'player1' | 'player2') => void): void {
+  // スコア更新コールバックを設定
+  public setScoreUpdateCallback(callback: ((scorer: 'player1' | 'player2') => void) | null): void {
     this.scoreUpdateCallback = callback;
   }
 
@@ -506,13 +518,15 @@ export class GameEngine {
 
   // リモートゲーム状態の同期（マルチプレイヤー用）
   public syncGameState(remoteState: GameState): void {
+    console.log('Syncing game state:', remoteState);
+    
     // ボール状態の同期
     this.state.ball.x = remoteState.ball.x;
     this.state.ball.y = remoteState.ball.y;
-    this.state.ball.dx = remoteState.ball.vx;
-    this.state.ball.dy = remoteState.ball.vy;
-    this.state.ball.vx = remoteState.ball.vx;
-    this.state.ball.vy = remoteState.ball.vy;
+    this.state.ball.dx = remoteState.ball.vx || remoteState.ball.dx;
+    this.state.ball.dy = remoteState.ball.vy || remoteState.ball.dy;
+    this.state.ball.vx = remoteState.ball.vx || remoteState.ball.dx;
+    this.state.ball.vy = remoteState.ball.vy || remoteState.ball.dy;
 
     // パドル状態の同期
     if (remoteState.players) {
@@ -520,8 +534,10 @@ export class GameEngine {
       this.state.paddle1.y = remoteState.players.player1.y;
       this.state.paddle2.x = remoteState.players.player2.x;
       this.state.paddle2.y = remoteState.players.player2.y;
-      this.syncPlayersPosition();
     }
+
+    // パドルとplayersの同期
+    this.syncPlayersPosition();
 
     // スコア・ゲーム状態の同期
     if (remoteState.score) {
@@ -537,5 +553,33 @@ export class GameEngine {
     this.state.gameOver = remoteState.gameOver;
     this.state.winner = remoteState.winner;
     this.state.timestamp = remoteState.timestamp;
+  }
+
+  // syncGameStateのエイリアス（命名の一貫性のため）
+  public syncWithRemoteState(remoteState: GameState): void {
+    this.syncGameState(remoteState);
+  }
+
+  /**
+   * ゲームエンジンをクリーンアップする
+   */
+  public cleanup(): void {
+    // NPCエンジンの停止
+    if (this.npcEngine) {
+      this.npcEngine = null;
+    }
+    if (this.npcEngine2) {
+      this.npcEngine2 = null;
+    }
+    
+    // 状態をリセット
+    this.state.gameStarted = false;
+    this.state.gameOver = false;
+    this.state.winner = null;
+    this.state.score.player1 = 0;
+    this.state.score.player2 = 0;
+    
+    // ボールをリセット
+    this.resetBall();
   }
 }
