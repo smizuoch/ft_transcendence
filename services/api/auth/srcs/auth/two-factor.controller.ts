@@ -4,7 +4,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import {
   VerifyTwoFactorCodeDto,
   TwoFactorResponseDto,
-} from './dto/two-factor.dto';
+} from './two-factor.dto';
 
 @Controller('auth/2fa')
 export class TwoFactorController {
