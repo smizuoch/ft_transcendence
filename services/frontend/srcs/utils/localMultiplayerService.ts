@@ -1,10 +1,25 @@
-
 export interface LocalClient {
   id: string;
   name: string;
   num_of_play: number;
   stillAlive: boolean;
   avatar: string;
+}
+
+export interface TournamentMatch {
+  player1: LocalClient;
+  player2: LocalClient;
+  roomNumber: string;
+  completed: boolean;
+  winner: LocalClient | null;
+}
+
+export interface TournamentBracket {
+  initialRoomNumber: string;
+  semifinal1: TournamentMatch;
+  semifinal2: TournamentMatch;
+  final: TournamentMatch | null;
+  currentMatch: 'semifinal1' | 'semifinal2' | 'final' | 'completed';
 }
 
 export interface LocalRoomState {
@@ -15,6 +30,7 @@ export interface LocalRoomState {
   gameStarted: boolean;
   gameOver: boolean;
   winner: number | null;
+  tournament?: TournamentBracket;
 }
 
 export class LocalMultiplayerService {
@@ -22,6 +38,7 @@ export class LocalMultiplayerService {
   private roomState: LocalRoomState | null = null;
   private eventListeners: { [event: string]: Function[] } = {};
   private isConnected: boolean = false;
+  private static occupiedRooms: Set<string> = new Set();
 
   constructor() {
     if (LocalMultiplayerService.instance) {
@@ -30,7 +47,6 @@ export class LocalMultiplayerService {
     LocalMultiplayerService.instance = this;
   }
 
-  // イベントリスナー管理
   on(event: string, callback: Function) {
     if (!this.eventListeners[event]) {
       this.eventListeners[event] = [];
@@ -58,10 +74,15 @@ export class LocalMultiplayerService {
     }
   }
 
-  // ローカル対戦のセットアップ
   setupLocalMultiplayer(roomNumber: string, clients: LocalClient[]): Promise<void> {
-    return new Promise((resolve) => {
-      // 1人しかアクセスできないルーム制御は実装しない（既に制御済み）
+    return new Promise((resolve, reject) => {
+      if (LocalMultiplayerService.occupiedRooms.has(roomNumber)) {
+        reject(new Error(`部屋番号 ${roomNumber} は既に使用中です`));
+        return;
+      }
+
+      LocalMultiplayerService.occupiedRooms.add(roomNumber);
+
       this.roomState = {
         roomNumber,
         clients: [...clients],
@@ -72,89 +93,135 @@ export class LocalMultiplayerService {
         winner: null,
       };
 
+      if (clients.length === 4) {
+        this.setupTournamentBracket(roomNumber, clients);
+      } else {
+        if (clients.length % 2 === 1) {
+          const npcClient: LocalClient = {
+            id: 'npc-technician',
+            name: 'TechnicianNPC',
+            num_of_play: 0,
+            stillAlive: true,
+            avatar: '/images/avatar/npc_avatar.png',
+          };
+          this.roomState.clients.push(npcClient);
+        }
+      }
+
       this.isConnected = true;
-      
-      // プレイヤーとスペクテーターの割り当て
       this.assignPlayersAndSpectators();
-      
       this.emit('localRoomJoined', this.roomState);
       resolve();
     });
   }
 
+  private setupTournamentBracket(roomNumber: string, clients: LocalClient[]) {
+    if (!this.roomState || clients.length !== 4) return;
+
+    const shuffledClients = [...clients].sort(() => Math.random() - 0.5);
+
+    const tournament: TournamentBracket = {
+      initialRoomNumber: roomNumber,
+      semifinal1: {
+        player1: shuffledClients[0],
+        player2: shuffledClients[1],
+        roomNumber: roomNumber,
+        completed: false,
+        winner: null,
+      },
+      semifinal2: {
+        player1: shuffledClients[2],
+        player2: shuffledClients[3],
+        roomNumber: (parseInt(roomNumber) + 1000000).toString(),
+        completed: false,
+        winner: null,
+      },
+      final: null,
+      currentMatch: 'semifinal1',
+    };
+
+    this.roomState.tournament = tournament;
+    console.log('Tournament bracket created:', tournament);
+  }
+
   private assignPlayersAndSpectators() {
     if (!this.roomState) return;
 
-    const { clients } = this.roomState;
-    
-    // 参加者数が奇数の場合、technicianNPCを追加
-    if (clients.length % 2 === 1) {
-      const npcClient: LocalClient = {
-        id: 'npc-technician',
-        name: 'TechnicianNPC',
-        num_of_play: 0,
-        stillAlive: true,
-        avatar: '/images/avatar/npc_avatar.png', // NPCアバター
-      };
-      clients.push(npcClient);
+    if (this.roomState.tournament) {
+      this.assignTournamentPlayers();
+      return;
     }
 
-    // stillAliveがtrueのクライアントの中から、num_of_playが最小の2人を選ぶ
-    const aliveClients = clients.filter(client => client.stillAlive);
-    
-    // num_of_playでソートし、最小値の2人を選択
-    aliveClients.sort((a, b) => a.num_of_play - b.num_of_play);
-    const minPlayCount = aliveClients[0]?.num_of_play || 0;
-    const candidates = aliveClients.filter(client => client.num_of_play === minPlayCount);
-    
-    // 候補者からランダムに2人選択
-    const shuffled = [...candidates].sort(() => Math.random() - 0.5);
-    this.roomState.players = shuffled.slice(0, 2);
-    this.roomState.spectators = clients.filter(client => 
-      !this.roomState!.players.includes(client)
+    this.roomState.players = this.roomState.clients
+      .filter(client => client.stillAlive)
+      .slice(0, 2);
+
+    this.roomState.spectators = this.roomState.clients.filter(
+      client => !this.roomState!.players.includes(client)
     );
 
-    console.log('Player assignment:', {
+    console.log('Players assigned:', {
       players: this.roomState.players.map(p => p.name),
       spectators: this.roomState.spectators.map(s => s.name),
     });
   }
 
-  // ゲーム開始
-  startGame() {
-    if (!this.roomState) return;
-    
-    this.roomState.gameStarted = true;
-    this.emit('localGameStarted', this.roomState);
+  private assignTournamentPlayers() {
+    if (!this.roomState?.tournament) return;
+
+    const tournament = this.roomState.tournament;
+    let currentMatch: TournamentMatch | null = null;
+
+    switch (tournament.currentMatch) {
+      case 'semifinal1':
+        currentMatch = tournament.semifinal1;
+        break;
+      case 'semifinal2':
+        currentMatch = tournament.semifinal2;
+        break;
+      case 'final':
+        currentMatch = tournament.final;
+        break;
+    }
+
+    if (currentMatch) {
+      this.roomState.players = [currentMatch.player1, currentMatch.player2];
+      this.roomState.spectators = this.roomState.clients.filter(
+        client => !this.roomState!.players.includes(client)
+      );
+    }
+
+    console.log('Tournament players assigned:', {
+      currentMatch: tournament.currentMatch,
+      players: this.roomState.players.map(p => p.name),
+      spectators: this.roomState.spectators.map(s => s.name),
+    });
   }
 
-  // ゲーム終了処理
-  endGame(winner: 1 | 2) {
+  onGameEnd(winner: 1 | 2) {
     if (!this.roomState) return;
 
-    const winnerPlayer = this.roomState.players[winner - 1];
-    const loserPlayer = this.roomState.players[winner === 1 ? 1 : 0];
-
-    // プレイヤーのnum_of_playを増加
-    this.roomState.players.forEach(player => {
-      if (player.id !== 'npc-technician') {
-        player.num_of_play++;
-      }
-    });
-
-    // 敗者のstillAliveをfalseに設定
-    if (loserPlayer && loserPlayer.id !== 'npc-technician') {
-      loserPlayer.stillAlive = false;
-    }
+    console.log('Game end called with winner:', winner);
 
     this.roomState.gameOver = true;
     this.roomState.winner = winner;
+
+    const winnerPlayer = this.roomState.players[winner - 1];
+    const loserPlayer = this.roomState.players[winner === 1 ? 1 : 0];
 
     console.log('Game ended:', {
       winner: winnerPlayer?.name,
       loser: loserPlayer?.name,
       stillAliveCount: this.roomState.clients.filter(c => c.stillAlive).length,
     });
+
+    if (this.roomState.tournament) {
+      this.processTournamentResult(winnerPlayer);
+    }
+
+    if (loserPlayer) {
+      loserPlayer.stillAlive = false;
+    }
 
     this.emit('localGameEnded', {
       winner,
@@ -165,23 +232,113 @@ export class LocalMultiplayerService {
     });
   }
 
-  // 次のゲームまたは結果画面に遷移
-  proceedToNext(): { action: 'nextGame' | 'result'; roomNumber?: string } {
-    if (!this.roomState) return { action: 'result' };
+  private processTournamentResult(winner: LocalClient) {
+    if (!this.roomState?.tournament) return;
 
-    const stillAliveCount = this.roomState.clients.filter(c => c.stillAlive).length;
-    
-    if (stillAliveCount >= 2) {
-      // 次のゲームに進む
-      const nextRoomNumber = (parseInt(this.roomState.roomNumber) + 1000000).toString();
-      return { action: 'nextGame', roomNumber: nextRoomNumber };
-    } else {
-      // 結果画面に進む
-      return { action: 'result' };
+    const tournament = this.roomState.tournament;
+
+    switch (tournament.currentMatch) {
+      case 'semifinal1':
+        tournament.semifinal1.completed = true;
+        tournament.semifinal1.winner = winner;
+        tournament.currentMatch = 'semifinal2';
+        console.log('Semifinal 1 completed, proceeding to semifinal 2');
+        break;
+
+      case 'semifinal2':
+        tournament.semifinal2.completed = true;
+        tournament.semifinal2.winner = winner;
+        
+        if (tournament.semifinal1.winner) {
+          tournament.final = {
+            player1: tournament.semifinal1.winner,
+            player2: winner,
+            roomNumber: tournament.initialRoomNumber,
+            completed: false,
+            winner: null,
+          };
+          tournament.currentMatch = 'final';
+          console.log('Semifinal 2 completed, proceeding to final');
+        }
+        break;
+
+      case 'final':
+        if (tournament.final) {
+          tournament.final.completed = true;
+          tournament.final.winner = winner;
+          tournament.currentMatch = 'completed';
+          console.log('Tournament completed, winner:', winner.name);
+        }
+        break;
     }
   }
 
-  // ゲッター
+  proceedToNext(): { action: 'nextGame' | 'result'; roomNumber?: string; roomState?: LocalRoomState } {
+    if (!this.roomState) return { action: 'result' };
+
+    const stillAliveClients = this.roomState.clients.filter(c =>
+      c.id !== 'npc-technician' && c.stillAlive
+    );
+
+    console.log('Proceeding to next game:', {
+      stillAliveCount: stillAliveClients.length,
+      totalClients: this.roomState.clients.length,
+      currentRoomNumber: this.roomState.roomNumber,
+      tournament: this.roomState.tournament,
+      allClients: this.roomState.clients.map(c => ({
+        name: c.name,
+        stillAlive: c.stillAlive,
+      })),
+    });
+
+    if (stillAliveClients.length <= 1) {
+      console.log('Tournament/Game completed - cleaning up room');
+      
+      const currentRoomNumber = this.roomState.roomNumber;
+      LocalMultiplayerService.occupiedRooms.delete(currentRoomNumber);
+      
+      return { action: 'result' };
+    }
+
+    if (this.roomState.tournament) {
+      const tournament = this.roomState.tournament;
+      let nextRoomNumber = this.roomState.roomNumber;
+
+      switch (tournament.currentMatch) {
+        case 'semifinal2':
+          nextRoomNumber = tournament.semifinal2.roomNumber;
+          break;
+        case 'final':
+          nextRoomNumber = tournament.initialRoomNumber;
+          break;
+      }
+
+      const nextRoomState: LocalRoomState = {
+        ...this.roomState,
+        roomNumber: nextRoomNumber,
+        gameStarted: false,
+        gameOver: false,
+        winner: null,
+      };
+
+      return {
+        action: 'nextGame',
+        roomNumber: nextRoomNumber,
+        roomState: nextRoomState,
+      };
+    }
+
+    if (stillAliveClients.length >= 2) {
+      if (this.roomState.roomNumber) {
+        LocalMultiplayerService.occupiedRooms.delete(this.roomState.roomNumber);
+      }
+
+      return { action: 'nextGame', roomState: this.roomState };
+    }
+
+    return { action: 'result' };
+  }
+
   isInLocalRoom(): boolean {
     return this.roomState !== null;
   }
@@ -198,25 +355,41 @@ export class LocalMultiplayerService {
     return this.isConnected;
   }
 
-  // クリーンアップ
   leaveLocalRoom() {
+    if (this.roomState?.roomNumber) {
+      LocalMultiplayerService.occupiedRooms.delete(this.roomState.roomNumber);
+    }
     this.roomState = null;
     this.isConnected = false;
     this.emit('localRoomLeft');
   }
 
-  // プレイヤー取得
+  setupNextGame(roomState: LocalRoomState): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (LocalMultiplayerService.occupiedRooms.has(roomState.roomNumber)) {
+        reject(new Error(`部屋番号 ${roomState.roomNumber} は既に使用中です`));
+        return;
+      }
+
+      LocalMultiplayerService.occupiedRooms.add(roomState.roomNumber);
+      this.roomState = { ...roomState };
+      this.isConnected = true;
+
+      this.assignPlayersAndSpectators();
+      this.emit('localRoomJoined', this.roomState);
+      resolve();
+    });
+  }
+
   getLocalPlayer(index: 1 | 2): LocalClient | null {
     if (!this.roomState) return null;
     return this.roomState.players[index - 1] || null;
   }
 
-  // NPCが含まれているかチェック
   hasNPC(): boolean {
     if (!this.roomState) return false;
-    return this.roomState.players.some(player => player.id === 'npc-technician');
+    return this.roomState.clients.some(client => client.id === 'npc-technician');
   }
 }
 
-// シングルトンインスタンス
 export const localMultiplayerService = new LocalMultiplayerService();
