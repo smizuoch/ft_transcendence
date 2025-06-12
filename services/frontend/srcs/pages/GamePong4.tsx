@@ -37,7 +37,7 @@ interface Tournament {
   currentRound: number;
 }
 
-interface GamePong8Props {
+interface GamePong4Props {
   navigate: (page: string, userId?: string, roomNumber?: string) => void;
   players?: {
     player1: PlayerInfo;
@@ -52,7 +52,7 @@ const defaultPlayers = {
   player2: { id: 2, avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
 };
 
-const GamePong8: React.FC<GamePong8Props> = ({ players = defaultPlayers }) => {
+const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   // ゲーム状態
@@ -1139,4 +1139,4 @@ const GamePong8: React.FC<GamePong8Props> = ({ players = defaultPlayers }) => {
   );
 };
 
-export default GamePong8;
+export default GamePong4;

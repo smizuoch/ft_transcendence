@@ -69,7 +69,7 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
 
   // Pong8（トーナメント）ゲームへの遷移
   const navigateToPong8 = () => {
-    navigate('GamePong8');
+    navigate('GamePong4');
   };
 
   // MyPageへの遷移

@@ -7,7 +7,7 @@ import MyPage from '@/pages/MyPage';
 import GameSelect from '@/pages/GameSelect';
 import GamePong2 from '@/pages/GamePong2';
 import GamePong42 from '@/pages/GamePong42';
-import GamePong8 from '@/pages/GamePong8';
+import GamePong4 from '@/pages/GamePong4';
 import GameResult from '@/pages/GameResult';
 import UserProfile from '@/pages/UserProfile';
 import AuthCallback from '@/pages/AuthCallback';
@@ -69,8 +69,8 @@ const App: React.FC = () => {
         return <GamePong2 navigate={navigate} roomNumber={currentRoute?.roomNumber} />;
       case 'GamePong42':
         return <GamePong42 navigate={navigate} />;
-      case 'GamePong8':
-        return <GamePong8 navigate={navigate} />;
+      case 'GamePong4':
+        return <GamePong4 navigate={navigate} />;
       case 'GameResult':
         return <GameResult navigate={navigate} />;
       case 'UserProfile':
