@@ -74,8 +74,12 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
 
     try {
       const result = await TwoFactorApi.verifyTwoFactorCode(token, fullCode);
-      
-      if (result.success) {
+        if (result.success) {
+        // 2FA検証成功時：本番JWTを受け取り保存
+        if (result.data && result.data.access_token) {
+          // 本番JWTをローカルストレージに保存（仮トークンを上書き）
+          localStorage.setItem('authToken', result.data.access_token);
+        }
         // 正しいコードの場合
         navigate('MyPage');
       } else {

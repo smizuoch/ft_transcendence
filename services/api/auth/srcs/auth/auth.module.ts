@@ -7,6 +7,7 @@ import { TwoFactorService } from './two-factor.service';
 import { TwoFactorController } from './two-factor.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { FullAuthGuard } from './full-auth.guard';
 import { GoogleOAuthService } from './google-oauth.service';
 import { UserModule } from '../user/user.module';
 import { PrismaService } from '../prisma.service';
@@ -26,7 +27,7 @@ import { PrismaService } from '../prisma.service';
     }),
   ],
   controllers: [AuthController, TwoFactorController],
-  providers: [AuthService, TwoFactorService, GoogleOAuthService, JwtStrategy, JwtAuthGuard, PrismaService],
-  exports: [AuthService, TwoFactorService, JwtAuthGuard],
+  providers: [AuthService, TwoFactorService, GoogleOAuthService, JwtStrategy, JwtAuthGuard, FullAuthGuard, PrismaService],
+  exports: [AuthService, TwoFactorService, JwtAuthGuard, FullAuthGuard],
 })
 export class AuthModule {}
