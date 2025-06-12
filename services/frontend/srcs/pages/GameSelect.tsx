@@ -67,6 +67,11 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
     navigate('GamePong42');
   };
 
+  // Pong8（トーナメント）ゲームへの遷移
+  const navigateToPong8 = () => {
+    navigate('GamePong4');
+  };
+
   // MyPageへの遷移
   const navigateToMyPage = () => {
     navigate('MyPage');
@@ -113,7 +118,7 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
 
       <div className="flex flex-col items-center justify-center h-full">
         {/* ゲームボタンコンテナ */}
-        <div className="flex justify-center items-center space-x-40 relative">
+        <div className="flex justify-center items-center space-x-24 relative">
           {/* Pong2ボタンと、その子要素としての部屋番号入力フィールド */}
           <button
             onClick={() => navigateToPong2()}
@@ -165,6 +170,18 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
             aria-label="Play Pong 42"
           >
             <img src="/images/icons/pong42.svg" alt="Pong 42" className="w-64 h-64" />
+          </button>
+
+          {/* Pong8（Tournament）ボタン */}
+          <button
+            onClick={navigateToPong8}
+            className="hover:opacity-80 transition-opacity"
+            aria-label="Play Pong Tournament"
+          >
+            <img src="/images/icons/pong.svg" alt="Pong Tournament" className="w-64 h-64" />
+            <div className="text-center mt-2 text-sm font-bold" style={{ color: '#6D6F8C' }}>
+              Tournament
+            </div>
           </button>
         </div>
       </div>
