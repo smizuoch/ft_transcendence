@@ -53,14 +53,13 @@ export class UserService {
         username,
         email,
         password: null, // Google認証の場合はパスワードはnull
+        twoFactorCode: null,
+        twoFactorExpiresAt: null,
+        twoFactorIsUsed: false,
       },
     });
     
-    // パスワードを除外して返す
-    const { password: _, ...result } = user;
-    return {
-      username: result.username,
-      email: result.email,
-    };
+    // 完全なユーザーオブジェクトを返す（passwordも含む）
+    return user;
   }
 }

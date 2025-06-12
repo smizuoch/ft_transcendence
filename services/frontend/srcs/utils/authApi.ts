@@ -91,14 +91,6 @@ export class ApiClient {
     });
   }
 
-  // 2要素認証
-  async verifyTwoFactor(verificationData: VerificationData): Promise<ApiResponse> {
-    return this.request('/auth/verify-2fa', {
-      method: 'POST',
-      body: JSON.stringify(verificationData),
-    });
-  }
-
   // ユーザー情報取得
   async getUserInfo(token: string): Promise<ApiResponse> {
     return this.request('/user/profile', {
