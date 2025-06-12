@@ -23,13 +23,13 @@ export class TwoFactorService {
 
     // SMTP設定の存在確認
     if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-      this.logger.warn('SMTP設定が不完全です。コンソールにコードを出力します。');
+      this.logger.error('SMTP設定が不完全です。メール送信はできません。');
       return;
     }
 
     // 開発用デフォルト値の確認
     if (smtpUser === 'your-email@gmail.com' || smtpPass === 'your-app-password') {
-      this.logger.warn('開発用デフォルト値が検出されました。コンソールにコードを出力します。');
+      this.logger.error('開発用デフォルト値が検出されました。メール送信はできません。');
       return;
     }
 
@@ -199,7 +199,7 @@ export class TwoFactorService {
       </div>
     `;
 
-    // SMTPが設定されている場合はメール送信、そうでなければコンソール出力
+    // SMTPが設定されている場合はメール送信
     if (this.transporter) {
       try {
         const info = await this.transporter.sendMail({
@@ -212,27 +212,11 @@ export class TwoFactorService {
         this.logger.log(`Message ID: ${info.messageId}`);
       } catch (error) {
         this.logger.error('メール送信エラー:', error);
-        // メール送信失敗時もコンソール出力で対応
-        this.outputCodeToConsole(email, code);
+        throw error;
       }
     } else {
-      // 開発環境用：コンソールに出力
-      this.outputCodeToConsole(email, code);
+      this.logger.error('SMTPが設定されていないため、メールを送信できませんでした。');
+      throw new Error('メール送信設定が無効です');
     }
-  }
-
-  /**
-   * 開発環境用：コンソールに認証コードを出力
-   */
-  private outputCodeToConsole(email: string, code: string): void {
-    this.logger.log(`
-=================================
-🔐 2FA認証コード（開発モード）
-=================================
-宛先: ${email}
-認証コード: ${code}
-有効期限: 10分
-=================================
-    `);
   }
 }
