@@ -171,6 +171,54 @@ export class MultiplayerService {
       console.error('Socket error:', error);
       this.emit('error', error);
     });
+
+    // トーナメント関連のイベントリスナー
+    this.socket.on('tournament-created', (data: any) => {
+      console.log('Tournament created event received:', data);
+      this.emit('tournament-created', data);
+    });
+
+    this.socket.on('tournament-joined', (data: any) => {
+      console.log('Tournament joined event received:', data);
+      this.emit('tournament-joined', data);
+    });
+
+    this.socket.on('tournament-participant-joined', (data: any) => {
+      this.emit('tournament-participant-joined', data);
+    });
+
+    this.socket.on('tournament-started', (data: any) => {
+      this.emit('tournament-started', data);
+    });
+
+    this.socket.on('tournament-match-completed', (data: any) => {
+      this.emit('tournament-match-completed', data);
+    });
+
+    this.socket.on('tournament-round-advanced', (data: any) => {
+      this.emit('tournament-round-advanced', data);
+    });
+
+    this.socket.on('tournament-completed', (data: any) => {
+      this.emit('tournament-completed', data);
+    });
+
+    this.socket.on('tournament-participant-left', (data: any) => {
+      this.emit('tournament-participant-left', data);
+    });
+
+    this.socket.on('tournament-start-failed', (data: any) => {
+      console.error('Tournament start failed:', data);
+      this.emit('error', data);
+    });
+
+    this.socket.on('current-match', (data: any) => {
+      this.emit('current-match', data);
+    });
+
+    this.socket.on('tournament-info', (data: any) => {
+      this.emit('tournament-info', data);
+    });
   }
 
   connect(): Promise<void> {
@@ -418,6 +466,84 @@ export class MultiplayerService {
   // 通信対戦モードかどうかを判定
   isMultiplayerMode(): boolean {
     return this.isConnected && this.roomNumber !== null;
+  }
+
+  // トーナメント関連メソッド
+  createTournament(maxPlayers: number, playerInfo: PlayerInfo) {
+    console.log('createTournament called with:', { maxPlayers, playerInfo });
+    console.log('Socket status:', { 
+      hasSocket: !!this.socket, 
+      isConnected: this.isConnected,
+      socketConnected: this.socket?.connected 
+    });
+    
+    if (this.socket && this.isConnected) {
+      console.log('Emitting create-tournament event');
+      this.socket.emit('create-tournament', {
+        maxPlayers,
+        playerInfo
+      });
+    } else {
+      console.error('Cannot create tournament: not connected');
+      this.emit('error', { message: 'Not connected to server' });
+    }
+  }
+
+  joinTournament(tournamentId: string, playerInfo: PlayerInfo) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('join-tournament', {
+        tournamentId,
+        playerInfo
+      });
+    }
+  }
+
+  startTournament(tournamentId: string) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('start-tournament', {
+        tournamentId
+      });
+    }
+  }
+
+  reportTournamentResult(tournamentId: string, matchId: string, winnerId: string) {
+    console.log('reportTournamentResult called:', { tournamentId, matchId, winnerId });
+    console.log('Socket connected:', this.isConnected);
+    
+    if (this.socket && this.isConnected) {
+      console.log('Emitting tournament-match-result to server');
+      this.socket.emit('tournament-match-result', {
+        tournamentId,
+        matchId,
+        winnerId
+      });
+    } else {
+      console.error('Cannot report tournament result: socket not connected');
+    }
+  }
+
+  leaveTournament(tournamentId: string) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('leave-tournament', {
+        tournamentId
+      });
+    }
+  }
+
+  getCurrentMatch(tournamentId: string) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('get-current-match', {
+        tournamentId
+      });
+    }
+  }
+
+  getTournamentInfo(tournamentId: string) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('get-tournament', {
+        tournamentId
+      });
+    }
   }
 }
 
