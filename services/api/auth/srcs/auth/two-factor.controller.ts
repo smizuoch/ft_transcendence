@@ -55,16 +55,4 @@ export class TwoFactorController {
       data: result.user,
     };
   }
-
-  @Get('status')
-  @HttpCode(HttpStatus.OK)
-  async getEmailServiceStatus() {
-    return await this.twoFactorService.getEmailServiceStatus();
-  }
-
-  @Get('check-connection')
-  @HttpCode(HttpStatus.OK)
-  async checkEmailService() {
-    return await this.twoFactorService.checkEmailService();
-  }
 }

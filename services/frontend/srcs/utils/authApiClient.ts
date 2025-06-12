@@ -84,19 +84,6 @@ class ApiClient {
     });
   }
 
-  async setupTwoFactor() {
-    return this.makeRequest('/auth/2fa/setup', {
-      method: 'POST',
-    });
-  }
-
-  async verifyTwoFactor(token: string) {
-    return this.makeRequest('/auth/2fa/verify', {
-      method: 'POST',
-      body: JSON.stringify({ token }),
-    });
-  }
-
   // Google認証関連API
   getGoogleAuthUrl(): string {
     return `${this.baseURL}/auth/google`;

@@ -1,10 +1,6 @@
 // 2FA API - Nginxプロキシを使用してMixed Content回避
 const API_BASE_URL = '/api';
 
-export interface VerifyTwoFactorCodeRequest {
-  code: string; // emailはJWTから取得するため不要
-}
-
 export interface TwoFactorResponse {
   success: boolean;
   message: string;
@@ -20,10 +16,8 @@ export class TwoFactorApi {
       const response = await fetch(`${API_BASE_URL}/auth/2fa/send`, {
         method: 'POST',
         headers: {
-          // 'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        // body: JSON.stringify({}),
       });
 
       if (!response.ok) {
