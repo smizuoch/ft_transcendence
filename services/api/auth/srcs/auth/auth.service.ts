@@ -13,29 +13,29 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.userService.findByEmail(email);
-    
+
     // Google認証ユーザー（passwordがnull）の場合は通常ログインを拒否
     if (user && user.password && await bcrypt.compare(password, user.password)) {
       const { password, ...result } = user;
       return result;
     }
-    
+
     return null;
   }
 
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
     const user = await this.validateUser(email, password);
-    
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = { 
-      sub: user.username, 
+    const payload = {
+      sub: user.username,
       username: user.username
     };
-    
+
     return {
       access_token: this.jwtService.sign(payload),
       user,
@@ -77,12 +77,34 @@ export class AuthService {
     }
 
     const payload = { sub: user.username, username: user.username };
-    
+
     return {
       access_token: this.jwtService.sign(payload),
       user: {
         username: user.username,
         email: user.email,
+      },
+    };
+  }
+
+  async register(createUserDto: any) {
+    // ユーザーを作成
+    const user = await this.userService.create(createUserDto);
+
+    // JWTトークンのペイロードを作成
+    const payload = {
+      sub: user.username,
+      username: user.username
+    };
+
+    // JWTトークンを生成
+    const token = this.jwtService.sign(payload);
+
+    return {
+      access_token: token,
+      user: {
+        username: user.username,
+        email: createUserDto.email,
       },
     };
   }

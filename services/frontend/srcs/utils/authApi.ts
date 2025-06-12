@@ -33,7 +33,7 @@ export class ApiClient {
   }
 
   private async request<T = any>(
-    endpoint: string, 
+    endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     try {
@@ -109,6 +109,24 @@ export class ApiClient {
     });
   }
 
+  // ユーザープロフィール取得（JWT認証）
+  async getProfile(): Promise<ApiResponse> {
+    const token = this.getStoredToken();
+    if (!token) {
+      return {
+        success: false,
+        message: 'No authentication token found',
+      };
+    }
+
+    return this.request('/auth/profile', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }
+
   // Google認証開始
   getGoogleAuthUrl(): string {
     return `${this.baseUrl}/auth/google`;
@@ -118,14 +136,14 @@ export class ApiClient {
   handleAuthCallback(): string | null {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
-    
+
     if (token) {
       // トークンをlocalStorageに保存
       localStorage.setItem('authToken', token);
       // URLからトークンパラメータを削除
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-    
+
     return token;
   }
 

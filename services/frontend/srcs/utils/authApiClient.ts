@@ -20,7 +20,7 @@ class ApiClient {
     if (window.location.protocol === 'https:') {
       return '/api';
     }
-    
+
     // 開発環境でも相対パス（プロキシ経由）を使用してMixed Content回避
     return '/api';
   }
@@ -31,12 +31,20 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseURL}${endpoint}`;
-      
+
+      // JWTトークンを取得してヘッダーに追加
+      const token = this.getStoredToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...options.headers as Record<string, string>,
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
+        headers,
         ...options,
       });
 
@@ -106,17 +114,17 @@ class ApiClient {
   handleAuthCallback(): string | null {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
-    
+
     if (token) {
       // トークンをローカルストレージに保存
       localStorage.setItem('authToken', token);
-      
+
       // URLからトークンパラメータを削除
       window.history.replaceState({}, document.title, window.location.pathname);
-      
+
       return token;
     }
-    
+
     return null;
   }
 
@@ -131,6 +139,12 @@ class ApiClient {
   }
 
   // ユーザー関連API
+  async getProfile() {
+    return this.makeRequest('/auth/profile', {
+      method: 'GET',
+    });
+  }
+
   async getUserProfile(userId: string) {
     return this.makeRequest(`/user/${userId}`, {
       method: 'GET',

@@ -46,12 +46,13 @@ export class AuthController {
         throw new HttpException('This username is already taken', HttpStatus.BAD_REQUEST);
       }
 
-      // ユーザー作成
-      const user = await this.userService.create(createUserDto);
-      
+      // ユーザー作成とJWTトークン生成
+      const result = await this.authService.register(createUserDto);
+
       return {
         message: 'User registration completed successfully',
-        user,
+        token: result.access_token,
+        user: result.user,
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -76,10 +77,10 @@ export class AuthController {
 
       // 認証コードをアクセストークンに交換
       const tokens = await this.googleOAuthService.exchangeCodeForTokens(code);
-      
+
       // ユーザー情報を取得
       const userInfo = await this.googleOAuthService.getUserInfo(tokens.access_token);
-      
+
       // ユーザーをログインまたは作成
       const user = {
         email: userInfo.email,
@@ -89,7 +90,7 @@ export class AuthController {
       };
 
       const result = await this.authService.googleLogin({ user });
-      
+
       // フロントエンドにリダイレクトしてトークンを渡す
       const redirectUrl = `https://localhost:8443/auth/callback?token=${result.access_token}`;
       return res.redirect(redirectUrl, 302);
