@@ -2,6 +2,7 @@ import { Controller, Post, Body, Get, UseGuards, Request, ValidationPipe, HttpEx
 import { AuthService } from './auth.service';
 import { LoginDto } from './login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { FullAuthGuard } from './full-auth.guard';
 import { UserService } from '../user/user.service';
 import { CreateUserDto } from '../user/create-user.dto';
 import { GoogleOAuthService } from './google-oauth.service';
@@ -20,7 +21,7 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FullAuthGuard)
   @Get('profile')
   getProfile(@Request() req) {
     return req.user;

@@ -1,5 +1,6 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Req } from '@nestjs/common';
 import { TwoFactorService } from './two-factor.service';
+import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import {
   VerifyTwoFactorCodeDto,
@@ -8,7 +9,10 @@ import {
 
 @Controller('auth/2fa')
 export class TwoFactorController {
-  constructor(private readonly twoFactorService: TwoFactorService) {}
+  constructor(
+    private readonly twoFactorService: TwoFactorService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Post('send')
   @UseGuards(JwtAuthGuard)
@@ -49,10 +53,24 @@ export class TwoFactorController {
       email,
       verifyCodeDto.code,
     );
+
+    if (result.success && result.user) {
+      // 2FA検証成功時に本番JWTを発行
+      const finalJwt = await this.authService.generateFinalJWT(result.user);
+      
+      return {
+        success: true,
+        message: result.message,
+        data: {
+          access_token: finalJwt.access_token,
+          user: finalJwt.user,
+        },
+      };
+    }
+
     return {
       success: result.success,
       message: result.message,
-      data: result.user,
     };
   }
 }
