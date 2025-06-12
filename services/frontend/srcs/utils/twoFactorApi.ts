@@ -20,10 +20,10 @@ export class TwoFactorApi {
       const response = await fetch(`${API_BASE_URL}/auth/2fa/send`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          // 'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({}),
+        // body: JSON.stringify({}),
       });
 
       if (!response.ok) {
