@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { followerService, useFollowerActions } from '../utils/followerService';
 import { getUsernameFromToken } from '../utils/jwtUtils';
 
 interface UserProfileProps {
@@ -22,8 +21,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId, userToken }
   const [isLoading, setIsLoading] = useState(false);
   const [username, setUsername] = useState<string>("NAME");
 
-  // followerServiceのアクション
-  const { followUser, unfollowUser, checkFollowStatus } = useFollowerActions();  // Load user profile on component mount
+  // followerServiceのアクション（モック）
+  const followUser = async (userId: string) => {
+    console.log('Mock: Following user', userId);
+    return true;
+  };
+
+  const unfollowUser = async (userId: string) => {
+    console.log('Mock: Unfollowing user', userId);
+    return true;
+  };
+
+  const checkFollowStatus = async (userId: string) => {
+    console.log('Mock: Checking follow status for user', userId);
+    return false; // デフォルトは未フォロー状態
+  };  // Load user profile on component mount
   useEffect(() => {
     const loadUserProfile = async () => {
       try {
@@ -92,20 +104,20 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId, userToken }
     ],
   };
 
-  // コンポーネント初期化時にフォロー状態と統計を取得
+  // コンポーネント初期化時にフォロー状態と統計を取得（モック）
   useEffect(() => {
     const loadUserData = async () => {
       if (!userId) return;
 
       setIsLoading(true);
       try {
-        // フォロー状態を確認
+        // フォロー状態を確認（モック）
         const followStatus = await checkFollowStatus(userId);
         setIsFollowing(followStatus);
 
-        // フォロー統計を取得
-        const stats = await followerService.getFollowStats(userId);
-        setFollowStats(stats);
+        // フォロー統計を取得（モック）
+        const mockStats = { followersCount: 42, followingCount: 24 };
+        setFollowStats(mockStats);
       } catch (error) {
         console.error('Failed to load user data:', error);
       } finally {
@@ -114,7 +126,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId, userToken }
     };
 
     loadUserData();
-  }, [userId, checkFollowStatus]);
+  }, [userId]);
 
   // フォロー状態の切り替え
   const toggleFollow = async () => {
