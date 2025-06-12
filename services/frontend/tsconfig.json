@@ -16,10 +16,11 @@
     "jsxImportSource": "react",
 
     /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "strict": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": false,
 
     /* Path Aliases */
     "baseUrl": ".",

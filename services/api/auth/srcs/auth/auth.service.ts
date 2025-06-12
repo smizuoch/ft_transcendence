@@ -31,14 +31,39 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // 2FA用の仮トークンを発行（2fa_pendingフラグ付き）
     const payload = { 
       sub: user.username, 
-      username: user.username
+      username: user.username,
+      email: user.email,
+      twoFactorPending: true  // 2FA待機中フラグ
+    };
+    
+    return {
+      access_token: this.jwtService.sign(payload, { expiresIn: '15m' }), // 短い有効期限
+      twoFactorRequired: true,
+      user: {
+        username: user.username,
+        email: user.email,
+      },
+    };
+  }
+
+  // 2FA完了後に本番JWTを発行
+  async generateFinalJWT(user: any) {
+    const payload = { 
+      sub: user.username, 
+      username: user.username,
+      email: user.email
+      // twoFactorPendingフラグは付けない（本番JWT）
     };
     
     return {
       access_token: this.jwtService.sign(payload),
-      user,
+      user: {
+        username: user.username,
+        email: user.email,
+      },
     };
   }
 
@@ -68,18 +93,20 @@ export class AuthService {
     // ユーザーが存在しない場合は新規作成
     if (!user) {
       // Google認証専用メソッドを使用してユーザーを作成
-      const newUser = await this.userService.createGoogleUser(email, username);
-      user = {
-        username: newUser.username,
-        email: newUser.email,
-        password: null, // Google認証ユーザーはパスワードがnull
-      };
+      user = await this.userService.createGoogleUser(email, username);
     }
 
-    const payload = { sub: user.username, username: user.username };
+    // Google認証の場合は直接本番JWTを発行（2FA不要）
+    const payload = { 
+      sub: user.username, 
+      username: user.username,
+      email: user.email
+      // twoFactorPendingフラグは付けない（本番JWT）
+    };
     
     return {
       access_token: this.jwtService.sign(payload),
+      twoFactorRequired: false,
       user: {
         username: user.username,
         email: user.email,

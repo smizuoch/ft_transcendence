@@ -52,12 +52,30 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ navigate }) => {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-      });
-
-      if (result.success) {
-        setFormData({ username: '', email: '', password: '' });
-        // 登録成功後、2要素認証画面に遷移
-        setTimeout(() => navigate('TwoFactorAuth'), 1000);
+      });      if (result.success) {
+        // 登録成功後、自動ログインを試行
+        try {
+          const loginResult = await apiClient.login({
+            email: formData.email,
+            password: formData.password,
+          });
+          
+          if (loginResult.success && loginResult.data && loginResult.data.access_token) {
+            // トークンをローカルストレージに保存
+            localStorage.setItem('authToken', loginResult.data.access_token);
+            setFormData({ username: '', email: '', password: '' });
+            // 2要素認証画面に遷移
+            setTimeout(() => navigate('TwoFactorAuth'), 1000);
+          } else {
+            // ログインに失敗した場合、メール確認画面に遷移
+            setFormData({ username: '', email: '', password: '' });
+            setTimeout(() => navigate('EmailVerification'), 1000);
+          }
+        } catch (loginError) {
+          // ログインエラーの場合、メール確認画面に遷移
+          setFormData({ username: '', email: '', password: '' });
+          setTimeout(() => navigate('EmailVerification'), 1000);
+        }
       } else {
         // 振動アニメーションを実行
         setIsShaking(true);

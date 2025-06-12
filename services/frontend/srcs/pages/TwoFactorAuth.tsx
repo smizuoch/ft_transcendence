@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { TwoFactorApi } from '../utils/twoFactorApi';
+import { apiClient } from '../utils/authApiClient';
 
 interface TwoFactorAuthProps {
   navigate: (page: string) => void;
@@ -12,19 +14,27 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
   const [code, setCode] = useState<string[]>(Array(6).fill(''));
   // エラー時の振動アニメーション用の状態
   const [isShaking, setIsShaking] = useState(false);
+  // ローディング状態
+  const [loading, setLoading] = useState(false);
+  // エラーメッセージ
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   // 各入力フィールドへの参照
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // 初期化時に参照配列を設定
+  // 初期化時に参照配列を設定とコードの自動送信
   useEffect(() => {
     inputRefs.current = inputRefs.current.slice(0, 6);
+    // ページ読み込み時に自動的に2FAコードを送信
+    handleResendEmail();
   }, []);
-
   // 入力処理関数
   const handleInputChange = (index: number, value: string) => {
     // 数字のみ受け付ける
     if (!/^\d*$/.test(value)) return;
+
+    // エラーメッセージをクリア
+    setErrorMessage('');
 
     // 状態を更新
     const newCode = [...code];
@@ -48,17 +58,48 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
     }
   };
 
-  // 検証関数 - 現在のcodeまたは渡された配列を使用
-  const verifyCode = (codeToVerify?: string[]) => {
+  // 検証関数 - 実際の2FA APIを使用
+  const verifyCode = async (codeToVerify?: string[]) => {
     // 引数が渡された場合はそれを使用、そうでなければcodeステートを使用
     const fullCode = (codeToVerify || code).join('');
-    console.log('Full Code:', fullCode);
+    console.log('Verifying Code:', fullCode);
 
-    if (fullCode === '000000') {
-      // 正しいコードの場合
-      navigate('MyPage');
-    } else {
-      // 間違ったコードの場合、振動アニメーションを実行
+    const token = apiClient.getStoredToken();
+    if (!token) {
+      setErrorMessage('認証トークンが見つかりません。再度ログインしてください。');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await TwoFactorApi.verifyTwoFactorCode(token, fullCode);
+        if (result.success) {
+        // 2FA検証成功時：本番JWTを受け取り保存
+        if (result.data && result.data.access_token) {
+          // 本番JWTをローカルストレージに保存（仮トークンを上書き）
+          localStorage.setItem('authToken', result.data.access_token);
+        }
+        // 正しいコードの場合
+        navigate('MyPage');
+      } else {
+        // 間違ったコードの場合、エラーメッセージを表示し振動アニメーションを実行
+        setErrorMessage(result.message || '無効な認証コードです');
+        setIsShaking(true);
+
+        // 振動アニメーション後、入力をリセット
+        setTimeout(() => {
+          setIsShaking(false);
+          setCode(Array(6).fill(''));
+          // 最初の入力フィールドにフォーカスを戻す
+          if (inputRefs.current[0]) {
+            inputRefs.current[0].focus();
+          }
+        }, 500);
+      }
+    } catch (error) {
+      console.error('2FA検証エラー:', error);
+      setErrorMessage('認証コードの検証中にエラーが発生しました');
       setIsShaking(true);
 
       // 振動アニメーション後、入力をリセット
@@ -70,6 +111,8 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
           inputRefs.current[0].focus();
         }
       }, 500);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -82,21 +125,49 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
       }
     }
   };
+  // メール再送信処理 - 実際の2FA APIを使用
+  const handleResendEmail = async () => {
+    const token = apiClient.getStoredToken();
+    if (!token) {
+      setErrorMessage('認証トークンが見つかりません。再度ログインしてください。');
+      return;
+    }
 
-  // メール再送信処理
-  const handleResendEmail = () => {
-    console.log('[MOCK] The email has been resent');
-    // モック通知などを表示する場合はここに追加
+    setLoading(true);
+    setErrorMessage('');
+
+    try {
+      const result = await TwoFactorApi.sendTwoFactorCode(token);
+      
+      if (result.success) {
+        console.log('2FAコードが送信されました');
+        setErrorMessage(''); // 成功時はエラーメッセージをクリア
+      } else {
+        setErrorMessage(result.message || 'コードの送信に失敗しました');
+      }
+    } catch (error) {
+      console.error('2FAコード送信エラー:', error);
+      setErrorMessage('コードの送信中にエラーが発生しました');
+    } finally {
+      setLoading(false);
+    }
   };
-
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4">
       <div className="w-full max-w-3xl flex flex-col items-center">
+        {/* エラーメッセージ表示 */}
+        {errorMessage && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {errorMessage}
+          </div>
+        )}
+
         {/* Resend Code button with SVG icon - placed at top */}
         <div className="flex justify-center mb-24 mt-1">
           <button
             onClick={handleResendEmail}
-            className="focus:outline-none hover:opacity-80 transition-opacity"
+            disabled={loading}
+            className={`focus:outline-none hover:opacity-80 transition-opacity ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             aria-label="Resend Code"
           >
             <img
@@ -130,10 +201,10 @@ const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({ navigate }) => {
                 maxLength={1}
                 value={code[index]}
                 onChange={(e) => handleInputChange(index, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(index, e)}
-                className="absolute inset-0 w-full h-full text-center text-4xl font-bold bg-transparent border-none focus:outline-none"
+                onKeyDown={(e) => handleKeyDown(index, e)}                className="absolute inset-0 w-full h-full text-center text-4xl font-bold bg-transparent border-none focus:outline-none"
                 style={{ zIndex: 10, color: iconColor }}
                 autoFocus={index === 0}
+                disabled={loading}
               />
             </div>
           ))}
