@@ -1,5 +1,3 @@
-NestJS + Fastifyの構成で2FA（Two-Factor Authentication）を実装してください。
-
 **要件:**
 - 最低限の実装で、メールに6桁の数字を送信
 - ユーザーが入力した6桁の数字が正しければ認証完了
