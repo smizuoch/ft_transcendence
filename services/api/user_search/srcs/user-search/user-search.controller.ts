@@ -84,4 +84,25 @@ export class UserSearchController {
       throw new HttpException('Failed to update online status', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
+  // プロフィール画像更新
+  @UseGuards(FullAuthGuard)
+  @Put('profile-image')
+  async updateProfileImage(@Request() req, @Body() body: { profileImage: string }) {
+    try {
+      const username = req.user.username;
+      const userProfile = await this.userSearchService.updateProfileImage(username, body.profileImage);
+      
+      return {
+        success: true,
+        data: {
+          username: userProfile.username,
+          profileImage: userProfile.profileImage,
+          isOnline: userProfile.isOnline,
+        },
+      };
+    } catch (error) {
+      throw new HttpException('Failed to update profile image', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 }

@@ -41,6 +41,25 @@ export class UserSearchService {
     return userProfile;
   }
 
+  async updateProfileImage(username: string, profileImage: string) {
+    const userProfile = await this.prisma.userProfile.upsert({
+      where: { username },
+      update: { profileImage },
+      create: {
+        username,
+        profileImage,
+        isOnline: true,
+      },
+      select: {
+        username: true,
+        profileImage: true,
+        isOnline: true,
+      },
+    });
+
+    return userProfile;
+  }
+
   async createOrUpdateUserProfile(username: string, profileData?: { profileImage?: string }) {
     const userProfile = await this.prisma.userProfile.upsert({
       where: { username },

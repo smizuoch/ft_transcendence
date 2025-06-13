@@ -56,14 +56,20 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
-        });
-
-        if (response.ok) {
+        });        if (response.ok) {
           const result = await response.json();
           setUserData(result.data);
           // プロフィール画像をアバターに設定
           if (result.data.profileImage) {
-            setAvatarSrc(result.data.profileImage);
+            // Base64データかファイルパスかを判断して適切に設定
+            if (result.data.profileImage.startsWith('data:image/')) {
+              // Base64データの場合はそのまま使用
+              setAvatarSrc(result.data.profileImage);
+            } else if (result.data.profileImage !== '/images/avatar/default_avatar.png') {
+              // デフォルトでない場合はBase64データとして使用
+              setAvatarSrc(result.data.profileImage);
+            }
+            // デフォルト画像の場合はavatarSrcをnullのままにしてプレースホルダーを表示
           }
         } else {
           setError('ユーザー情報の取得に失敗しました');
@@ -82,13 +88,50 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
   /* ------------------------------------------------------------------ */
   // Event handlers
   const handleAvatarClick = () => fileInputRef.current?.click();
-
-  const handleAvatarPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarPicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onloadend = () => setAvatarSrc(reader.result as string);
+    reader.onloadend = async () => {
+      const base64Image = reader.result as string;
+      setAvatarSrc(base64Image);
+      
+      // プロフィール画像をデータベースに保存
+      try {
+        const token = localStorage.getItem('authToken');
+        if (token) {          const response = await fetch('/api/user-search/profile-image', {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ profileImage: base64Image })
+          });
+
+          console.log(`[DEBUG] Profile image upload response status: ${response.status}`);
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log('Profile image updated successfully:', result);
+            console.log(`[DEBUG] Response image length: ${result.data?.profileImage?.length || 0}`);
+            
+            // ユーザーデータを更新
+            if (userData) {
+              setUserData({
+                ...userData,
+                profileImage: base64Image
+              });
+            }
+          } else {
+            const errorText = await response.text();
+            console.error('Failed to update profile image. Response:', errorText);
+          }
+        }
+      } catch (error) {
+        console.error('Error updating profile image:', error);
+      }
+    };
     reader.readAsDataURL(file);
   };
 

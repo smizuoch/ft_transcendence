@@ -7,7 +7,9 @@ async function bootstrap() {
   // Fastifyアダプターを使用してNestアプリケーションを作成
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter()
+    new FastifyAdapter({
+      bodyLimit: 10 * 1024 * 1024, // 10MB リクエストボディサイズ制限
+    })
   );
   
   // バリデーションパイプを追加
