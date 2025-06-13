@@ -113,8 +113,13 @@ class ApiClient {
   }
 
   // ログアウト
-  logout(): void {
-    localStorage.removeItem('authToken');
+  async logout(): Promise<void> {
+    // オンライン状態管理をインポートして使用
+    const { OnlineStatusManager } = await import('./onlineStatusManager');
+    const onlineStatusManager = OnlineStatusManager.getInstance();
+    
+    // オンライン状態をオフに設定してからトークンを削除
+    await onlineStatusManager.logout();
   }
 
   // ユーザー関連API

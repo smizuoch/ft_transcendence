@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import Home from '@/pages/Home';
-import UserRegistration from '@/pages/UserRegistration';
-import EmailVerification from '@/pages/EmailVerification';
-import TwoFactorAuth from '@/pages/TwoFactorAuth';
-import MyPage from '@/pages/MyPage';
-import GameSelect from '@/pages/GameSelect';
-import GamePong2 from '@/pages/GamePong2';
-import GamePong42 from '@/pages/GamePong42';
-import GameResult from '@/pages/GameResult';
-import UserProfile from '@/pages/UserProfile';
-import AuthCallback from '@/pages/AuthCallback';
+import React, { useState, useEffect } from "react";
+import { OnlineStatusManager } from "./utils/onlineStatusManager";
+import Home from './pages/Home';
+import UserRegistration from './pages/UserRegistration';
+import EmailVerification from './pages/EmailVerification';
+import TwoFactorAuth from './pages/TwoFactorAuth';
+import MyPage from './pages/MyPage';
+import GameSelect from './pages/GameSelect';
+import GamePong2 from './pages/GamePong2';
+import GamePong42 from './pages/GamePong42';
+import GameResult from './pages/GameResult';
+import UserProfile from './pages/UserProfile';
+import AuthCallback from './pages/AuthCallback';
 
 interface RouteState {
   page: string;
@@ -42,6 +43,17 @@ const App: React.FC = () => {
     window.history.replaceState({ page: 'Home' }, '', '/');
 
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  /** -------- オンライン状態管理の初期化 -------- */
+  useEffect(() => {
+    const onlineStatusManager = OnlineStatusManager.getInstance();
+    onlineStatusManager.initialize();
+
+    // アプリ終了時のクリーンアップ
+    return () => {
+      onlineStatusManager.cleanup();
+    };
   }, []);
 
   /** -------- page renderer -------- */

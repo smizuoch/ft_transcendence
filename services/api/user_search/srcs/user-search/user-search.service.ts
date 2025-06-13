@@ -48,7 +48,7 @@ export class UserSearchService {
       create: {
         username,
         profileImage,
-        isOnline: true,
+        isOnline: false, // デフォルトはfalse
       },
       select: {
         username: true,
@@ -65,12 +65,12 @@ export class UserSearchService {
       where: { username },
       update: {
         ...(profileData?.profileImage && { profileImage: profileData.profileImage }),
-        isOnline: true,
+        // ログイン時にオンライン状態を自動で true にしない
       },
       create: {
         username,
         profileImage: profileData?.profileImage || '/images/avatar/default_avatar.png',
-        isOnline: true,
+        isOnline: false, // デフォルトはfalseに変更
       },
       select: {
         username: true,

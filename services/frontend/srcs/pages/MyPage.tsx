@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
+import { OnlineStatusManager } from "../utils/onlineStatusManager";
 
 interface MyPageProps {
   /**
@@ -48,7 +49,6 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
   const [showSearchResult, setShowSearchResult] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);  const searchContainerRef = useRef<HTMLDivElement>(null);
-
   /* ------------------------------------------------------------------ */
   // 検索結果外をクリックした時に検索結果を閉じる
   useEffect(() => {
@@ -61,6 +61,17 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+  /* ------------------------------------------------------------------ */
+  // オンライン状態管理の初期化
+  useEffect(() => {
+    const onlineStatusManager = OnlineStatusManager.getInstance();
+    onlineStatusManager.initialize();
+
+    // コンポーネントアンマウント時のクリーンアップ
+    return () => {
+      onlineStatusManager.cleanup();
     };
   }, []);
 
