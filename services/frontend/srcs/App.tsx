@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Home from '@/pages/Home';
+import { OnlineStatusManager } from "./utils/onlineStatusManager";
 import UserRegistration from '@/pages/UserRegistration';
 import EmailVerification from '@/pages/EmailVerification';
 import TwoFactorAuth from '@/pages/TwoFactorAuth';
@@ -43,6 +44,17 @@ const App: React.FC = () => {
     window.history.replaceState({ page: 'Home' }, '', '/');
 
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  /** -------- オンライン状態管理の初期化 -------- */
+  useEffect(() => {
+    const onlineStatusManager = OnlineStatusManager.getInstance();
+    onlineStatusManager.initialize();
+
+    // アプリ終了時のクリーンアップ
+    return () => {
+      onlineStatusManager.cleanup();
+    };
   }, []);
 
   /** -------- page renderer -------- */

@@ -1,8 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface UserProfileProps {
   navigate: (page: string) => void;
   userId?: string;
+}
+
+interface UserData {
+  userId: number;
+  username: string;
+  profileImage: string;
+  isOnline: boolean;
+  rank?: number;
+}
+
+interface MockData {
+  name: string;
+  avatar: string;
+  rank: number;
+  pong42RankHistory: { date: string; rank: number; }[];
+  pong2History: { date: string; isWin: boolean; opponentAvatar: string; }[];
 }
 
 const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
@@ -10,8 +26,45 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [avatarBorderColor, setAvatarBorderColor] = useState<'green' | 'gray'>('green');
   const [showFollowButton, setShowFollowButton] = useState(true);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // モックデータ
+  // JWT経由でユーザー情報を取得
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {        const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
+        const endpoint = userId 
+          ? `/api/user-search/profile/${userId}` // プロキシ経由に変更
+          : '/api/user-search/me'; // プロキシ経由に変更
+        
+        const response = await fetch(endpoint, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          setUserData(result.data);
+          setAvatarBorderColor(result.data.isOnline ? 'green' : 'gray');
+          setShowFollowButton(!!userId); // 他のユーザーの場合のみフォローボタン表示
+        } else {
+          setError('Failed to fetch user data');
+        }
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        setError('Failed to fetch user data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [userId]);
+
+  // モックデータ（フォールバック用）
   const mockData = {
     name: userId || "NAME",
     avatar: "/images/avatar/default_avatar.png",
@@ -33,22 +86,55 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
     ],
   };
-
   // フォロー状態の切り替え
   const toggleFollow = () => {
     setIsFollowing(!isFollowing);
-  };  return (
+  };
+
+  // ローディング状態の表示
+  if (loading) {
+    return (
+      <div className="bg-[#FFFFFF] min-h-screen flex items-center justify-center">
+        <p className="text-2xl text-gray-500">Loading...</p>
+      </div>
+    );
+  }
+
+  // エラー状態の表示
+  if (error) {
+    return (
+      <div className="bg-[#FFFFFF] min-h-screen flex items-center justify-center">
+        <p className="text-2xl text-red-500">{error}</p>
+      </div>
+    );
+  }
+  // ユーザーデータの表示（JWTデータを優先、フォールバックはモックデータ）
+  const displayData = userData || mockData;
+  
+  // 型安全なプロパティアクセス用のヘルパー関数
+  const getDisplayName = () => {
+    if (userData) return userData.username;
+    return mockData.name;
+  };
+  
+  const getDisplayImage = () => {
+    if (userData) return userData.profileImage;
+    return mockData.avatar;
+  };
+  
+  const getDisplayRank = () => {
+    if (userData) return userData.rank || 0;
+    return mockData.rank;
+  };return (
     <div className="bg-[#FFFFFF] min-h-screen p-4 relative font-sans text-[#5C5E7A]">
       <main className="max-w-7xl mx-auto flex justify-center items-start gap-12 pt-8">        {/* 左側: アバターと名前 */}
         <section className="flex flex-col items-center justify-start pt-12 space-y-6">
           <div className="relative">
-            {/* アバターコンテナ */}
-            <div className={`w-56 h-56 rounded-full border-[8px] ${
+            {/* アバターコンテナ */}            <div className={`w-56 h-56 rounded-full border-[8px] ${
               avatarBorderColor === 'green' ? 'border-green-400' : 'border-gray-400'
-            } bg-white flex items-center justify-center p-1`}>
-              <img
-                src={mockData.avatar}
-                alt={`${mockData.name}'s Avatar`}
+            } bg-white flex items-center justify-center p-1`}>              <img
+                src={getDisplayImage()}
+                alt={`${getDisplayName()}'s Avatar`}
                 className="w-full h-full object-cover rounded-full"
               />
             </div>
@@ -65,14 +151,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
                 />
               </button>
             )}
-          </div>
-          <h1 className="text-6xl font-medium tracking-wider text-gray-600 text-center">{mockData.name}</h1>
+          </div>          <h1 className="text-6xl font-medium tracking-wider text-gray-600 text-center">
+            {getDisplayName()}
+          </h1>
         </section>        {/* 中央: ランキング、グラフ、戦績 */}
         <section className="flex-1 max-w-2xl flex flex-col space-y-8 pt-4">
-          {/* PONG42ランキング */}
-          <div className="flex justify-center items-center space-x-4">
+          {/* PONG42ランキング */}          <div className="flex justify-center items-center space-x-4">
              <p className="text-8xl font-light text-gray-500 text-center">
-               #{mockData.rank.toFixed(2)}
+               #{getDisplayRank().toFixed(2)}
              </p>
           </div>
 

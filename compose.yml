@@ -74,6 +74,17 @@ services:
     env_file:
       - ./secrets/.env
 
+  user_search:
+    build: ./services/api/user_search
+    container_name: user_search
+    restart: unless-stopped
+    networks:
+      - transcendence_net
+    volumes:
+      - user_search_data:/app/data
+    env_file:
+      - ./secrets/.env
+
   # --- ELK Stack Setup ---
   elk_setup:
     build:
@@ -215,6 +226,7 @@ volumes:
   elk_certs: # 証明書用ボリューム
   kibana_data: # Kibanaデータ用ボリューム
   auth_data: # authサービス用SQLiteデータ
+  user_search_data: # user_searchサービス用SQLiteデータ
 
 networks:
   transcendence_net:
