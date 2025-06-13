@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 
 interface MyPageProps {
   /**
@@ -7,6 +7,13 @@ interface MyPageProps {
    * @param userId – optional user identifier
    */
   navigate: (page: string, userId?: string) => void;
+}
+
+interface UserData {
+  userId: number;
+  username: string;
+  profileImage: string;
+  isOnline: boolean;
 }
 
 /**
@@ -26,9 +33,51 @@ interface MyPageProps {
 const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
   /* ------------------------------------------------------------------ */
   // State & refs
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /* ------------------------------------------------------------------ */
+  // Fetch user data from user_search service
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {        const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
+        if (!token) {
+          setError('認証が必要です');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch('/api/user-search/me', { // プロキシ経由に変更
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          setUserData(result.data);
+          // プロフィール画像をアバターに設定
+          if (result.data.profileImage) {
+            setAvatarSrc(result.data.profileImage);
+          }
+        } else {
+          setError('ユーザー情報の取得に失敗しました');
+        }
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        setError('ユーザー情報の取得に失敗しました');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   /* ------------------------------------------------------------------ */
   // Event handlers
@@ -48,7 +97,6 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
     alert(`Searching for: ${searchTerm}`);
     // Future: navigate("UserProfile", searchTerm)
   };
-
   /* ------------------------------------------------------------------ */
   // Design tokens – tweak once, propagate everywhere
   const accent = "#6B6D9A";
@@ -57,6 +105,24 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
 
   const AVATAR = 320; // px
   const NAME_SIZE = 88; // px – keeps maths readable
+
+  // ローディング状態の表示
+  if (loading) {
+    return (
+      <div className="relative min-h-screen w-full flex items-center justify-center bg-white">
+        <p className="text-2xl" style={{ color: accent }}>Loading...</p>
+      </div>
+    );
+  }
+
+  // エラー状態の表示
+  if (error) {
+    return (
+      <div className="relative min-h-screen w-full flex items-center justify-center bg-white">
+        <p className="text-2xl text-red-500">{error}</p>
+      </div>
+    );
+  }
 
   /* ------------------------------------------------------------------ */
   return (
@@ -68,8 +134,7 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
         className="absolute flex"
         style={{ top: 120, left: 60 }}
       >
-        {/* Avatar --------------------------------------------------------- */}
-        <div
+        {/* Avatar --------------------------------------------------------- */}        <div
           onClick={handleAvatarClick}
           className="relative shrink-0 cursor-pointer overflow-hidden rounded-full"
           style={{ width: AVATAR, height: AVATAR, backgroundColor: avatarSrc ? "transparent" : avatarPlaceholder }}
@@ -83,6 +148,18 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
             >
               avatar
             </span>
+          )}
+
+          {/* オンラインステータスインジケーター */}
+          {userData && (
+            <div
+              className="absolute bottom-2 right-2 rounded-full border-4 border-white"
+              style={{
+                width: 32,
+                height: 32,
+                backgroundColor: userData.isOnline ? "#22C55E" : "#9CA3AF"
+              }}
+            />
           )}
 
           {/* Hidden file input */}
@@ -102,14 +179,13 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
              the bottom of the avatar.  NAME font-size = 88 px so we move the
              whole stack down by (AVATAR - NAME_SIZE) = 232 px. */
           style={{ transform: `translateY(${AVATAR - NAME_SIZE}px)` }}
-        >
-          {/* NAME */}
+        >          {/* NAME */}
           <button
-            onClick={() => navigate("UserProfile", "myusername")}
+            onClick={() => navigate("UserProfile", userData?.username || "myusername")}
             className="whitespace-nowrap text-left font-medium transition-opacity hover:opacity-80"
             style={{ color: accent, fontSize: NAME_SIZE, lineHeight: 1 }}
           >
-            NAME
+            {userData?.username || "NAME"}
           </button>
 
           {/* Search bar */}
