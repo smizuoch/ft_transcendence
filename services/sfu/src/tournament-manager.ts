@@ -189,6 +189,7 @@ export class TournamentManager {
   recordMatchResult(tournamentId: string, matchId: string, winnerId: string): boolean {
     const tournament = this.tournaments.get(tournamentId);
     if (!tournament || tournament.status !== TournamentStatus.IN_PROGRESS) {
+      console.log(`Tournament ${tournamentId} not found or not in progress. Status: ${tournament?.status}`);
       return false;
     }
 
@@ -209,21 +210,27 @@ export class TournamentManager {
       if (match) break;
     }
 
-    if (!match || match.status === 'completed') {
-      console.log(`Match ${matchId} not found or already completed`);
+    if (!match) {
+      console.log(`Match ${matchId} not found in tournament ${tournamentId}`);
       return false;
+    }
+
+    if (match.status === 'completed') {
+      console.log(`Match ${matchId} is already completed. Current winner: ${match.winner?.playerInfo.name}`);
+      return false; // 既に完了している試合は再処理しない
     }
 
     // 勝者を決定
     const winner = match.player1?.playerId === winnerId ? match.player1 : match.player2;
     if (!winner) {
-      console.log(`Winner ${winnerId} not found in match ${matchId}`);
+      console.log(`Winner ${winnerId} not found in match ${matchId}. Available players: ${match.player1?.playerId}, ${match.player2?.playerId}`);
       return false;
     }
 
+    // 試合結果を記録
     match.winner = winner;
     match.status = 'completed';
-    console.log(`Match ${matchId} completed, winner: ${winner.playerInfo.name}`);
+    console.log(`Match ${matchId} completed successfully. Winner: ${winner.playerInfo.name} (${winner.playerId})`);
 
     // 次のラウンドに勝者を進める
     if (roundIndex + 1 < tournament.bracket.length) {

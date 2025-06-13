@@ -508,6 +508,19 @@ export class GameEngine {
     this.scoreUpdateCallback = callback;
   }
 
+  // スコアをリセット
+  public resetScore(): void {
+    this.score.player1 = 0;
+    this.score.player2 = 0;
+    this.state.score.player1 = 0;
+    this.state.score.player2 = 0;
+    this.state.gameOver = false;
+    this.state.winner = null;
+    this.gameOver = false;
+    this.winner = null;
+    console.log('Score reset to 0:0');
+  }
+
   // パドル位置とplayers同期メソッド
   public syncPlayersPosition(): void {
     this.state.players.player1.x = this.state.paddle1.x;
