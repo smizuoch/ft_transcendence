@@ -85,140 +85,140 @@ services:
     env_file:
       - ./secrets/.env
 
-  # # --- ELK Stack Setup ---
-  # elk_setup:
-  #   build:
-  #     context: ./services/elkstack/elk_setup
-  #     dockerfile: Dockerfile
-  #   container_name: elk_setup
-  #   user: "0"
-  #   volumes:
-  #     - elk_certs:/usr/share/elasticsearch/config/certs
-  #   env_file:
-  #     - ./secrets/.env
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "[ -f config/certs/elasticsearch/elasticsearch.crt ]"]
-  #     interval: 1s
-  #     timeout: 5s
-  #     retries: 120
-  #   networks:
-  #     - transcendence_net
-  #   restart: "no"
+  # --- ELK Stack Setup ---
+  elk_setup:
+    build:
+      context: ./services/elkstack/elk_setup
+      dockerfile: Dockerfile
+    container_name: elk_setup
+    user: "0"
+    volumes:
+      - elk_certs:/usr/share/elasticsearch/config/certs
+    env_file:
+      - ./secrets/.env
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f config/certs/elasticsearch/elasticsearch.crt ]"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+    networks:
+      - transcendence_net
+    restart: "no"
 
-  # # --- ELK Stack (Updated) ---
-  # elasticsearch:
-  #   build:
-  #     context: ./services/elkstack/elasticsearch
-  #     dockerfile: Dockerfile
-  #   container_name: elasticsearch
-  #   depends_on:
-  #     elk_setup:
-  #       condition: service_healthy
-  #   ports:
-  #     - "9201:9200"
-  #   volumes:
-  #     - es_data:/usr/share/elasticsearch/data
-  #     - elk_certs:/usr/share/elasticsearch/config/certs
-  #   env_file:
-  #     - ./secrets/.env
-  #   environment:
-  #     # Discovery settings for single node
-  #     - discovery.type=single-node
+  # --- ELK Stack (Updated) ---
+  elasticsearch:
+    build:
+      context: ./services/elkstack/elasticsearch
+      dockerfile: Dockerfile
+    container_name: elasticsearch
+    depends_on:
+      elk_setup:
+        condition: service_healthy
+    ports:
+      - "9201:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+      - elk_certs:/usr/share/elasticsearch/config/certs
+    env_file:
+      - ./secrets/.env
+    environment:
+      # Discovery settings for single node
+      - discovery.type=single-node
 
-  #     # Network settings
-  #     - network.host=0.0.0.0
-  #     - http.port=9200
-  #     - transport.port=9300
+      # Network settings
+      - network.host=0.0.0.0
+      - http.port=9200
+      - transport.port=9300
 
-  #     # Memory settings
-  #     - bootstrap.memory_lock=false
+      # Memory settings
+      - bootstrap.memory_lock=false
 
-  #     # X-Pack Security settings
-  #     - xpack.security.enabled=true
-  #     - xpack.security.http.ssl.enabled=true
-  #     - xpack.security.http.ssl.key=certs/elasticsearch/elasticsearch.key
-  #     - xpack.security.http.ssl.certificate=certs/elasticsearch/elasticsearch.crt
-  #     - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
-  #     - xpack.security.transport.ssl.enabled=true
-  #     - xpack.security.transport.ssl.key=certs/elasticsearch/elasticsearch.key
-  #     - xpack.security.transport.ssl.certificate=certs/elasticsearch/elasticsearch.crt
-  #     - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
-  #     - xpack.security.transport.ssl.verification_mode=certificate
-  #     - xpack.license.self_generated.type=basic
-  #   mem_limit: 1073741824
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"]
-  #     interval: 10s
-  #     timeout: 10s
-  #     retries: 120
-  #     start_period: 60s
-  #   networks:
-  #     - transcendence_net
-  #   restart: unless-stopped
+      # X-Pack Security settings
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/elasticsearch/elasticsearch.key
+      - xpack.security.http.ssl.certificate=certs/elasticsearch/elasticsearch.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/elasticsearch/elasticsearch.key
+      - xpack.security.transport.ssl.certificate=certs/elasticsearch/elasticsearch.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=basic
+    mem_limit: 1073741824
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 60s
+    networks:
+      - transcendence_net
+    restart: unless-stopped
 
-  # logstash:
-  #   build:
-  #     context: ./services/elkstack/logstash
-  #     dockerfile: Dockerfile
-  #   container_name: logstash
-  #   depends_on:
-  #     elasticsearch:
-  #       condition: service_healthy
-  #   volumes:
-  #     - elk_certs:/usr/share/logstash/config/certs
-  #     - ./logs:/host/logs:ro
-  #   env_file:
-  #     - ./secrets/.env
-  #   networks:
-  #     - transcendence_net
-  #   restart: unless-stopped
+  logstash:
+    build:
+      context: ./services/elkstack/logstash
+      dockerfile: Dockerfile
+    container_name: logstash
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - elk_certs:/usr/share/logstash/config/certs
+      - ./logs:/host/logs:ro
+    env_file:
+      - ./secrets/.env
+    networks:
+      - transcendence_net
+    restart: unless-stopped
 
-  # kibana:
-  #   build:
-  #     context: ./services/elkstack/kibana
-  #     dockerfile: Dockerfile
-  #   container_name: kibana
-  #   depends_on:
-  #     elasticsearch:
-  #       condition: service_healthy
-  #     elk_setup:
-  #       condition: service_completed_successfully
-  #   ports:
-  #     - "5601:5601"
-  #   volumes:
-  #     - elk_certs:/usr/share/kibana/config/certs
-  #     - kibana_data:/usr/share/kibana/data
-  #   env_file:
-  #     - ./secrets/.env
-  #   environment:
-  #     # Kibana server settings
-  #     - SERVER_NAME=kibana
-  #     - SERVER_PUBLICBASEURL=https://localhost:5601
+  kibana:
+    build:
+      context: ./services/elkstack/kibana
+      dockerfile: Dockerfile
+    container_name: kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      elk_setup:
+        condition: service_completed_successfully
+    ports:
+      - "5601:5601"
+    volumes:
+      - elk_certs:/usr/share/kibana/config/certs
+      - kibana_data:/usr/share/kibana/data
+    env_file:
+      - ./secrets/.env
+    environment:
+      # Kibana server settings
+      - SERVER_NAME=kibana
+      - SERVER_PUBLICBASEURL=https://localhost:5601
 
-  #     # Elasticsearch connection
-  #     - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
-  #     - ELASTICSEARCH_USERNAME=kibana_system
-  #     - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      # Elasticsearch connection
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
 
-  #     # SSL settings for Kibana
-  #     - SERVER_SSL_ENABLED=true
-  #     - SERVER_SSL_CERTIFICATE=config/certs/kibana/kibana.crt
-  #     - SERVER_SSL_KEY=config/certs/kibana/kibana.key
-  #     - SERVER_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      # SSL settings for Kibana
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=config/certs/kibana/kibana.crt
+      - SERVER_SSL_KEY=config/certs/kibana/kibana.key
+      - SERVER_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
 
-  #     # Additional settings
-  #     - TELEMETRY_ENABLED=false
-  #     - LOGGING_ROOT_LEVEL=info
-  #   mem_limit: 1073741824
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -k -f https://localhost:5601/api/status || exit 1"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 15
-  #     start_period: 180s
-  #   networks:
-  #     - transcendence_net
-  #   restart: unless-stopped
+      # Additional settings
+      - TELEMETRY_ENABLED=false
+      - LOGGING_ROOT_LEVEL=info
+    mem_limit: 1073741824
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -f https://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 180s
+    networks:
+      - transcendence_net
+    restart: unless-stopped
 
 volumes:
   frontend_dist: # frontendのビルド成果物を永続化/共有するための名前付きボリューム

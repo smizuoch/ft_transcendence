@@ -6,25 +6,25 @@ async function main() {
   // サンプルユーザープロフィールを作成
   const sampleProfiles = [
     {
-      user_name: 'user1',
-      profile_image: '/images/avatar/user1.png',
-      is_online: true,
+      username: 'user1',
+      profileImage: '/images/avatar/user1.png',
+      isOnline: true,
     },
     {
-      user_name: 'user2',
-      profile_image: '/images/avatar/user2.png', 
-      is_online: false,
+      username: 'user2',
+      profileImage: '/images/avatar/user2.png', 
+      isOnline: false,
     },
     {
-      user_name: 'testuser',
-      profile_image: '/images/avatar/default_avatar.png',
-      is_online: true,
+      username: 'testuser',
+      profileImage: '/images/avatar/default_avatar.png',
+      isOnline: true,
     }
   ];
 
   for (const profile of sampleProfiles) {
     await prisma.userProfile.upsert({
-      where: { user_name: profile.user_name },
+      where: { username: profile.username },
       update: {},
       create: profile,
     });
