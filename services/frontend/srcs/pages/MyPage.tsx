@@ -16,6 +16,12 @@ interface UserData {
   isOnline: boolean;
 }
 
+interface SearchResult {
+  username: string;
+  profileImage: string;
+  isOnline: boolean;
+}
+
 /**
  * Responsive implementation that reproduces the supplied mock *pixel‑perfect*.
  *
@@ -31,14 +37,32 @@ interface UserData {
  *  Tailwind utility classes + inline styles → no external stylesheets needed.
  */
 const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
-  /* ------------------------------------------------------------------ */
-  // State & refs
+  /* ------------------------------------------------------------------ */  // State & refs
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResult, setShowSearchResult] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  /* ------------------------------------------------------------------ */
+  // 検索結果外をクリックした時に検索結果を閉じる
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSearchResult(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   /* ------------------------------------------------------------------ */
   // Fetch user data from user_search service
@@ -134,11 +158,59 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
     };
     reader.readAsDataURL(file);
   };
+  const handleSearch = async () => {
+    const trimmedTerm = searchTerm.trim();
+    if (!trimmedTerm) {
+      setShowSearchResult(false);
+      setSearchResult(null);
+      return;
+    }
 
-  const handleSearch = () => {
-    if (!searchTerm.trim()) return;
-    alert(`Searching for: ${searchTerm}`);
-    // Future: navigate("UserProfile", searchTerm)
+    setIsSearching(true);
+    setSearchError(null);
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setSearchError('認証が必要です');
+        return;
+      }
+
+      const response = await fetch(`/api/user-search/profile/${encodeURIComponent(trimmedTerm)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setSearchResult(result.data);
+        setShowSearchResult(true);
+        setSearchError(null);
+      } else if (response.status === 404) {
+        setSearchResult(null);
+        setSearchError('ユーザーが見つかりませんでした');
+        setShowSearchResult(true);
+      } else {
+        setSearchResult(null);
+        setSearchError('検索に失敗しました');
+        setShowSearchResult(true);
+      }
+    } catch (error) {
+      console.error('Error searching user:', error);
+      setSearchResult(null);
+      setSearchError('検索中にエラーが発生しました');
+      setShowSearchResult(true);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleUserSelect = (username: string) => {
+    navigate("UserProfile", username);
+    setShowSearchResult(false);
+    setSearchTerm("");
   };
   /* ------------------------------------------------------------------ */
   // Design tokens – tweak once, propagate everywhere
@@ -229,10 +301,8 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
             style={{ color: accent, fontSize: NAME_SIZE, lineHeight: 1 }}
           >
             {userData?.username || "NAME"}
-          </button>
-
-          {/* Search bar */}
-          <div className="relative mt-10" style={{ width: 560 }}>
+          </button>          {/* Search bar */}
+          <div ref={searchContainerRef} className="relative mt-10" style={{ width: 560 }}>
             {/* Icon */}
             <img
               src="/images/icons/userserch.svg"
@@ -244,7 +314,14 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                // リアルタイム検索は負荷が高いので、Enterキーでのみ検索
+                if (!e.target.value.trim()) {
+                  setShowSearchResult(false);
+                  setSearchResult(null);
+                }
+              }}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               className="w-full rounded-md border bg-transparent focus:outline-none"
               style={{
@@ -254,7 +331,66 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
                 color: accent,
                 fontSize: 18,
               }}
+              placeholder="ユーザー名を入力してEnterキーを押してください"
             />
+
+            {/* 検索結果ドロップダウン */}
+            {showSearchResult && (
+              <div
+                className="absolute top-full left-0 mt-1 w-full bg-white rounded-md border shadow-lg z-10"
+                style={{ borderColor: accent }}
+              >
+                {isSearching ? (
+                  <div className="p-4 text-center" style={{ color: accent }}>
+                    検索中...
+                  </div>
+                ) : searchError ? (
+                  <div className="p-4 text-center text-red-500">
+                    {searchError}
+                  </div>
+                ) : searchResult ? (
+                  <div
+                    onClick={() => handleUserSelect(searchResult.username)}
+                    className="flex items-center p-4 hover:bg-gray-50 cursor-pointer"
+                  >
+                    {/* ユーザーアバター */}
+                    <div className="w-12 h-12 rounded-full overflow-hidden mr-4 bg-gray-200">
+                      {searchResult.profileImage && searchResult.profileImage !== '/images/avatar/default_avatar.png' ? (
+                        <img 
+                          src={searchResult.profileImage} 
+                          alt={`${searchResult.username}'s avatar`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                          avatar
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* ユーザー情報 */}
+                    <div className="flex-1">
+                      <div className="font-medium text-lg" style={{ color: accent }}>
+                        {searchResult.username}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {searchResult.isOnline ? (
+                          <span className="flex items-center">
+                            <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
+                            オンライン
+                          </span>
+                        ) : (
+                          <span className="flex items-center">
+                            <span className="w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
+                            オフライン
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
         </div>
       </div>
