@@ -2,6 +2,7 @@ import fastify from 'fastify';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { MediasoupService } from './mediasoup-service';
 import { RoomManager } from './room-manager';
+import { TournamentManager } from './tournament-manager';
 import { GameState } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -49,9 +50,10 @@ const io = new SocketIOServer({
   }
 });
 
-// MediasoupとRoomManagerのインスタンス
+// MediasoupとRoomManagerとTournamentManagerのインスタンス
 const mediasoupService = new MediasoupService();
 const roomManager = new RoomManager();
+const tournamentManager = new TournamentManager();
 
 async function startServer() {
   try {
@@ -308,6 +310,254 @@ async function startServer() {
           }
         }
       });
+
+      // ======== トーナメント関連のイベントハンドラー ========
+
+      // トーナメント作成
+      socket.on('create-tournament', async (data: { maxPlayers: number; playerInfo: any }) => {
+        try {
+          const { maxPlayers, playerInfo } = data;
+          const tournamentId = Math.floor(100000 + Math.random() * 900000).toString();
+          
+          const tournament = tournamentManager.createTournament(tournamentId, maxPlayers);
+          const role = tournamentManager.addPlayer(tournamentId, socket.id, playerInfo);
+          
+          socket.join(`tournament-${tournamentId}`);
+          
+          socket.emit('tournament-created', {
+            tournamentId,
+            tournament,
+            playerId: socket.id,
+            role
+          });
+
+          console.log(`Tournament ${tournamentId} created with max ${maxPlayers} players`);
+        } catch (error) {
+          console.error('Error creating tournament:', error);
+          socket.emit('error', { message: 'Failed to create tournament' });
+        }
+      });
+
+      // トーナメント参加
+      socket.on('join-tournament', async (data: { tournamentId: string; playerInfo: any }) => {
+        try {
+          const { tournamentId, playerInfo } = data;
+          
+          const role = tournamentManager.addPlayer(tournamentId, socket.id, playerInfo);
+          const tournament = tournamentManager.getTournament(tournamentId);
+          
+          if (!tournament) {
+            socket.emit('error', { message: 'Tournament not found' });
+            return;
+          }
+
+          socket.join(`tournament-${tournamentId}`);
+          
+          const participants = tournamentManager.getAllParticipants(tournamentId);
+          
+          socket.emit('tournament-joined', {
+            tournamentId,
+            tournament,
+            playerId: socket.id,
+            role,
+            participants
+          });
+
+          // 他の参加者に新しい参加者を通知
+          socket.to(`tournament-${tournamentId}`).emit('tournament-participant-joined', {
+            playerId: socket.id,
+            playerInfo,
+            role,
+            participants
+          });
+
+          console.log(`Player ${socket.id} joined tournament ${tournamentId} as ${role}`);
+        } catch (error) {
+          console.error('Error joining tournament:', error);
+          socket.emit('error', { message: 'Failed to join tournament' });
+        }
+      });
+
+      // トーナメント開始
+      socket.on('start-tournament', async (data: { tournamentId: string }) => {
+        try {
+          const { tournamentId } = data;
+          
+          const success = tournamentManager.startTournament(tournamentId);
+          if (!success) {
+            socket.emit('tournament-start-failed', { 
+              reason: 'Tournament cannot be started' 
+            });
+            return;
+          }
+
+          const tournament = tournamentManager.getTournament(tournamentId);
+          const nextMatches = tournamentManager.getNextMatches(tournamentId);
+
+          // 全参加者にトーナメント開始を通知
+          io.to(`tournament-${tournamentId}`).emit('tournament-started', {
+            tournamentId,
+            tournament,
+            nextMatches
+          });
+
+          console.log(`Tournament ${tournamentId} started with ${tournament?.players.length} players`);
+        } catch (error) {
+          console.error('Error starting tournament:', error);
+          socket.emit('error', { message: 'Failed to start tournament' });
+        }
+      });
+
+      // 試合結果報告
+      socket.on('tournament-match-result', async (data: { 
+        tournamentId: string; 
+        matchId: string; 
+        winnerId: string;
+      }) => {
+        try {
+          const { tournamentId, matchId, winnerId } = data;
+          
+          const success = tournamentManager.recordMatchResult(tournamentId, matchId, winnerId);
+          if (!success) {
+            socket.emit('error', { message: 'Failed to record match result' });
+            return;
+          }
+
+          const tournament = tournamentManager.getTournament(tournamentId);
+          const match = tournamentManager.getMatch(tournamentId, matchId);
+          
+          if (!tournament || !match) {
+            socket.emit('error', { message: 'Tournament or match not found' });
+            return;
+          }
+
+          // 該当する試合のプレイヤーのみに試合結果を通知
+          const matchPlayers = tournamentManager.getMatchPlayers(tournamentId, matchId);
+          
+          // 勝者と敗者を特定
+          const winnerId_actual = match.winner?.playerId;
+          const loserId = matchPlayers.find(id => id !== winnerId_actual);
+          
+          console.log(`Match ${matchId} completed. Winner: ${winnerId_actual}, Loser: ${loserId}`);
+
+          // 各プレイヤーに個別の情報を送信
+          for (const playerId of matchPlayers) {
+            const playerSocket = io.sockets.sockets.get(playerId);
+            if (playerSocket) {
+              const isWinner = playerId === winnerId_actual;
+              
+              playerSocket.emit('tournament-match-completed', {
+                tournamentId,
+                match,
+                tournament,
+                isWinner,
+                isEliminated: !isWinner
+              });
+
+              console.log(`Sent match result to ${playerId}: ${isWinner ? 'WINNER' : 'ELIMINATED'}`);
+            }
+          }
+
+          // ラウンド進行チェック
+          const roundAdvanced = tournamentManager.advanceRound(tournamentId);
+          if (roundAdvanced) {
+            const nextMatches = tournamentManager.getNextMatches(tournamentId);
+            
+            // 次のラウンドに進む勝者のみに通知
+            for (const nextMatch of nextMatches) {
+              const advancingPlayers = tournamentManager.getMatchPlayers(tournamentId, nextMatch.id);
+              
+              for (const playerId of advancingPlayers) {
+                const playerSocket = io.sockets.sockets.get(playerId);
+                if (playerSocket) {
+                  playerSocket.emit('tournament-round-advanced', {
+                    tournamentId,
+                    tournament,
+                    nextMatches: [nextMatch], // そのプレイヤーの試合のみ
+                    currentMatch: nextMatch
+                  });
+                  
+                  console.log(`Sent round advancement to ${playerId} for match ${nextMatch.id}`);
+                }
+              }
+            }
+          }
+
+          // トーナメント完了チェック
+          if (tournament?.status === 'COMPLETED') {
+            // 全参加者にトーナメント完了を通知（これは全員が知るべき情報）
+            io.to(`tournament-${tournamentId}`).emit('tournament-completed', {
+              tournamentId,
+              tournament,
+              winner: tournament.winner
+            });
+            console.log(`Tournament ${tournamentId} completed, winner: ${tournament.winner?.playerInfo.name}`);
+          }
+
+        } catch (error) {
+          console.error('Error recording tournament match result:', error);
+          socket.emit('error', { message: 'Failed to record match result' });
+        }
+      });
+
+      // トーナメント情報取得
+      socket.on('get-tournament', async (data: { tournamentId: string }) => {
+        try {
+          const { tournamentId } = data;
+          const tournament = tournamentManager.getTournament(tournamentId);
+          const participants = tournamentManager.getAllParticipants(tournamentId);
+          const progress = tournamentManager.getTournamentProgress(tournamentId);
+          
+          socket.emit('tournament-info', {
+            tournament,
+            participants,
+            progress
+          });
+        } catch (error) {
+          console.error('Error getting tournament info:', error);
+          socket.emit('error', { message: 'Failed to get tournament info' });
+        }
+      });
+
+      // プレイヤーの現在の試合取得
+      socket.on('get-current-match', async (data: { tournamentId: string }) => {
+        try {
+          const { tournamentId } = data;
+          const match = tournamentManager.getPlayerCurrentMatch(tournamentId, socket.id);
+          
+          socket.emit('current-match', {
+            tournamentId,
+            match
+          });
+        } catch (error) {
+          console.error('Error getting current match:', error);
+          socket.emit('error', { message: 'Failed to get current match' });
+        }
+      });
+
+      // トーナメントから退出
+      socket.on('leave-tournament', async (data: { tournamentId: string }) => {
+        try {
+          const { tournamentId } = data;
+          
+          const success = tournamentManager.removeParticipant(tournamentId, socket.id);
+          if (success) {
+            socket.leave(`tournament-${tournamentId}`);
+            
+            const participants = tournamentManager.getAllParticipants(tournamentId);
+            
+            // 他の参加者に退出を通知
+            socket.to(`tournament-${tournamentId}`).emit('tournament-participant-left', {
+              playerId: socket.id,
+              participants
+            });
+
+            console.log(`Player ${socket.id} left tournament ${tournamentId}`);
+          }
+        } catch (error) {
+          console.error('Error leaving tournament:', error);
+        }
+      });
     });
 
     // ヘルスチェックエンドポイント
@@ -321,7 +571,23 @@ async function startServer() {
         service: 'pong-sfu-server',
         version: '1.0.0',
         rooms: roomManager.getRoomCount(),
-        activePlayers: roomManager.getTotalPlayers()
+        activePlayers: roomManager.getTotalPlayers(),
+        tournaments: tournamentManager.getAllTournaments().length
+      };
+    });
+
+    // トーナメント一覧取得エンドポイント
+    app.get('/tournaments', async (request, reply) => {
+      return {
+        tournaments: tournamentManager.getAllTournaments().map(t => ({
+          id: t.id,
+          maxPlayers: t.maxPlayers,
+          playerCount: t.players.length,
+          spectatorCount: t.spectators.size,
+          status: t.status,
+          createdAt: t.createdAt,
+          currentRound: t.currentRound
+        }))
       };
     });
 

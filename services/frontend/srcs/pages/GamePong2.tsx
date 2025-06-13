@@ -6,6 +6,9 @@ import { NPCSettingsPanel } from "@/utils/NPCSettingsPanel";
 import { NPCDebugPanel } from "@/utils/NPCDebugPanel";
 import { SpectatorPanel } from "@/utils/SpectatorPanel";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
+import { localMultiplayerService, type LocalClient, type LocalRoomState } from "@/utils/localMultiplayerService";
+import { LocalPlayerInput } from "@/utils/LocalPlayerInput";
+import { LocalGamePanel } from "@/utils/LocalGamePanel";
 // NPCアルゴリズムの登録を確実に行うためにインポート
 import "@/utils/npcAlgorithmRegistry";
 
@@ -53,8 +56,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   void multiplayerConnected;
   void roomPlayers;
   void roomSpectators;
-  void isGameReady;// ============= NPC関連の状態 =============
+  void isGameReady;  // ============= NPC関連の状態 =============
   const [npcEnabled, setNpcEnabled] = useState(false);
+  
+  // ============= ローカル対戦関連の状態 =============
+  const [localEnabled, setLocalEnabled] = useState(false);
+  const [showLocalPlayerInput, setShowLocalPlayerInput] = useState(false);
+  const [localRoomState, setLocalRoomState] = useState<LocalRoomState | null>(null);
+  
   const [npcSettings, setNpcSettings] = useState<NPCConfig>({
     player: 1 as 1 | 2, // Player 1 (上)に固定
     mode: 'technician' as any, // technicianに固定
@@ -94,11 +103,11 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   // engineRefの未使用警告を抑制（NPC機能が無効化されているため）
   void engineRef;  // ============= 通信対戦のセットアップ =============
   useEffect(() => {
-    // NPCモードの場合は部屋入力をスキップ
-    if (npcEnabled) {
+    // NPCモードまたはローカルモードの場合は部屋入力をスキップ
+    if (npcEnabled || localEnabled) {
       setShowRoomInput(false);
       return;
-    }    const setupMultiplayer = async () => {
+    }const setupMultiplayer = async () => {
       try {
         // 既に接続されている場合は何もしない
         if (multiplayerService.isConnectedToServer()) {
@@ -205,9 +214,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         console.error('Failed to setup multiplayer:', error);
         setMultiplayerConnected(false);
       }
-    };
-
-    // 通信対戦のセットアップを一度だけ実行
+    };    // 通信対戦のセットアップを一度だけ実行
     if (!multiplayerService.isConnectedToServer()) {
       setupMultiplayer();
     }
@@ -215,8 +222,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     // コンポーネントアンマウント時のみ部屋から離脱
     return () => {
       // ページ遷移や終了時のみ部屋から離脱
-    };  }, [npcEnabled]);
-
+    };  }, [npcEnabled, localEnabled]);
   // ============= コンポーネントアンマウント時の部屋離脱 =============
   useEffect(() => {
     return () => {
@@ -224,6 +230,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       if (multiplayerService.isInRoom()) {
         multiplayerService.leaveRoom();
         console.log('Left room due to component unmount');
+      }
+      if (localMultiplayerService.isInLocalRoom()) {
+        localMultiplayerService.leaveLocalRoom();
+        console.log('Left local room due to component unmount');
       }
     };
   }, []);
@@ -241,19 +251,31 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       stopGameLoop();
     };
   }, [initializeEngine, stopGameLoop]);
-
   const handleScore = useCallback((scorer: 'player1' | 'player2') => {
     setScore((prev) => {
       const newScore = { ...prev, [scorer]: prev[scorer] + 1 };
       if (newScore[scorer] >= DEFAULT_CONFIG.winningScore) {
         setGameOver(true);
-        setWinner(scorer === 'player1' ? 1 : 2);
+        const winnerNumber = scorer === 'player1' ? 1 : 2;
+        setWinner(winnerNumber);
+        
+        // ローカル対戦の場合はローカルサービスでゲーム終了処理
+        if (localEnabled && localRoomState) {
+          localMultiplayerService.onGameEnd(winnerNumber);
+        }
       }
       return newScore;
-    });  }, []);  useEffect(() => {
+    });
+  }, [localEnabled, localRoomState]);useEffect(() => {
     if (gameStarted) {
+      // ローカル対戦時
+      if (localEnabled && localRoomState) {
+        // ローカル対戦のゲームループ
+        const hasNPC = localMultiplayerService.hasNPC();
+        startGameLoop(handleScore, gameStarted, keysRef, '#212121', hasNPC, null, null);
+      }
       // 通信対戦時は入力送信とゲーム状態同期を行う
-      if (isMultiplayer && multiplayerService.isInRoom()) {        // 観戦者の場合は入力を送信しない
+      else if (isMultiplayer && multiplayerService.isInRoom()) {// 観戦者の場合は入力を送信しない
         if (!isSpectator && multiplayerService.isPlayer()) {
           const sendInputs = () => {
             if (keysRef.current) {
@@ -295,10 +317,8 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       }
     } else {
       stopGameLoop();
-    }
-
-    return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, npcEnabled, isMultiplayer, isSpectator, remotePlayerInput, playerNumber]);
+    }    return () => stopGameLoop();
+  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, npcEnabled, localEnabled, localRoomState, isMultiplayer, isSpectator, remotePlayerInput, playerNumber]);
 
   useEffect(() => {
     if (!gameStarted) return;
@@ -326,11 +346,129 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           multiplayerService.sendScoreUpdate(scorer);
         });
       }
-    }
-  }, [gameStarted, isMultiplayer, isAuthoritativeClient]);
+    }  }, [gameStarted, isMultiplayer, isAuthoritativeClient]);
 
+  // ============= ローカル対戦のイベントリスナー =============
+  useEffect(() => {
+    if (!localEnabled) return;
+
+    const handleLocalRoomJoined = (roomState: LocalRoomState) => {
+      setLocalRoomState(roomState);
+      setShowRoomInput(false);
+      console.log('Local room joined:', roomState);
+    };
+
+    const handleLocalGameStarted = (roomState: LocalRoomState) => {
+      console.log('Local game started:', roomState);
+      setGameStarted(true);
+      setGameOver(false);
+      setWinner(null);
+      setScore({ player1: 0, player2: 0 });
+    };    const handleLocalGameEnded = (data: {
+      winner: number;
+      winnerPlayer: LocalClient;
+      loserPlayer: LocalClient;
+      finalScores: { player1: number; player2: number };
+      roomState: LocalRoomState;
+    }) => {
+      console.log('Local game ended:', data);
+      setScore(data.finalScores);
+      setGameOver(true);
+      setWinner(data.winner);
+      setLocalRoomState(data.roomState);
+
+      // 次のゲームまたは結果画面への遷移
+      setTimeout(() => {
+        const result = localMultiplayerService.proceedToNext();
+        console.log('Transition result:', {
+          action: result.action,
+          roomNumber: result.roomNumber,
+          hasRoomState: !!result.roomState
+        });
+
+        if (result.action === 'nextGame' && result.roomNumber && result.roomState) {
+          console.log('Setting up next game with room:', result.roomNumber);
+
+          // 現在のサービス状態をクリア
+          localMultiplayerService.leaveLocalRoom();
+
+          // 次のゲーム用に新しい部屋をセットアップ
+          localMultiplayerService.setupNextGame(result.roomState)
+            .then(() => {
+              console.log('Successfully set up next game, navigating to:', result.roomNumber);
+              // 次のゲームに遷移
+              navigate('GamePong2', undefined, result.roomNumber);
+            })
+            .catch((error) => {
+              console.error('Failed to setup next game:', error);
+              // エラーの場合は結果画面に遷移
+              console.log('Falling back to GameResult due to setup error');
+              navigate('GameResult');
+            });
+        } else {
+          // 結果画面に遷移
+          console.log('Navigating to GameResult, reason:', result.action === 'result' ? 'Not enough alive players' : 'Missing room data');
+          navigate('GameResult');
+        }
+      }, 2000);
+    };
+
+    localMultiplayerService.on('localRoomJoined', handleLocalRoomJoined);
+    localMultiplayerService.on('localGameStarted', handleLocalGameStarted);
+    localMultiplayerService.on('localGameEnded', handleLocalGameEnded);
+
+    return () => {
+      localMultiplayerService.off('localRoomJoined', handleLocalRoomJoined);
+      localMultiplayerService.off('localGameStarted', handleLocalGameStarted);
+      localMultiplayerService.off('localGameEnded', handleLocalGameEnded);
+    };
+  }, [localEnabled, navigate]);
   // ============= ハンドラー関数 =============
+  const handleLocalPlayersConfirmed = useCallback((clients: LocalClient[]) => {
+    console.log('Local players confirmed:', clients);
+    localMultiplayerService.setupLocalMultiplayer(roomNumber, clients);
+    setShowLocalPlayerInput(false);
+  }, [roomNumber]);
+  const handleLocalCancel = useCallback(() => {
+    setShowLocalPlayerInput(false);
+    setLocalEnabled(false);
+  }, []);
+
+  const handleLocalEnabled = useCallback((enabled: boolean) => {
+    setLocalEnabled(enabled);
+    if (enabled) {
+      setNpcEnabled(false); // ローカルを有効にしたらNPCを無効化
+      setShowLocalPlayerInput(true); // 参加者入力画面を表示
+    }
+  }, []);
+
   const handleStartGame = useCallback(() => {
+    // ローカル対戦モードの場合
+    if (localEnabled && localRoomState) {
+      console.log('Starting local multiplayer game...');
+      
+      // NPCが含まれている場合はNPCを有効化
+      if (localMultiplayerService.hasNPC()) {
+        if (engineRef.current) {
+          engineRef.current.updateNPCConfig({
+            enabled: true,
+            player: 1, // Player1をNPCに設定
+            mode: 'technician',
+            difficulty: 'Nightmare',
+            reactionDelayMs: 50,
+          });
+        }
+      } else {
+        // NPCを無効化
+        if (engineRef.current) {
+          engineRef.current.updateNPCConfig({ enabled: false });
+        }
+      }
+      
+      setGameStarted(true);
+      return;
+    }
+    
     // マルチプレイヤーモードの場合、サーバーにゲーム開始要求を送信
     if (isMultiplayer && isGameReady) {
       console.log('Requesting to start multiplayer game...');
@@ -358,7 +496,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         engineRef.current.updateNPCConfig({ enabled: false });
       }
       setGameStarted(true);
-    } else if (!isMultiplayer) {
+    } else if (!isMultiplayer && !localEnabled) {
       // ローカルPVPモード
       if (engineRef.current) {
         engineRef.current.updateNPCConfig({ enabled: false });
@@ -371,7 +509,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       setWinner(null);
       setScore({ player1: 0, player2: 0 });
     }
-  }, [npcEnabled, npcSettings, engineRef, isMultiplayer, isGameReady, gameStarted]);
+  }, [npcEnabled, npcSettings, engineRef, isMultiplayer, isGameReady, gameStarted, localEnabled, localRoomState]);
 
   // ============= NPC状態のデバッグ情報更新 =============
   useEffect(() => {
@@ -437,46 +575,57 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       </div>
     );  };  // ============= propRoomNumberの処理 =============
   useEffect(() => {
-    if (propRoomNumber && !multiplayerService.isInRoom()) {
+    if (propRoomNumber) {
       setRoomNumber(propRoomNumber);
       setShowRoomInput(false);
-      // 部屋番号が渡された場合は自動的にマルチプレイヤーモードに設定
-      setIsMultiplayer(true);
+      
+      // ローカル対戦の場合はマルチプレイヤーモードを無効化
+      if (localEnabled) {
+        setIsMultiplayer(false);
+        console.log('Received room number for local tournament:', propRoomNumber);
+        return;
+      }
 
-      // マルチプレイヤーサービスが接続されていない場合は接続を待つ
-      const autoJoinRoom = async () => {
-        try {
-          // 既に部屋に参加している場合は何もしない
-          if (multiplayerService.isInRoom()) {
-            console.log('Already in room, skipping join');
-            return;
+      // 通信対戦の場合の処理
+      if (!multiplayerService.isInRoom()) {
+        // 部屋番号が渡された場合は自動的にマルチプレイヤーモードに設定
+        setIsMultiplayer(true);
+
+        // マルチプレイヤーサービスが接続されていない場合は接続を待つ
+        const autoJoinRoom = async () => {
+          try {
+            // 既に部屋に参加している場合は何もしない
+            if (multiplayerService.isInRoom()) {
+              console.log('Already in room, skipping join');
+              return;
+            }
+
+            // 接続済みの場合はそのまま部屋に参加
+            if (!multiplayerService.isConnectedToServer()) {
+              await multiplayerService.connect();
+              setMultiplayerConnected(true);
+            }
+
+            const playerInfo = {
+              id: '',
+              avatar: players.player2.avatar,
+              name: 'Player'
+            };
+
+            await multiplayerService.joinRoom(propRoomNumber, playerInfo);
+            console.log(`Auto-joining room: ${propRoomNumber}`);
+          } catch (error) {
+            console.error('Auto join room failed:', error);
+            alert('部屋への参加に失敗しました');
+            setMultiplayerConnected(false);
           }
+        };
 
-          // 接続済みの場合はそのまま部屋に参加
-          if (!multiplayerService.isConnectedToServer()) {
-            await multiplayerService.connect();
-            setMultiplayerConnected(true);
-          }
-
-          const playerInfo = {
-            id: '',
-            avatar: players.player2.avatar,
-            name: 'Player'
-          };
-
-          await multiplayerService.joinRoom(propRoomNumber, playerInfo);
-          console.log(`Auto-joining room: ${propRoomNumber}`);
-        } catch (error) {
-          console.error('Auto join room failed:', error);
-          alert('部屋への参加に失敗しました');
-          setMultiplayerConnected(false);
-        }
-      };
-
-      // 少し遅延を入れてマルチプレイヤーサービスの初期化を待つ
-      setTimeout(autoJoinRoom, 100);
+        // 少し遅延を入れてマルチプレイヤーサービスの初期化を待つ
+        setTimeout(autoJoinRoom, 100);
+      }
     }
-  }, [propRoomNumber, players.player2.avatar]);
+  }, [propRoomNumber, players.player2.avatar, localEnabled]);
 
   // ============= ハンドラー関数 =============
   const handleRoomNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -511,14 +660,11 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       };
 
       await multiplayerService.joinRoom(roomNumber, playerInfo);
-      setIsMultiplayer(true);
-
-    } catch (error) {
+      setIsMultiplayer(true);    } catch (error) {
       console.error('Failed to join room:', error);
       alert('部屋への参加に失敗しました');
       setMultiplayerConnected(false);
-    }
-  };
+    }  };
 
   return (
     <div className="relative w-full h-screen overflow-hidden font-[Futura]">
@@ -555,9 +701,8 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           )}
         </div>        {/* opening screen */}
         {!gameStarted && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {/* 部屋入力画面 */}
-            {showRoomInput && !npcEnabled ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center">            {/* 部屋入力画面 */}
+            {showRoomInput && !npcEnabled && !localEnabled ? (
               <div className="flex flex-col items-center gap-6 p-8 bg-black bg-opacity-50 rounded-lg">
                 <div className="text-3xl text-white mb-4">部屋番号を入力</div>
                 <input
@@ -577,10 +722,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
                 </button>
               </div>
             ) : (
-              <>
-                <div className="text-5xl mb-4 tracking-widest" style={{ color: "#212121" }}>
-                  {isMultiplayer ? roomNumber.toString().padStart(6, "0") : "PvP"}
-                </div>                <img
+              <>                <div className="text-5xl mb-4 tracking-widest" style={{ color: "#212121" }}>
+                  {isMultiplayer ? roomNumber.toString().padStart(6, "0") : 
+                   localEnabled ? "ローカル" : "PvP"}
+                </div><img
                   src={`${ICON_PATH}${hoverClose ? "close" : "open"}.svg`}
                   alt="toggle"
                   className="w-40 h-40 cursor-pointer"
@@ -595,12 +740,36 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
                       デバッグ: Players: {roomPlayers.length}, Ready: {isGameReady.toString()}
                     </div>
                   </div>
-                )}
-
-                {/* マルチプレイヤー準備完了メッセージ */}
+                )}                {/* マルチプレイヤー準備完了メッセージ */}
                 {isMultiplayer && isGameReady && (
                   <div className="text-2xl text-white mt-4">
                     ドアをクリックしてゲーム開始！
+                  </div>
+                )}                {/* ローカル対戦準備完了メッセージ */}
+                {localEnabled && localRoomState && (
+                  <div className="text-center mt-4">
+                    <div className="text-2xl text-white mb-2">
+                      ドアをクリックしてトーナメント開始！
+                    </div>
+                    <div className="text-sm text-gray-300 space-y-1">
+                      <div>参加者: {localRoomState.clients.filter(c => c.id !== 'npc-technician').length}人</div>
+                      <div className="text-yellow-400">
+                        🥊 対戦: {localRoomState.players.map(p => p.name).join(' vs ')}
+                      </div>
+                      {localRoomState.spectators.filter(s => s.stillAlive).length > 0 && (
+                        <div className="text-blue-400">
+                          👥 待機: {localRoomState.spectators.filter(s => s.stillAlive).map(s => s.name).join(', ')}
+                        </div>
+                      )}
+                      {localRoomState.tournament && (
+                        <div className="text-green-400">
+                          📍 {localRoomState.tournament.currentMatch === 'semifinal1' ? 'Semifinal 1' : 
+                              localRoomState.tournament.currentMatch === 'semifinal2' ? 'Semifinal 2' : 
+                              localRoomState.tournament.currentMatch === 'final' ? 'Final' : 'Tournament'} 
+                          (部屋: {localRoomState.roomNumber})
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </>
@@ -614,6 +783,8 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         npcSettings={npcSettings}
         setNpcSettings={setNpcSettings}
         gameStarted={gameStarted}
+        localEnabled={localEnabled}
+        setLocalEnabled={handleLocalEnabled}
       />
 
       {/* ============= NPC状態デバッグ表示 ============= */}
@@ -628,6 +799,23 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           roomPlayers={roomPlayers}
           roomSpectators={roomSpectators}
           currentUserId={multiplayerService.getPlayerId() || undefined}
+          score={score}
+          gameStarted={gameStarted}
+        />
+      )}
+
+      {/* ============= ローカル対戦プレイヤー入力 ============= */}
+      {showLocalPlayerInput && (
+        <LocalPlayerInput
+          onPlayersConfirmed={handleLocalPlayersConfirmed}
+          onCancel={handleLocalCancel}
+        />
+      )}
+
+      {/* ============= ローカル対戦パネル ============= */}
+      {localEnabled && localRoomState && (
+        <LocalGamePanel
+          roomState={localRoomState}
           score={score}
           gameStarted={gameStarted}
         />

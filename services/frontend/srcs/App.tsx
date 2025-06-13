@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
+import Home from '@/pages/Home';
 import { OnlineStatusManager } from "./utils/onlineStatusManager";
-import Home from './pages/Home';
-import UserRegistration from './pages/UserRegistration';
-import EmailVerification from './pages/EmailVerification';
-import TwoFactorAuth from './pages/TwoFactorAuth';
-import MyPage from './pages/MyPage';
-import GameSelect from './pages/GameSelect';
-import GamePong2 from './pages/GamePong2';
-import GamePong42 from './pages/GamePong42';
-import GameResult from './pages/GameResult';
-import UserProfile from './pages/UserProfile';
-import AuthCallback from './pages/AuthCallback';
+import UserRegistration from '@/pages/UserRegistration';
+import EmailVerification from '@/pages/EmailVerification';
+import TwoFactorAuth from '@/pages/TwoFactorAuth';
+import MyPage from '@/pages/MyPage';
+import GameSelect from '@/pages/GameSelect';
+import GamePong2 from '@/pages/GamePong2';
+import GamePong42 from '@/pages/GamePong42';
+import GamePong4 from '@/pages/GamePong4';
+import GameResult from '@/pages/GameResult';
+import UserProfile from '@/pages/UserProfile';
+import AuthCallback from '@/pages/AuthCallback';
 
 interface RouteState {
   page: string;
@@ -80,6 +81,8 @@ const App: React.FC = () => {
         return <GamePong2 navigate={navigate} roomNumber={currentRoute?.roomNumber} />;
       case 'GamePong42':
         return <GamePong42 navigate={navigate} />;
+      case 'GamePong4':
+        return <GamePong4 navigate={navigate} />;
       case 'GameResult':
         return <GameResult navigate={navigate} />;
       case 'UserProfile':
