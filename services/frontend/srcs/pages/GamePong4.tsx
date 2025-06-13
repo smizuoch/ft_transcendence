@@ -63,7 +63,8 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   
   // UI状態
   const [hoverClose, setHoverClose] = useState(false);
-  const iconsDocked = false; // Fixed value to avoid unused variable warning
+  const [iconsDocked, setIconsDocked] = useState(false);
+  const ICON_LAUNCH_DELAY = 600;
   
   // トーナメント状態
   const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -614,6 +615,14 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
     }
   }, [showTournamentLobby, isEliminated, initializeEngine]);
 
+  // アイコンアニメーション効果
+  useEffect(() => {
+    if (!gameStarted) return;
+    setIconsDocked(false);
+    const t = setTimeout(() => setIconsDocked(true), ICON_LAUNCH_DELAY);
+    return () => clearTimeout(t);
+  }, [gameStarted]);
+
   const handleScore = useCallback((scorer: 'player1' | 'player2') => {
     console.log('handleScore called with scorer:', scorer);
     setScore((prev: { player1: number; player2: number }) => {
@@ -807,19 +816,24 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   };
 
   const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
+    // 自分のプレイヤー番号に基づいてスコアとアバターを決定
     let displayedScore;
     let avatarPlayerKey: "player1" | "player2";
     
     if (isMultiplayer && playerNumber) {
+      // マルチプレイヤーの場合：左=自分、右=相手
       const isMyScore = (side === "left");
       if (isMyScore) {
+        // 自分のスコアとアバター
         displayedScore = playerNumber === 1 ? score.player1 : score.player2;
         avatarPlayerKey = playerNumber === 1 ? "player1" : "player2";
       } else {
+        // 相手のスコアとアバター  
         displayedScore = playerNumber === 1 ? score.player2 : score.player1;
         avatarPlayerKey = playerNumber === 1 ? "player2" : "player1";
       }
     } else {
+      // ローカルゲーム/NPCモードの場合は従来通り
       displayedScore = idx === 1 ? score.player1 : score.player2;
       avatarPlayerKey = idx === 1 ? "player1" : "player2";
     }
@@ -839,11 +853,14 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
           side === "right" ? "flex-row-reverse" : ""
         } ${iconsDocked ? positionClass : initialPosition} ${translateClass}`}
       >
+        {/* outer score */}
         {pts >= DEFAULT_CONFIG.winningScore ? (
           <img src={`${ICON_PATH}win.svg`} alt="win" className="w-12 h-12 lg:w-16 lg:h-16" />
         ) : (
           <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
         )}
+        
+        {/* inner avatar */}
         <img
           src={players[avatarPlayerKey].avatar}
           alt="avatar"
@@ -1107,11 +1124,13 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
               <>
                 {isMultiplayer && playerNumber ? (
                   <>
-                    {renderAvatarGroup(1, "left")}
-                    {renderAvatarGroup(2, "right")}
+                    {/* マルチプレイヤー：常に左=自分、右=相手 */}
+                    {renderAvatarGroup(1, "left")}   {/* 左側は自分 */}
+                    {renderAvatarGroup(1, "right")}  {/* 右側は相手 */}
                   </>
                 ) : (
                   <>
+                    {/* ローカルゲーム/NPCモード：従来通り */}
                     {renderAvatarGroup(1, "right")}
                     {renderAvatarGroup(2, "left")}
                   </>
