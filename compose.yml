@@ -84,8 +84,6 @@ services:
       - user_search_data:/app/data
     env_file:
       - ./secrets/.env
-    ports:
-      - "3003:3000"
 
   # # --- ELK Stack Setup ---
   # elk_setup:
