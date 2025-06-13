@@ -90,6 +90,9 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   
   // 新規追加: ゲームが初期化されたかどうかを追跡
   const [isGameInitialized, setIsGameInitialized] = useState(false);
+  
+  // 重複防止フラグ
+  const [tournamentResultSent, setTournamentResultSent] = useState(false);
 
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
@@ -290,7 +293,16 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
         // エラーハンドリング
         multiplayerService.on('error', (error: any) => {
           console.error('MultiplayerService error:', error);
-          alert('エラーが発生しました: ' + (error.message || error));
+          // 特定のエラーメッセージは無視
+          if (error.message !== 'Failed to record match result') {
+            alert('エラーが発生しました: ' + (error.message || error));
+          }
+        });
+
+        // 試合が既に完了している場合のイベント
+        multiplayerService.on('tournament-match-already-completed', (data: any) => {
+          console.log('Match already completed, current state:', data);
+          // エラーではないので、現在の状態を確認するだけ
         });
 
         // 通常のゲーム部屋のイベントリスナー
@@ -325,6 +337,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
           setScore({ player1: 0, player2: 0 }); // 再度確実にリセット
           setWinner(null);
           setIsEliminated(false);
+          setTournamentResultSent(false); // 重複防止フラグもリセット
         });
 
         multiplayerService.on('gameStarted', (data: any) => {
@@ -354,6 +367,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
           setScore({ player1: 0, player2: 0 }); // 再度確実にリセット
           setIsEliminated(false);
           setIsGameInitialized(true);
+          setTournamentResultSent(false); // 重複防止フラグもリセット
         });
 
         multiplayerService.on('gameEnded', (data: any) => {
@@ -391,8 +405,8 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
             player2Id: currentMatch?.player2?.playerId
           });
           
-          // トーナメントの場合は結果を報告（勝者のみ）
-          if (isWinner && currentMatch && tournamentId && isInTournament) {
+          // トーナメントの場合は結果を報告（勝者のみ、かつ重複防止）
+          if (isWinner && currentMatch && tournamentId && isInTournament && !tournamentResultSent) {
             const winnerId = data.winner === 1 ? 
               currentMatch.player1?.playerId : 
               currentMatch.player2?.playerId;
@@ -404,6 +418,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
                 winnerId
               });
               
+              setTournamentResultSent(true); // 重複防止フラグを設定
               multiplayerService.reportTournamentResult(tournamentId, currentMatch.id, winnerId);
             }
           }
@@ -635,8 +650,8 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
         setWinner(winnerNumber);
         console.log('Game over! Winner:', scorer, 'Winner number:', winnerNumber);
         
-        // トーナメント中の場合、結果を報告
-        if (currentMatch && tournamentId && isInTournament && isMultiplayer) {
+        // トーナメント中の場合、結果を報告（権威クライアントのみ、かつ重複防止）
+        if (currentMatch && tournamentId && isInTournament && isMultiplayer && isAuthoritativeClient && !tournamentResultSent) {
           const winnerId = winnerNumber === 1 ? 
             currentMatch.player1?.playerId : 
             currentMatch.player2?.playerId;
@@ -649,6 +664,8 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
               winnerNumber
             });
             
+            // 重複防止フラグを設定してから送信
+            setTournamentResultSent(true);
             // 少し遅延を入れて結果を報告
             setTimeout(() => {
               multiplayerService.reportTournamentResult(tournamentId, currentMatch.id, winnerId);
@@ -798,6 +815,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
       setWinner(null);
       setScore({ player1: 0, player2: 0 });
       setIsGameInitialized(true);
+      setTournamentResultSent(false); // 重複防止フラグもリセット
     } else {
       // 通常のローカルゲーム
       console.log('Starting regular local game');
@@ -812,6 +830,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
       setWinner(null);
       setScore({ player1: 0, player2: 0 });
       setIsGameInitialized(true);
+      setTournamentResultSent(false); // 重複防止フラグもリセット
     }
   };
 
