@@ -24,7 +24,6 @@ COPY services/sfu/tsconfig.json ./
 
 # ソースコードとスクリプトをコピー
 COPY services/sfu/src/ ./src/
-COPY services/sfu/scripts/ ./scripts/
 
 # SSL証明書ディレクトリを作成（権限も設定）
 RUN mkdir -p /app/certs /app/internal-certs && chmod 755 /app/certs /app/internal-certs
