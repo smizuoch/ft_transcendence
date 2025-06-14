@@ -13,6 +13,12 @@ interface UserData {
   rank?: number;
 }
 
+interface FriendshipStatus {
+  isFollowing: boolean;
+  isFollowedBy: boolean;
+  isMutual: boolean;
+}
+
 interface MockData {
   name: string;
   avatar: string;
@@ -27,13 +33,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [avatarBorderColor, setAvatarBorderColor] = useState<'green' | 'gray'>('green');
   const [showFollowButton, setShowFollowButton] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   // JWT経由でユーザー情報を取得
   useEffect(() => {
     const fetchUserData = async () => {
-      try {        const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
+      try {        
+        const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
+        
+        // ユーザー情報を取得
         const endpoint = userId 
           ? `/api/user-search/profile/${userId}` // プロキシ経由に変更
           : '/api/user-search/me'; // プロキシ経由に変更
@@ -48,7 +57,31 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
         if (response.ok) {
           const result = await response.json();
           setUserData(result.data);
-          setAvatarBorderColor(result.data.isOnline ? 'green' : 'gray');
+          
+          // 他のユーザーのプロフィールを見ている場合、フレンド状態をチェック
+          if (userId && result.data?.username) {
+            const friendStatusResponse = await fetch(`/api/friend-search/status/${result.data.username}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });            if (friendStatusResponse.ok) {
+              const friendResult = await friendStatusResponse.json();
+              setFriendshipStatus(friendResult.data);
+              setIsFollowing(friendResult.data.isFollowing);
+              
+              // オンライン状態の判定：画面を見ている かつ 相互フォロー状態
+              const isActuallyOnline = result.data.isOnline && friendResult.data.isMutual;
+              setAvatarBorderColor(isActuallyOnline ? 'green' : 'gray');
+            } else {
+              // フレンド状態が取得できない場合は、デフォルトでオフライン扱い
+              setAvatarBorderColor('gray');
+            }
+          } else {
+            // 自分のプロフィールの場合は、そのままオンライン状態を使用
+            setAvatarBorderColor(result.data.isOnline ? 'green' : 'gray');
+          }
+          
           setShowFollowButton(!!userId); // 他のユーザーの場合のみフォローボタン表示
         } else {
           setError('Failed to fetch user data');
@@ -85,10 +118,67 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
       { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
     ],
-  };
-  // フォロー状態の切り替え
-  const toggleFollow = () => {
-    setIsFollowing(!isFollowing);
+  };  // フォロー状態の切り替え
+  const toggleFollow = async () => {
+    if (!userData || !friendshipStatus) return;
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setError('認証が必要です');
+        return;
+      }
+
+      if (isFollowing) {
+        // アンフォロー実行
+        const response = await fetch(`/api/friend-search/unfollow/${userData.username}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });        if (response.ok) {
+          setIsFollowing(false);
+          setFriendshipStatus(prev => prev ? {
+            ...prev,
+            isFollowing: false,
+            isMutual: prev.isFollowedBy && false
+          } : null);
+          
+          // 双方向フォローでなくなったため、オンライン状態に関係なくグレーに変更
+          setAvatarBorderColor('gray');
+        } else {
+          throw new Error('アンフォローに失敗しました');
+        }
+      } else {
+        // フォロー実行
+        const response = await fetch('/api/friend-search/follow', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username: userData.username })
+        });        if (response.ok) {
+          setIsFollowing(true);
+          setFriendshipStatus(prev => prev ? {
+            ...prev,
+            isFollowing: true,
+            isMutual: prev.isFollowedBy && true
+          } : null);
+          
+          // 双方向フォローになった場合 かつ オンライン状態の場合のみ緑色に変更
+          const newIsMutual = friendshipStatus?.isFollowedBy && true;
+          const isActuallyOnline = userData.isOnline && newIsMutual;
+          setAvatarBorderColor(isActuallyOnline ? 'green' : 'gray');
+        } else {
+          throw new Error('フォローに失敗しました');
+        }
+      }
+    } catch (error) {
+      console.error('フォロー状態の変更に失敗:', error);
+      setError('フォロー状態の変更に失敗しました');
+    }
   };
 
   // ローディング状態の表示
