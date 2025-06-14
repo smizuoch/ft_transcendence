@@ -81,7 +81,7 @@ services/sfu/janus/logs/
 
 # Nginx certs generated locally
 secrets/certs/*
-!secrets/certs/.gitkeep
+!secrets/certs/generate-common-certs.sh
 
 # ====================
 # === Misc ===
