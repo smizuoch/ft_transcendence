@@ -54,7 +54,7 @@ DNS.7 = auth
 DNS.8 = npc_manager
 IP.1 = 127.0.0.1
 IP.2 = ::1
-IP.3 = 10.16.2.9
+IP.3 = "YOUR_SERVER_IP"  # Replace with your server's IP address
 EOF
 
 # Generate server certificate signing request
