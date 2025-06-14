@@ -14,29 +14,31 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # package.jsonとpackage-lock.jsonをコピー
-COPY package*.json ./
+COPY services/sfu/package*.json ./
 
 # 依存関係をインストール（ビルド用にdevDependenciesも含める）
 RUN npm install --verbose
 
 # TypeScript設定ファイルをコピー
-COPY tsconfig.json ./
+COPY services/sfu/tsconfig.json ./
 
 # ソースコードとスクリプトをコピー
-COPY src/ ./src/
-COPY scripts/ ./scripts/
+COPY services/sfu/src/ ./src/
+
+# SSL証明書ディレクトリを作成（権限も設定）
+RUN mkdir -p /app/certs /app/internal-certs && chmod 755 /app/certs /app/internal-certs
+
+# SSL証明書をコピー（ビルド時に利用可能な場合）
+COPY secrets/certs /app/certs/
 
 # TypeScriptをビルド
 RUN npm run build
-
-# SSL証明書を生成
-RUN chmod +x ./scripts/generate-ssl-certs.sh && ./scripts/generate-ssl-certs.sh
 
 # 本番用ユーザーを作成
 RUN addgroup --gid 1001 nodejs
 RUN adduser --disabled-password --gecos "" --uid 1001 --gid 1001 sfu
 
-# アプリケーションファイルの所有者を変更
+# アプリケーションファイルの所有者を変更（証明書ディレクトリも含む）
 RUN chown -R sfu:nodejs /app
 USER sfu
 
