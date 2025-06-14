@@ -9,20 +9,112 @@ import * as path from 'path';
 
 // SSL証明書の設定
 const getSSLOptions = () => {
-  const certDir = '/app/certs';
-  const keyPath = path.join(certDir, 'server-san.key');
-  const certPath = path.join(certDir, 'server-san.crt');
+  const certDirs = ['/app/internal-certs', '/app/certs', '/certs', './certs'];
   
-  try {
-    if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-      return {
-        key: fs.readFileSync(keyPath),
-        cert: fs.readFileSync(certPath)
-      };
+  console.log('=== SSL Certificate Debug ===');
+  
+  for (const certDir of certDirs) {
+    console.log(`Checking certificate directory: ${certDir}`);
+    
+    // 証明書ディレクトリの存在確認
+    if (!fs.existsSync(certDir)) {
+      console.log(`Certificate directory does not exist: ${certDir}`);
+      continue;
     }
-  } catch (error: any) {
-    console.warn('SSL certificates not found, falling back to HTTP:', error?.message || error);
+    
+    // ディレクトリの内容を表示
+    try {
+      const files = fs.readdirSync(certDir);
+      console.log('Files in certificate directory:', files);
+      
+      // 共通証明書のパス
+      const keyPath = path.join(certDir, 'server.key');
+      const certPath = path.join(certDir, 'server.crt');
+      
+      // SAN証明書のパス（フォールバック）
+      const sanKeyPath = path.join(certDir, 'server-san.key');
+      const sanCertPath = path.join(certDir, 'server-san.crt');
+      
+      console.log('Checking certificate paths:');
+      console.log('- Common key:', keyPath, 'exists:', fs.existsSync(keyPath));
+      console.log('- Common cert:', certPath, 'exists:', fs.existsSync(certPath));
+      console.log('- SAN key:', sanKeyPath, 'exists:', fs.existsSync(sanKeyPath));
+      console.log('- SAN cert:', sanCertPath, 'exists:', fs.existsSync(sanCertPath));
+      
+      // まず共通証明書を試す
+      if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+        console.log('Using common SSL certificates from:', certDir);
+        const keyContent = fs.readFileSync(keyPath);
+        const certContent = fs.readFileSync(certPath);
+        console.log('Successfully read common SSL certificates');
+        console.log('Key size:', keyContent.length, 'bytes');
+        console.log('Cert size:', certContent.length, 'bytes');
+        console.log('=== End SSL Certificate Debug ===');
+        return {
+          key: keyContent,
+          cert: certContent
+        };
+      }
+      
+      // フォールバック: SAN証明書を試す
+      if (fs.existsSync(sanKeyPath) && fs.existsSync(sanCertPath)) {
+        console.log('Using SAN SSL certificates from:', certDir);
+        const keyContent = fs.readFileSync(sanKeyPath);
+        const certContent = fs.readFileSync(sanCertPath);
+        console.log('Successfully read SAN SSL certificates');
+        console.log('Key size:', keyContent.length, 'bytes');
+        console.log('Cert size:', certContent.length, 'bytes');
+        console.log('=== End SSL Certificate Debug ===');
+        return {
+          key: keyContent,
+          cert: certContent
+        };
+      }
+      
+    } catch (error) {
+      console.log(`Error accessing certificate directory ${certDir}:`, error);
+      continue;
+    }
   }
+  
+  console.error('No valid SSL certificate files found in any directory');
+  
+  // 自己署名証明書を生成
+  console.log('Generating self-signed certificate...');
+  try {
+    const { execSync } = require('child_process');
+    const tempCertDir = '/tmp/ssl-certs';
+    
+    // 一時ディレクトリを作成
+    if (!fs.existsSync(tempCertDir)) {
+      fs.mkdirSync(tempCertDir, { recursive: true });
+    }
+    
+    const keyPath = path.join(tempCertDir, 'server.key');
+    const certPath = path.join(tempCertDir, 'server.crt');
+    
+    // 自己署名証明書を生成
+    const cmd = `openssl req -x509 -newkey rsa:4096 -keyout ${keyPath} -out ${certPath} -days 365 -nodes -subj "/C=JP/ST=Tokyo/L=Tokyo/O=42Tokyo/OU=ft_transcendence/CN=localhost" -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:0.0.0.0,IP:10.16.2.9"`;
+    
+    execSync(cmd);
+    
+    const keyContent = fs.readFileSync(keyPath);
+    const certContent = fs.readFileSync(certPath);
+    
+    console.log('Generated self-signed certificate');
+    console.log('Key size:', keyContent.length, 'bytes');
+    console.log('Cert size:', certContent.length, 'bytes');
+    console.log('=== End SSL Certificate Debug ===');
+    
+    return {
+      key: keyContent,
+      cert: certContent
+    };
+  } catch (error: any) {
+    console.error('Error generating self-signed certificate:', error?.message || error);
+  }
+  
+  console.log('=== End SSL Certificate Debug ===');
   return null;
 };
 
