@@ -1,7 +1,7 @@
 {
   "name": "friend-search-service",
-  "vers  }
-}escription": "Friend search service for ft_transcendence using SQLite",
+  "version": "1.0.0",
+  "description": "Friend search service for ft_transcendence using SQLite",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
