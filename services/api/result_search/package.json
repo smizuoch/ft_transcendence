@@ -1,0 +1,41 @@
+{
+  "name": "result-search-service",
+  "version": "1.0.0",
+  "description": "Game result search and statistics service",
+  "main": "dist/app.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "dev": "ts-node src/app.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "fastify": "^4.24.3",
+    "@fastify/cors": "^8.4.0",
+    "@fastify/jwt": "^7.2.4",
+    "@prisma/client": "^5.7.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.8",
+    "prisma": "^5.7.1"
+  },
+  "keywords": [
+    "fastify",
+    "typescript",
+    "prisma",
+    "game",
+    "results",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC"
+}
