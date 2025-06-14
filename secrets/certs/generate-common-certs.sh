@@ -65,12 +65,6 @@ openssl x509 -req -in "$CERTS_DIR/server.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$C
     -CAcreateserial -out "$CERTS_DIR/server.crt" -days 365 \
     -extensions v3_req -extfile "$CERTS_DIR/server.conf"
 
-# Create symlinks for backward compatibility
-ln -sf server.crt "$CERTS_DIR/nginx.crt"
-ln -sf server.key "$CERTS_DIR/nginx.key"
-ln -sf server.crt "$CERTS_DIR/server-san.crt"
-ln -sf server.key "$CERTS_DIR/server-san.key"
-
 # Set appropriate permissions
 chmod 644 "$CERTS_DIR"/server.crt "$CERTS_DIR"/ca.crt "$CERTS_DIR"/*.crt
 chmod 600 "$CERTS_DIR"/server.key "$CERTS_DIR"/ca.key "$CERTS_DIR"/*.key

@@ -31,15 +31,9 @@ const getSSLOptions = () => {
       const keyPath = path.join(certDir, 'server.key');
       const certPath = path.join(certDir, 'server.crt');
       
-      // SAN証明書のパス（フォールバック）
-      const sanKeyPath = path.join(certDir, 'server-san.key');
-      const sanCertPath = path.join(certDir, 'server-san.crt');
-      
       console.log('Checking certificate paths:');
       console.log('- Common key:', keyPath, 'exists:', fs.existsSync(keyPath));
       console.log('- Common cert:', certPath, 'exists:', fs.existsSync(certPath));
-      console.log('- SAN key:', sanKeyPath, 'exists:', fs.existsSync(sanKeyPath));
-      console.log('- SAN cert:', sanCertPath, 'exists:', fs.existsSync(sanCertPath));
       
       // まず共通証明書を試す
       if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
@@ -47,21 +41,6 @@ const getSSLOptions = () => {
         const keyContent = fs.readFileSync(keyPath);
         const certContent = fs.readFileSync(certPath);
         console.log('Successfully read common SSL certificates');
-        console.log('Key size:', keyContent.length, 'bytes');
-        console.log('Cert size:', certContent.length, 'bytes');
-        console.log('=== End SSL Certificate Debug ===');
-        return {
-          key: keyContent,
-          cert: certContent
-        };
-      }
-      
-      // フォールバック: SAN証明書を試す
-      if (fs.existsSync(sanKeyPath) && fs.existsSync(sanCertPath)) {
-        console.log('Using SAN SSL certificates from:', certDir);
-        const keyContent = fs.readFileSync(sanKeyPath);
-        const certContent = fs.readFileSync(sanCertPath);
-        console.log('Successfully read SAN SSL certificates');
         console.log('Key size:', keyContent.length, 'bytes');
         console.log('Cert size:', certContent.length, 'bytes');
         console.log('=== End SSL Certificate Debug ===');

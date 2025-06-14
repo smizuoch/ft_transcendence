@@ -2,8 +2,8 @@
 
 COMMON_CERT_DIR="/app/certs"
 CERT_DIR="/etc/nginx/certs"
-KEY_FILE="${CERT_DIR}/nginx.key"
-CERT_FILE="${CERT_DIR}/nginx.crt"
+KEY_FILE="${CERT_DIR}/server.key"
+CERT_FILE="${CERT_DIR}/server.crt"
 
 # Create nginx cert directory
 mkdir -p "${CERT_DIR}"
