@@ -7,6 +7,16 @@ mkdir -p "$CERTS_DIR"
 
 echo "Generating CA and server SSL certificates for all services..."
 
+# Read HOST_IP from .env file
+ENV_FILE="${CERTS_DIR}/../.env"
+if [ -f "$ENV_FILE" ]; then
+    HOST_IP=$(grep "^HOST_IP=" "$ENV_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d ' ')
+    echo "Using HOST_IP from .env: $HOST_IP"
+else
+    HOST_IP="127.0.0.1"
+    echo "Warning: .env file not found, using default HOST_IP: $HOST_IP"
+fi
+
 # Generate CA private key
 openssl genrsa -out "$CERTS_DIR/ca.key" 2048
 
@@ -19,7 +29,6 @@ openssl req -new -x509 -key "$CERTS_DIR/ca.key" -out "$CERTS_DIR/ca.crt" -days 3
 # Generate server private key
 openssl genrsa -out "$CERTS_DIR/server.key" 2048
 
-# Create server certificate configuration
 # Create server certificate configuration
 cat > "$CERTS_DIR/server.conf" << EOF
 [req]
@@ -54,7 +63,7 @@ DNS.7 = auth
 DNS.8 = npc_manager
 IP.1 = 127.0.0.1
 IP.2 = ::1
-IP.3 = "YOUR_SERVER_IP"  # Replace with your server's IP address
+IP.3 = $HOST_IP
 EOF
 
 # Generate server certificate signing request
