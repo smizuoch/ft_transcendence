@@ -9,6 +9,10 @@ all: up
 
 up:
 	@echo "Starting up $(PROJECT_NAME) services..."
+	@if [ ! -f "./secrets/certs/server.crt" ] || [ ! -f "./secrets/certs/server.key" ]; then \
+		echo "SSL certificates not found. Generating certificates..."; \
+		cd secrets/certs && ./generate-common-certs.sh; \
+	fi
 	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) --env-file $(ENV_FILE) up --build -d
 	@printf "\e[32m🏠 https://localhost:8443/ on nginx\e[m\n"
 
