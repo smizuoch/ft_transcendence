@@ -19,38 +19,137 @@ interface MiniGame {
 
 const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<number | null>(null);
-  const [countdown, setCountdown] = useState(30);  // 30秒のカウントダウンに変更
-  const [survivors, setSurvivors] = useState(42);
   const [selectedTarget, setSelectedTarget] = useState<number | null>(Math.floor(Math.random() * 41));
   const [showSurvivorsAlert, setShowSurvivorsAlert] = useState(false);
   const [attackAnimation, setAttackAnimation] = useState<{ targetIndex: number; duration: number } | null>(null);
-  const [miniGamesReady, setMiniGamesReady] = useState(false); // ミニゲーム初期化完了フラグ
-  const [miniGamesDataReady, setMiniGamesDataReady] = useState(false); // ミニゲームデータ取得完了フラグ
-  const [isWaitingForGame, setIsWaitingForGame] = useState(true); // ゲーム開始待機状態
+  const [miniGamesReady, setMiniGamesReady] = useState(false);
 
   // ミニゲーム状態
   const [miniGames, setMiniGames] = useState<MiniGame[]>([]);
   // npc_managerサービスのhook
   const npcManager = useNPCManager();
-  // WebRTC SFUのhook
+  // WebRTC SFUのhook（純粋なデータ中継）
   const sfu = useGamePong42SFU();
 
-  // 固定のプレイヤー情報（useRefで安定化）
+  // SFUから取得する状態（Room Leaderが管理）
+  const gameStarted = sfu.gameState.gameStarted;
+  const countdown = sfu.gameState.countdown;
+  const [survivors, setSurvivors] = useState(42); // 動的な生存者数
+  const isWaitingForGame = !gameStarted && countdown > 0;
+
+  // 固定のプレイヤー情報
   const playerInfoRef = useRef({
-    id: `player-${Math.random().toString(36).substr(2, 9)}`,
-    avatar: '/images/avatar/default.png',
-    name: 'Player'
+    name: 'Player',
+    avatar: '/images/avatar/default.png'
   });
 
+  // ゲームエンジンとキーボード制御を追加
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
 
+  // SFUのローカルゲーム状態を監視してUIを更新
+  useEffect(() => {
+    const { gameState } = sfu;
+
+    // カウントダウン状態の反映
+    if (gameState.countdown >= 0 && !gameState.gameStarted) {
+      console.log(`⏰ Countdown: ${gameState.countdown}`);
+    }
+
+    // ゲーム開始状態の反映
+    if (gameState.gameStarted && !gameStarted) {
+      console.log('🎮 Game started locally');
+
+      // NPCの数を計算（42 - 参加者数）
+      const npcCount = Math.max(0, 42 - gameState.participantCount);
+      if (npcCount > 0) {
+        initMiniGames(npcCount);
+      } else {
+        setMiniGamesReady(true); // 42人満員の場合はNPCなし
+      }
+    }
+  }, [sfu.gameState, gameStarted]);
+
+  // 他のプレイヤーからの入力を受信
+  useEffect(() => {
+    sfu.receivedData.forEach(data => {
+      if (data.type === 'playerInput') {
+        console.log('📨 Received player input from', data.playerId, ':', data.payload);
+        // 他のプレイヤーの入力を処理（必要に応じて実装）
+      } else if (data.type === 'gameState') {
+        console.log('📨 Received game state from', data.playerId, ':', data.payload);
+        // 他のプレイヤーのゲーム状態を処理（必要に応じて実装）
+      }
+    });
+  }, [sfu.receivedData]);
+
+  // 他のプレイヤーからの入力を使ってミニゲームを更新
+  useEffect(() => {
+    sfu.receivedData.forEach(data => {
+      if (data.type === 'gameState') {
+        console.log('📨 Received game state from other player:', data.playerId);
+
+        // 他のプレイヤーのゲーム状態をミニゲームに反映
+        const playerIndex = Math.floor(Math.random() * miniGames.length);
+
+        setMiniGames(prev => {
+          const updated = [...prev];
+          if (updated[playerIndex]) {
+            updated[playerIndex] = {
+              ...updated[playerIndex],
+              gameState: {
+                gameId: `player-${data.playerId}`,
+                gameState: data.payload,
+                isRunning: true,
+                score: { player1: 0, player2: 0 }
+              },
+              active: true
+            };
+          }
+          return updated;
+        });
+      }
+    });
+  }, [sfu.receivedData, miniGames.length]);
+
+  // NPCの状態を監視（後で実装予定）
+  // useEffect(() => {
+  //   if (sfu.gameState.npcStates && sfu.gameState.npcStates.length > 0) {
+  //     console.log('🤖 NPC states updated:', sfu.gameState.npcStates.length, 'NPCs');
+
+  //     // NPCの状態をミニゲームに反映
+  //     setMiniGames(prev => {
+  //       const updated = [...prev];
+
+  //       sfu.gameState.npcStates.forEach((npcState: any, index: number) => {
+  //         if (index < updated.length && updated[index]) {
+  //           updated[index] = {
+  //             ...updated[index],
+  //             gameState: npcState.gameState,
+  //             active: npcState.active
+  //           };
+  //         }
+  //       });
+
+  //       return updated;
+  //     });
+  //   }
+  // }, [sfu.gameState.npcStates]);
+
+  // ミニゲーム更新ループ（WebRTC SFU経由でNPCManagerから更新を受信）
+  useEffect(() => {
+    if (!miniGamesReady || gameOver || !gameStarted) return;
+
+    // WebRTC SFU経由でNPCの状態が更新される場合の処理は
+    // 上記のnpcStatesの監視で処理される
+    console.log('ℹ️ Mini games update now handled via WebRTC SFU');
+  }, [miniGamesReady, gameOver, gameStarted]);
+
   // キーボード入力をSFUに送信
   const sendPlayerInput = useCallback(() => {
-    if (sfu.connected && sfu.roomState?.roomNumber && gameStarted) {
+    if (sfu.connected && gameStarted) {
       const input = {
         up: keysRef.current.ArrowUp || keysRef.current.KeyW,
         down: keysRef.current.ArrowDown || keysRef.current.KeyS,
@@ -59,34 +158,25 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
       // 入力に変化がある場合のみ送信
       if (input.up || input.down || input.attack !== undefined) {
-        sfu.sendPlayerInput(sfu.roomState.roomNumber, input);
+        sfu.sendPlayerInput(input);
       }
     }
   }, [sfu, gameStarted, selectedTarget]);
 
-  // ゲーム状態をSFUから受信して反映
+  // ゲーム状態送信（60fps）
   useEffect(() => {
-    if (sfu.gameState && gameStarted) {
-      const gameState = sfu.gameState;
+    if (!gameStarted || !sfu.connected || !engineRef.current) return;
 
-      // メインゲームの状態を反映
-      if (engineRef.current && gameState.mainGame) {
-        // エンジンの状態を更新（必要に応じて実装）
-        console.log('🎮 Updating main game state:', gameState.mainGame);      }
-
-      // 生存者数の更新
-      if (gameState.roomState.survivors !== survivors) {
-        setSurvivors(gameState.roomState.survivors);
+    const sendGameState = () => {
+      if (engineRef.current) {
+        const gameState = engineRef.current.getState();
+        sfu.sendGameState(gameState);
       }
+    };
 
-      // ゲーム終了判定
-      if (gameState.mainGame.gameOver && !gameOver) {
-        setGameOver(true);
-        setWinner(gameState.mainGame.winner === 'player' ? 1 : 2);
-        // stopGameLoopはuseGameEngineから取得されるので、ここでは呼ばない
-      }
-    }
-  }, [sfu.gameState, gameStarted, survivors, gameOver]);
+    const interval = setInterval(sendGameState, 1000 / 60); // 60fps
+    return () => clearInterval(interval);
+  }, [gameStarted, sfu, engineRef]);
 
   // 定期的にプレイヤー入力を送信
   useEffect(() => {
@@ -108,8 +198,6 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     if (npcCount === 0) {
       console.log('⚠️ 42 participants detected, no mini-games needed');
       setMiniGamesReady(true);
-      setGameStarted(true);
-      setIsWaitingForGame(false);
       return;
     }
 
@@ -175,7 +263,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     console.log(`🏁 MiniGames initialization complete. Created ${games.filter(g => g.active).length} active games.`);
     setMiniGames(games);
     setMiniGamesReady(true); // ミニゲーム初期化完了
-  }, [miniGames.length, npcManager]);  // SFUサーバーに接続
+  }, [miniGames.length, npcManager]);
+
+  // SFUサーバーに接続
   useEffect(() => {
     console.log('🔗 Starting SFU connection process...');
 
@@ -192,10 +282,13 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       sfu.disconnect();
     };
   }, []); // 初回のみ実行
+
   // 接続状態をログ出力
   useEffect(() => {
     console.log('🔗 SFU connected state changed:', sfu.connected);
-  }, [sfu.connected]);  // 接続完了後に部屋に参加
+  }, [sfu.connected]);
+
+  // 接続完了後に部屋に参加
   useEffect(() => {
     if (sfu.connected) {
       console.log('✅ Connected to SFU server, preparing to join GamePong42 room...');
@@ -205,124 +298,94 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       console.log('🏠 Attempting to join room:', roomNumber, 'with player info:', playerInfo);
 
       try {
-        const joinResult = sfu.joinGamePong42Room(roomNumber, playerInfo);
-        console.log('🏠 Join room result:', joinResult);
+        sfu.joinRoom(roomNumber, playerInfo);
+        console.log('🏠 Joined room:', roomNumber);
       } catch (error) {
         console.error('❌ Error joining room:', error);
       }
     } else {
       console.log('⏳ Waiting for SFU connection to be established...');
     }
-  }, [sfu.connected]); // sfu.joinGamePong42Roomを依存配列から削除// SFU状態の監視
+  }, [sfu.connected]);
+
+  // ゲーム状態の監視
   useEffect(() => {
-    console.log('🏠 SFU room state effect triggered, roomState:', sfu.roomState);
+    console.log('🎮 Game state updated:', sfu.gameState);
 
-    if (sfu.roomState) {
-      console.log('🏠 Room state updated:', sfu.roomState);
-      setCountdown(sfu.roomState.countdown);
+    // ゲーム開始状態の反映
+    if (sfu.gameState.gameStarted && !gameStarted) {
+      console.log('🎮 Game started locally');
 
-      if (sfu.roomState.gameStarted) {
-        console.log('🎮 Game started with', sfu.roomState.participantCount, 'participants and', sfu.roomState.npcCount, 'NPCs');
-        setIsWaitingForGame(false);
-        setGameStarted(true);
-
-        // NPC数が0でない場合のみミニゲームを初期化
-        if (sfu.roomState.npcCount > 0 && miniGames.length === 0) {
-          console.log('🎯 Initializing mini games with NPC count:', sfu.roomState.npcCount);
-          initMiniGames(sfu.roomState.npcCount);
-        } else if (sfu.roomState.npcCount === 0) {
-          console.log('ℹ️ 42 participants detected, no NPCs needed - mini games will show player vs player battles');
-          setMiniGamesReady(true); // NPC無しでもゲーム開始可能
-        }
-      } else {
-        console.log('⏳ Game not started yet, countdown:', sfu.roomState.countdown, 'participants:', sfu.roomState.participantCount);
-      }
-    } else {
-      console.log('❓ No room state available');
-    }
-  }, [sfu.roomState]); // initMiniGamesとminiGames.lengthを依存配列から削除// NPCの状態を監視
-  useEffect(() => {
-    if (sfu.npcStates.length > 0) {
-      console.log('🤖 NPC states updated:', sfu.npcStates.length, 'NPCs');
-
-      // NPCの状態をミニゲームに反映
-      setMiniGames(prev => {
-        const updated = [...prev];
-
-        sfu.npcStates.forEach((npcState, index) => {
-          if (index < updated.length && updated[index]) {
-            updated[index] = {
-              ...updated[index],
-              gameState: npcState.gameState,
-              active: npcState.active
-            };
-          }
+      // NPCを上側（Player1）のみに設定
+      if (engineRef.current) {
+        engineRef.current.updateNPCConfig({
+          player: 1 as 1 | 2, // Player 1 (上)がNPC
+          mode: 'pid' as any,
+          enabled: true,
+          difficulty: 'Normal' as any,
         });
+      }
 
-        return updated;
-      });
+      // NPCの数を計算（42 - 参加者数）
+      const npcCount = Math.max(0, 42 - sfu.gameState.participantCount);
+      if (npcCount > 0) {
+        initMiniGames(npcCount);
+      } else {
+        setMiniGamesReady(true); // 42人満員の場合はNPCなし
+      }
     }
-  }, [sfu.npcStates]);// 他のプレイヤーからのゲーム状態を受信してミニゲームに反映
+  }, [sfu.gameState, gameStarted, engineRef]);
+
+  // 受信データの監視
   useEffect(() => {
-    if (!sfu.socket) return;
+    if (sfu.receivedData.length > 0) {
+      console.log('📨 Received data:', sfu.receivedData);
+    }
+  }, [sfu.receivedData]);
 
-    const handlePlayerGameState = (data: any) => {
-      console.log('📨 Received game state from other player:', data);
+  // ゲームループの統一管理
+  useEffect(() => {
+    if (!gameStarted) return;
 
-      // 他のプレイヤーのゲーム状態をいずれかのミニゲームに反映
-      // （実際の実装では、プレイヤーIDとミニゲームのマッピングが必要）
-      const playerIndex = Math.floor(Math.random() * miniGames.length);
+    // パドルとボールの色を取得
+    const getPaddleAndBallColor = () => {
+      if (survivors < 33) return '#ffffff';
+      return '#212121';
+    };
 
-      setMiniGames(prev => {
-        const updated = [...prev];
-        if (updated[playerIndex]) {
-          updated[playerIndex] = {
-            ...updated[playerIndex],
-            gameState: {
-              gameId: `player-${data.playerId}`,
-              gameState: data.gameState,
-              isRunning: true,
-              score: { player1: 0, player2: 0 }
-            },
-            active: true
-          };
-        }
-        return updated;
-      });
-    };    sfu.socket.on('gamepong42-state', handlePlayerGameState);
+    const handleScore = (scorer: 'player1' | 'player2') => {
+      if (scorer === 'player1') { // NPCが勝利した場合
+        setGameOver(true);
+        setWinner(1);
+      }
+    };
+
+    startGameLoop(handleScore, gameStarted, keysRef, getPaddleAndBallColor());
+    return () => stopGameLoop();
+  }, [gameStarted, startGameLoop, stopGameLoop, keysRef, survivors]);
+
+  // ゲームエンジン初期化
+  useEffect(() => {
+    const handleResize = () => {
+      initializeEngine();
+    };
+
+    window.addEventListener("resize", handleResize);
+    handleResize();
 
     return () => {
-      sfu.socket?.off('gamepong42-state', handlePlayerGameState);
+      window.removeEventListener("resize", handleResize);
+      stopGameLoop();
     };
-  }, [sfu.socket, miniGames.length]); // sfu.socketを使用// ミニゲーム更新ループ（WebRTC SFU経由でNPCManagerから更新を受信）  // ミニゲーム更新ループ（WebRTC SFU経由でNPCManagerから更新を受信）
-  useEffect(() => {
-    if (!miniGamesReady || gameOver || !sfu.roomState?.gameStarted) return;
+  }, [initializeEngine, stopGameLoop]);
 
-    // WebRTC SFU経由でNPCの状態が更新される場合の処理は
-    // 上記のnpcStatesの監視で処理される
-
-    // 従来のポーリング方式は使用しない（WebRTC SFUを使用するため）
-    console.log('ℹ️ Mini games update now handled via WebRTC SFU');
-  }, [miniGamesReady, gameOver, sfu.roomState]);
-
-  // 生存者数の更新
-  useEffect(() => {
-    const activeMiniGames = miniGames.filter(game => game.active).length;
-    const centralCanvasActive = gameStarted && !gameOver ? 1 : 0; // 中央キャンバスがアクティブかどうか
-    const totalSurvivors = activeMiniGames + centralCanvasActive;
-
-    if (totalSurvivors !== survivors && gameStarted) {
-      setSurvivors(totalSurvivors);
-    }
-  }, [miniGames, gameStarted, gameOver, survivors]);
-
-  // 背景画像の取得
   const getBackgroundImage = () => {
     if (survivors >= 33) return '/images/background/noon.png';
     if (survivors >= 22) return '/images/background/evening.png';
     if (survivors >= 6) return '/images/background/late_night.png';
     return '/images/background/daybreak.png';
   };
+
   // パドルとボールの色を取得
   const getPaddleAndBallColor = () => {
     if (survivors < 33) return '#ffffff';
@@ -369,6 +432,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       }, 1000);
     }
   }, [selectedTarget, miniGames, npcManager]);
+
   const handleStartGame = useCallback(() => {
     // NPCを上側（Player1）のみに設定
     if (engineRef.current) {
@@ -379,32 +443,15 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         difficulty: 'Normal' as any,
       });
     }
+  }, [engineRef]);
 
-    setGameStarted(true);
-    setGameOver(false);
-    setWinner(null);
-  }, [engineRef]); // getCurrentNPCの依存関係を削除
   // ゲームループの統一管理
   useEffect(() => {
     // カウントダウン中もゲームループを開始（プレイヤーのパドル操作のため）
     startGameLoop(handleScore, gameStarted, keysRef, getPaddleAndBallColor());
 
     return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, survivors]); // survivorsを依存関係に追加
-  // ゲーム状態をSFU経由で他のプレイヤーに送信（60fps）
-  useEffect(() => {
-    if (!gameStarted || !sfu.connected || !engineRef.current) return;
-
-    const sendGameState = () => {
-      if (engineRef.current && sfu.roomState) {
-        const gameState = engineRef.current.getState();
-        sfu.sendGameState('gamepong42-room-1', gameState);
-      }
-    };
-
-    const interval = setInterval(sendGameState, 1000 / 60); // 60fps
-    return () => clearInterval(interval);
-  }, [gameStarted, sfu.connected, sfu.roomState, engineRef, sfu]);
+  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, survivors]);
 
   // Show alert when survivors count reaches milestone
   useEffect(() => {
@@ -450,7 +497,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     if (miniGames[index]?.active) {
       setSelectedTarget(index);
     }
-  };  // Calculate target position for ray animation
+  };
+
+  // Calculate target position for ray animation
   const getTargetPosition = (targetIndex: number) => {
     const isLeftSide = targetIndex < 21;
     const gridIndex = isLeftSide ? targetIndex : targetIndex - 21;
@@ -485,332 +534,289 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       }}
     >
       {/* Background overlay */}
-      <div className="absolute inset-0 bg-black bg-opacity-40"></div>      {/* Left side opponents - 21 tables in 7x3 grid (21 out of 41) */}
-      {gameStarted && (
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
-          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>            {Array.from({ length: 21 }).map((_, i) => {
-              const game = miniGames[i];
-              const hasNPCGame = game?.active && game.gameState;
-              const hasOtherPlayers = sfu.roomState && sfu.roomState.participants.length > 1;
+      <div className="absolute inset-0 bg-black bg-opacity-40"></div>
 
-              // NPC vs NPC ゲーム、または他のプレイヤーとの対戦を表示
-              const shouldShowCanvas = hasNPCGame || (hasOtherPlayers && i < (41 - (sfu.roomState?.npcCount || 0)));
-
-              if (!shouldShowCanvas) return null;
-
-              const gameState = game?.gameState?.gameState; // NPCGameResponse.gameState
-              const isUnderAttack = false; // スピードブースト状態は別途管理が必要
-              const isPlayerVsPlayer = !hasNPCGame && hasOtherPlayers;
-
-              // デバッグ: パドル位置情報をログに出力
-              if (gameState && i === 0) { // 最初のゲームのみログ出力
-                console.log(`🎯 Game ${i} paddle positions:`, {
-                  paddle1: { x: gameState.paddle1.x, y: gameState.paddle1.y },
-                  paddle2: { x: gameState.paddle2.x, y: gameState.paddle2.y },
-                  ball: { x: gameState.ball.x, y: gameState.ball.y }
-                });
-              }
-
-              return (
-                <div
-                  key={`left-${i}`}
-                  className={`cursor-pointer transition-all duration-200 relative ${
-                    selectedTarget === i ? 'scale-105' : 'hover:scale-102'
-                  } ${isUnderAttack ? 'ring-2 ring-red-500 ring-opacity-75' : ''}`}
-                  style={{ width: "12.8vmin", height: "12.8vmin" }}
-                  onClick={() => handleTargetSelect(i)}
-                >
-                  {selectedTarget === i && (
-                    <img
-                      src="/images/icons/target_circle.svg"
-                      alt="Target"
-                      className="absolute inset-0 w-full h-full opacity-80 z-10"
-                    />
-                  )}
-
-                  {/* 攻撃効果表示 */}
-                  {isUnderAttack && (
-                    <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
-                      BOOST
-                    </div>
-                  )}
-
-                  {/* NPC Manager-based mini pong game */}
-                  <div className="w-full h-full border border-white relative overflow-hidden" style={{
-                    backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
-                  }}>
-                    {gameState ? (
-                      <>
-                        {/* Player1 paddle */}
-                        <div
-                          className="absolute rounded"
-                          style={{
-                            left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
-                            top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
-                            width: `${Math.max(1, (gameState.paddle1.width / gameState.canvasWidth) * 100)}%`,
-                            height: `${Math.max(1, (gameState.paddle1.height / gameState.canvasHeight) * 100)}%`,
-                            backgroundColor: getPaddleAndBallColor()
-                          }}
-                        ></div>
-
-                        {/* Player2 paddle */}
-                        <div
-                          className="absolute rounded"
-                          style={{
-                            left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
-                            top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
-                            width: `${Math.max(1, (gameState.paddle2.width / gameState.canvasWidth) * 100)}%`,
-                            height: `${Math.max(1, (gameState.paddle2.height / gameState.canvasHeight) * 100)}%`,
-                            backgroundColor: getPaddleAndBallColor()
-                          }}
-                        ></div>
-
-                        {/* Ball with attack effect */}
-                        <div
-                          className={`absolute rounded-full  ${
-                            isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
-                          }`}
-                          style={{
-                            left: `${Math.max(0, Math.min(100, (gameState.ball.x / gameState.canvasWidth) * 100))}%`,
-                            top: `${Math.max(0, Math.min(100, (gameState.ball.y / gameState.canvasHeight) * 100))}%`,
-                            width: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasWidth) * 100)}%`,
-                            height: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasHeight) * 100)}%`,
-                            transform: 'translate(-50%, -50%)',
-                            backgroundColor: isUnderAttack ? '#ff4444' : getPaddleAndBallColor()
-                          }}
-                        ></div>
-                      </>
-                    ) : (
-                      /* Loading state */
-                      <div className="w-full h-full flex items-center justify-center">
-                        <div className="text-white text-xs opacity-60">Loading...</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}      {/* Right side opponents - 20 tables in 7x3 grid (remaining 20 out of 41) */}
-      {gameStarted && (
-        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
-          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
-            {Array.from({ length: 20 }).map((_, i) => {
-              const gameIndex = 21 + i;
-              const game = miniGames[gameIndex];
-              const hasNPCGame = game?.active && game.gameState;
-              const hasOtherPlayers = sfu.roomState && sfu.roomState.participants.length > 1;
-
-              // NPC vs NPC ゲーム、または他のプレイヤーとの対戦を表示
-              const shouldShowCanvas = hasNPCGame || (hasOtherPlayers && gameIndex < (41 - (sfu.roomState?.npcCount || 0)));
-
-              if (!shouldShowCanvas) return null;
-
-              const gameState = game?.gameState?.gameState; // NPCGameResponse.gameState
-              const isUnderAttack = false; // スピードブースト状態は別途管理が必要
-              const isPlayerVsPlayer = !hasNPCGame && hasOtherPlayers;
-
-              return (
-                <div
-                  key={`right-${gameIndex}`}
-                  className={`cursor-pointer transition-all duration-200 relative ${
-                    selectedTarget === gameIndex ? 'scale-105' : 'hover:scale-102'
-                  } ${isUnderAttack ? 'ring-2 ring-red-500 ring-opacity-75' : ''}`}
-                  style={{ width: "12.8vmin", height: "12.8vmin" }}
-                  onClick={() => handleTargetSelect(gameIndex)}
-                >
-                  {selectedTarget === gameIndex && (
-                    <img
-                      src="/images/icons/target_circle.svg"
-                      alt="Target"
-                      className="absolute inset-0 w-full h-full opacity-80 z-10"
-                    />
-                  )}
-
-                  {/* 攻撃効果表示 */}
-                  {isUnderAttack && (
-                    <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
-                      BOOST
-                    </div>
-                  )}
-
-                  {/* NPC Manager-based mini pong game */}
-                  <div className="w-full h-full border border-white relative overflow-hidden" style={{
-                    backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
-                  }}>
-                    {gameState ? (
-                      <>
-                        {/* Player1 paddle */}
-                        <div
-                          className="absolute rounded"
-                          style={{
-                            left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
-                            top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
-                            width: `${Math.max(1, (gameState.paddle1.width / gameState.canvasWidth) * 100)}%`,
-                            height: `${Math.max(1, (gameState.paddle1.height / gameState.canvasHeight) * 100)}%`,
-                            backgroundColor: getPaddleAndBallColor()
-                          }}
-                        ></div>
-
-                        {/* Player2 paddle */}
-                        <div
-                          className="absolute rounded"
-                          style={{
-                            left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
-                            top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
-                            width: `${Math.max(1, (gameState.paddle2.width / gameState.canvasWidth) * 100)}%`,
-                            height: `${Math.max(1, (gameState.paddle2.height / gameState.canvasHeight) * 100)}%`,
-                            backgroundColor: getPaddleAndBallColor()
-                          }}
-                        ></div>
-
-                        {/* Ball with attack effect */}
-                        <div
-                          className={`absolute rounded-full  ${
-                            isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
-                          }`}
-                          style={{
-                            left: `${Math.max(0, Math.min(100, (gameState.ball.x / gameState.canvasWidth) * 100))}%`,
-                            top: `${Math.max(0, Math.min(100, (gameState.ball.y / gameState.canvasHeight) * 100))}%`,
-                            width: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasWidth) * 100)}%`,
-                            height: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasHeight) * 100)}%`,
-                            transform: 'translate(-50%, -50%)',
-                            backgroundColor: isUnderAttack ? '#ff4444' : getPaddleAndBallColor()
-                          }}
-                        ></div>
-                      </>
-                    ) : (
-                      /* Loading state */
-                      <div className="w-full h-full flex items-center justify-center">
-                        <div className="text-white text-xs opacity-60">Loading...</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* central content */}
-      <div className="relative z-10 w-full h-full flex items-center justify-center">
-        {/* play square */}
-        <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
-          <canvas ref={canvasRef} className="w-full h-full border border-white" />
-        </div>        {/* countdown screen */}
-        {!gameStarted && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {!miniGamesReady ? (
-              <>
-                <div className="text-4xl font-bold text-white mb-4">
-                  Initializing Mini Games...
-                </div>
-                <div className="text-xl text-white opacity-80">
-                  {miniGames.filter(g => g.active).length} / 42 games ready
-                </div>
-                <div className="text-sm text-white opacity-60 mt-4">
-                  SFU Connected: {sfu.connected ? '✅' : '❌'}<br/>
-                  Room State: {sfu.roomState ? '✅' : '❌'}<br/>
-                  Game Started: {sfu.roomState?.gameStarted ? '✅' : '❌'}<br/>
-                  NPC Count: {sfu.roomState?.npcCount || 'N/A'}
-                </div>
-              </>
-            ) : !miniGamesDataReady ? (
-              <>
-                <div className="text-4xl font-bold text-white mb-4">
-                  Loading Game Data...
-                </div>
-                <div className="text-xl text-white opacity-80">
-                  Fetching initial game states...
-                </div>
-              </>
-            ) : countdown > 0 ? (
-              <div className="text-8xl font-bold text-white animate-pulse">
-                {countdown}
+      {/* Waiting screen */}
+      {isWaitingForGame && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center">
+          <div className="text-center text-white">
+            <h1 className="text-6xl font-bold mb-8">GamePong42</h1>
+            <div className="text-3xl mb-4">Waiting for players...</div>
+            <div className="text-2xl mb-4">
+              Players: {sfu.gameState.participantCount} / 42
+            </div>
+            {countdown > 0 && (
+              <div className="text-4xl font-bold animate-pulse">
+                Game starts in: {countdown}
               </div>
-            ) : null}
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Survivors count */}
+      {/* Game UI */}
       {gameStarted && (
-        <div
-          className="absolute z-30"
-          style={{
-            fontSize: "12.8vmin",
-            lineHeight: 1,
-            right: "1rem",
-            bottom: "calc(50vh - 48vmin)",
-            width: "12.8vmin",
-            height: "12.8vmin",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <span className="text-white font-bold">{survivors}</span>
-        </div>
-      )}
+        <>
+          {/* Left side opponents - 21 tables in 7x3 grid (21 out of 41) */}
+          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
+            <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
+              {Array.from({ length: 21 }).map((_, i) => {
+                const game = miniGames[i];
+                const hasNPCGame = game?.active && game.gameState;
+                const hasOtherPlayers = sfu.gameState.participantCount > 1;
 
-      {/* Survivors milestone alert */}
-      {showSurvivorsAlert && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-          <div className="text-8xl font-bold text-white animate-pulse text-center">
-            {survivors}
+                // NPC vs NPC ゲーム、または他のプレイヤーとの対戦を表示
+                const shouldShowCanvas = hasNPCGame || (hasOtherPlayers && i < (41 - miniGames.length));
+
+                if (!shouldShowCanvas) return null;
+
+                const gameState = game?.gameState?.gameState; // NPCGameResponse.gameState
+                const isUnderAttack = false; // スピードブースト状態は別途管理が必要
+                const isPlayerVsPlayer = !hasNPCGame && hasOtherPlayers;
+
+                return (
+                  <div
+                    key={`left-${i}`}
+                    className={`cursor-pointer transition-all duration-200 relative ${
+                      selectedTarget === i ? 'scale-105' : 'hover:scale-102'
+                    } ${isUnderAttack ? 'ring-2 ring-red-500 ring-opacity-75' : ''}`}
+                    style={{ width: "12.8vmin", height: "12.8vmin" }}
+                    onClick={() => handleTargetSelect(i)}
+                  >
+                    {selectedTarget === i && (
+                      <img
+                        src="/images/icons/target_circle.svg"
+                        alt="Target"
+                        className="absolute inset-0 w-full h-full opacity-80 z-10"
+                      />
+                    )}
+
+                    {/* 攻撃効果表示 */}
+                    {isUnderAttack && (
+                      <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
+                        BOOST
+                      </div>
+                    )}
+
+                    {/* NPC Manager-based mini pong game */}
+                    <div className="w-full h-full border border-white relative overflow-hidden" style={{
+                      backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
+                    }}>
+                      {gameState ? (
+                        <>
+                          {/* Player1 paddle */}
+                          <div
+                            className="absolute rounded"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (gameState.paddle1.width / gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (gameState.paddle1.height / gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPaddleAndBallColor()
+                            }}
+                          ></div>
+
+                          {/* Player2 paddle */}
+                          <div
+                            className="absolute rounded"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (gameState.paddle2.width / gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (gameState.paddle2.height / gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPaddleAndBallColor()
+                            }}
+                          ></div>
+
+                          {/* Ball */}
+                          <div
+                            className={`absolute rounded-full ${
+                              isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
+                            }`}
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (gameState.ball.x / gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (gameState.ball.y / gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: isUnderAttack ? '#ff0000' : getPaddleAndBallColor()
+                            }}
+                          ></div>
+                        </>
+                      ) : (
+                        /* Placeholder for player vs player battles */
+                        <div className="w-full h-full flex items-center justify-center text-white text-xs">
+                          {isPlayerVsPlayer ? 'P vs P' : 'Loading...'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Attack ray animation */}
-      {attackAnimation && (
-        <div className="absolute inset-0 pointer-events-none z-30">
-          {(() => {
-            const targetPos = getTargetPosition(attackAnimation.targetIndex);
-            const centerX = '50vw';
-            const centerY = '50vh';
+          {/* Central canvas */}
+          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+            <canvas
+              ref={canvasRef}
+              className="bg-transparent"
+              style={{
+                width: '60vmin',
+                height: '40vmin',
+                maxWidth: '80vw',
+                maxHeight: '60vh',
+              }}
+            />
+          </div>
 
-            // Calculate angle and distance for ray
-            const deltaX = parseFloat(targetPos.x.replace(/[^0-9.-]/g, '')) - 50;
-            const deltaY = parseFloat(targetPos.y.replace(/[^0-9.-]/g, '')) - 50;
-            const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
-            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+          {/* Right side opponents - 20 tables in 7x3 grid (positions 21-40 out of 41) */}
+          <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
+            <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
+              {Array.from({ length: 20 }).map((_, i) => {
+                const gameIndex = i + 21; // Right side starts from index 21
+                const game = miniGames[gameIndex];
+                const hasNPCGame = game?.active && game.gameState;
+                const hasOtherPlayers = sfu.gameState.participantCount > 1;
 
-            return (
+                const shouldShowCanvas = hasNPCGame || (hasOtherPlayers && gameIndex < (41 - miniGames.length));
+
+                if (!shouldShowCanvas) return null;
+
+                const gameState = game?.gameState?.gameState;
+                const isUnderAttack = false;
+                const isPlayerVsPlayer = !hasNPCGame && hasOtherPlayers;
+
+                return (
+                  <div
+                    key={`right-${gameIndex}`}
+                    className={`cursor-pointer transition-all duration-200 relative ${
+                      selectedTarget === gameIndex ? 'scale-105' : 'hover:scale-102'
+                    } ${isUnderAttack ? 'ring-2 ring-red-500 ring-opacity-75' : ''}`}
+                    style={{ width: "12.8vmin", height: "12.8vmin" }}
+                    onClick={() => handleTargetSelect(gameIndex)}
+                  >
+                    {selectedTarget === gameIndex && (
+                      <img
+                        src="/images/icons/target_circle.svg"
+                        alt="Target"
+                        className="absolute inset-0 w-full h-full opacity-80 z-10"
+                      />
+                    )}
+
+                    {isUnderAttack && (
+                      <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
+                        BOOST
+                      </div>
+                    )}
+
+                    <div className="w-full h-full border border-white relative overflow-hidden" style={{
+                      backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
+                    }}>
+                      {gameState ? (
+                        <>
+                          <div
+                            className="absolute rounded"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (gameState.paddle1.width / gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (gameState.paddle1.height / gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPaddleAndBallColor()
+                            }}
+                          ></div>
+
+                          <div
+                            className="absolute rounded"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (gameState.paddle2.width / gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (gameState.paddle2.height / gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPaddleAndBallColor()
+                            }}
+                          ></div>
+
+                          <div
+                            className={`absolute rounded-full ${
+                              isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
+                            }`}
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (gameState.ball.x / gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (gameState.ball.y / gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: isUnderAttack ? '#ff0000' : getPaddleAndBallColor()
+                            }}
+                          ></div>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-xs">
+                          {isPlayerVsPlayer ? 'P vs P' : 'Loading...'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* UI Elements */}
+          <div className="absolute top-4 left-4 text-white z-30">
+            <div className="text-2xl font-bold">Survivors: {survivors}</div>
+            <div className="text-sm">Players: {sfu.gameState.participantCount}</div>
+          </div>
+
+          {/* Attack Animation Ray */}
+          {attackAnimation && (
+            <div
+              className="absolute pointer-events-none z-40"
+              style={{
+                left: '50%',
+                top: '50%',
+                width: '2px',
+                height: '2px',
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
               <div
-                className="absolute origin-left"
+                className="absolute bg-red-500 shadow-lg shadow-red-500 animate-pulse"
                 style={{
-                  left: centerX,
-                  top: centerY,
-                  width: `${distance}vmin`,
-                  height: '4px',
-                  background: 'linear-gradient(90deg, #ff6b6b, #ffd93d)',
-                  transform: `rotate(${angle}deg)`,
-                  transformOrigin: '0 50%',
-                  opacity: 0,
-                  animation: 'ray-attack 1s ease-out forwards'
+                  width: '4px',
+                  height: '200px',
+                  transformOrigin: 'center bottom',
+                  transform: `rotate(${Math.atan2(
+                    parseFloat(getTargetPosition(attackAnimation.targetIndex).y.replace('vh', '')) - 50,
+                    parseFloat(getTargetPosition(attackAnimation.targetIndex).x.replace(/v[mw]/, '')) - 50
+                  )}rad)`,
+                  transition: `opacity ${attackAnimation.duration}ms ease-out`,
                 }}
               />
-            );
-          })()}
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Global styles */}
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          @keyframes ray-attack {
-            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
-            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
-          }
-          .text-shadow-lg {
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-          }
-        `
-      }} />
+          {/* Survivors Alert */}
+          {showSurvivorsAlert && (
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 text-center">
+              <div className="bg-black bg-opacity-75 text-white px-8 py-4 rounded-lg text-3xl font-bold animate-pulse">
+                {survivors} Survivors Remaining!
+              </div>
+            </div>
+          )}
+
+          {/* Game Over Screen */}
+          {gameOver && (
+            <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+              <div className="text-center text-white">
+                <h1 className="text-6xl font-bold mb-4">
+                  {winner === 1 ? 'NPC Wins!' : 'You Win!'}
+                </h1>
+                <p className="text-2xl">Redirecting to results...</p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

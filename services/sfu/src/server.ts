@@ -3,7 +3,6 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { MediasoupService } from './mediasoup-service';
 import { RoomManager } from './room-manager';
 import { TournamentManager } from './tournament-manager';
-import { GamePong42Manager } from './game-pong42-manager';
 import { GameState, NPCRequest } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -114,47 +113,13 @@ app.register(require('@fastify/cors'), {
 // Socket.IOサーバーの設定（Fastifyサーバーと統合）
 let io: SocketIOServer;
 
-// MediasoupとRoomManagerとTournamentManagerとGamePong42Managerのインスタンス
+// MediasoupとRoomManagerとTournamentManagerのインスタンス
 const mediasoupService = new MediasoupService();
 const roomManager = new RoomManager();
 const tournamentManager = new TournamentManager();
-const gamePong42Manager = new GamePong42Manager();
 
-// npc_managerへの接続
-async function requestNPCsFromManager(npcCount: number, roomId: string) {
-  if (npcCount <= 0) {
-    console.log('🤖 No NPCs needed (npcCount <= 0)');
-    return [];
-  }
-
-  const npcManagerUrl = process.env.NPC_MANAGER_URL || 'http://npc_manager:3003';
-  console.log(`🤖 Requesting ${npcCount} NPCs from NPC Manager at ${npcManagerUrl}...`);
-
-  try {
-    const response = await fetch(`${npcManagerUrl}/gamepong42/request-npcs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        roomNumber: roomId,  // roomIdからroomNumberに変更
-        npcCount: npcCount,
-        gameType: 'gamepong42'
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log(`🤖 Successfully requested NPCs from manager:`, result);
-    return result.npcs || [];
-  } catch (error) {
-    console.error('❌ Error requesting NPCs from manager:', error);
-    return [];
-  }
-}
+// 部屋の参加者を追跡するためのMap（Room Leader判定用）
+const roomParticipants = new Map<string, Set<string>>();
 
 async function startServer() {
   try {
@@ -236,6 +201,27 @@ async function startServer() {
         }
         console.log(`Total connected clients: ${io.sockets.sockets.size}`);
 
+        // GamePong42部屋からプレイヤーを削除
+        for (const [roomKey, participants] of roomParticipants.entries()) {
+          if (participants.has(socket.id)) {
+            participants.delete(socket.id);
+            console.log(`Player ${socket.id} removed from ${roomKey} (${participants.size} participants remaining)`);
+
+            // 他の参加者に通知
+            socket.to(roomKey).emit('gamepong42-participant-left', {
+              playerId: socket.id,
+              participantCount: participants.size
+            });
+
+            // 部屋が空になったら削除
+            if (participants.size === 0) {
+              roomParticipants.delete(roomKey);
+              console.log(`Empty room ${roomKey} deleted`);
+            }
+            break;
+          }
+        }
+
         // プレイヤーを全ての部屋から削除
         const roomNumber = roomManager.removePlayer(socket.id);
         if (roomNumber) {
@@ -245,110 +231,59 @@ async function startServer() {
           });
         }
 
-        // GamePong42の部屋からも削除
-        const gamePong42Rooms = gamePong42Manager.getAllRooms();
-        for (const room of gamePong42Rooms) {
-          if (room.hasParticipant(socket.id)) {
-            gamePong42Manager.removeParticipant(room.id, socket.id);
-            socket.to(`gamepong42-${room.id}`).emit('gamepong42-participant-left', {
-              playerId: socket.id
-            });
-            console.log(`Player ${socket.id} left GamePong42 room ${room.id}`);
-          }
-        }
-      });      // GamePong42への参加
-      socket.on('join-gamepong42', async (data: { roomNumber?: string; playerInfo: any }) => {
+      });
+
+      // WebRTCデータの中継（ゲーム状態やプレイヤー入力の中継）
+      socket.on('gamepong42-data', (data: { roomNumber: string; payload: any }) => {
+        console.log(`🔄 Relaying GamePong42 data from ${socket.id} to room ${data.roomNumber}`);
+        // データを同じ部屋の他のクライアントに中継
+        socket.to(`gamepong42-${data.roomNumber}`).emit('gamepong42-data', {
+          senderId: socket.id,
+          payload: data.payload
+        });
+      });
+
+      // WebRTC部屋への参加（データ中継のみ）
+      socket.on('join-gamepong42-room', async (data: { roomNumber: string; playerInfo: any }) => {
         try {
-          console.log(`Player ${socket.id} joining GamePong42:`, data);
+          console.log(`🏠 Player ${socket.id} joining GamePong42 room for data relay:`, data);
 
-          const { roomNumber, playerInfo } = data;
+          const { roomNumber } = data;
+          const roomKey = `gamepong42-${roomNumber}`;
 
-          // ルームIDを決定（指定されていればそれを使用、なければデフォルト）
-          const roomId = roomNumber || 'default';
-          const room = gamePong42Manager.addParticipant(roomId, socket.id, playerInfo);
-
-          console.log(`Player ${socket.id} joined GamePong42 room ${roomId}`);
-          console.log(`Room ${roomId} now has ${room.getParticipantCount()} participants`);
-
-          // Socket.IOルームに参加
-          await socket.join(`gamepong42-${roomId}`);
-
-          // カウントダウン時間を計算
-          const timeUntilStart = Math.max(0, room.countdown);
-
-          // クライアントに参加確認を送信
-          socket.emit('gamepong42-joined', {
-            roomNumber: roomId, // roomNumberとして返す
-            participantCount: room.getParticipantCount(),
-            timeUntilStart: timeUntilStart,
-            isStarted: room.gameStarted
-          });
-
-          // 他の参加者に新しい参加者を通知
-          socket.to(`gamepong42-${roomId}`).emit('gamepong42-participant-joined', {
-            playerId: socket.id,
-            playerInfo,
-            participantCount: room.getParticipantCount(),
-            timeUntilStart: timeUntilStart
-          });
-
-          // ゲーム開始チェック
-          if (room.shouldStartGame()) {
-            console.log(`🎮 GamePong42 room ${roomId} is ready to start!`);
-
-            // NPCリクエスト
-            const npcCount = Math.max(0, 42 - room.getParticipantCount());
-            console.log(`📊 Current participants: ${room.getParticipantCount()}, NPCs needed: ${npcCount}`);
-
-            if (npcCount > 0) {
-              // NPCをリクエスト
-              try {
-                const npcManagerUrl = process.env.NPC_MANAGER_URL || 'http://npc_manager:3003';
-                console.log(`🤖 Requesting ${npcCount} NPCs from ${npcManagerUrl}`);
-
-                const response = await fetch(`${npcManagerUrl}/gamepong42/request-npcs`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    roomNumber: roomId,  // roomIdからroomNumberに変更
-                    npcCount: npcCount,
-                    sfuUrl: process.env.SFU_URL || 'http://sfu:3001'
-                  })
-                });
-
-                if (response.ok) {
-                  const result = await response.json();
-                  console.log(`✅ NPC request successful:`, result);
-                } else {
-                  console.error(`❌ NPC request failed: ${response.status} ${response.statusText}`);
-                  const errorText = await response.text();
-                  console.error('NPC request error details:', errorText);
-                }
-              } catch (error: any) {
-                console.error('❌ Error requesting NPCs:', error?.message || error);
-              }
-            } else {
-              console.log(`⚡ 42 participants reached - no NPCs needed`);
-            }
-
-            // ゲーム開始
-            room.startGame();
-
-            // ゲーム状態配信の設定
-            setupGameStateDistribution(roomId);
-
-            io.to(`gamepong42-${roomId}`).emit('gamepong42-game-started', {
-              roomNumber: roomId, // roomNumberとして送信
-              participantCount: room.getParticipantCount(),
-              npcCount: npcCount
-            });
+          // 部屋の参加者リストを初期化（存在しない場合）
+          if (!roomParticipants.has(roomKey)) {
+            roomParticipants.set(roomKey, new Set());
           }
+
+          const participants = roomParticipants.get(roomKey)!;
+          const isFirstPlayer = participants.size === 0;
+
+          // 参加者を追加
+          participants.add(socket.id);
+          await socket.join(roomKey);
+
+          console.log(`✅ Player ${socket.id} joined GamePong42 data relay room ${roomNumber} (${participants.size} participants)`);
+
+          // 参加確認を送信（Room Leader情報を含む）
+          socket.emit('gamepong42-room-joined', {
+            roomNumber: roomNumber,
+            message: 'Ready for data relay',
+            participantCount: participants.size,
+            isFirstPlayer: isFirstPlayer
+          });
+
+          // 他のクライアントに新しい参加者を通知
+          socket.to(roomKey).emit('gamepong42-participant-joined', {
+            playerId: socket.id,
+            participantCount: participants.size
+          });
 
         } catch (error) {
-          console.error(`Error joining GamePong42:`, error);
-          socket.emit('error', { message: 'Failed to join GamePong42' });
+          console.error('❌ Error joining GamePong42 room:', error);
+          socket.emit('gamepong42-room-error', {
+            error: 'Failed to join room for data relay'
+          });
         }
       });
 
@@ -428,82 +363,6 @@ async function startServer() {
         } catch (error: any) {
           console.error('❌ Error producing data:', error);
           callback({ error: error?.message || 'Failed to produce data' });
-        }
-      });
-
-      // === GamePong42 Data Channel Events ===
-
-      // プレイヤー入力受信（データチャンネル経由）
-      socket.on('gamepong42-player-input', (data: { roomId: string; input: any }) => {
-        try {
-          const { roomId, input } = data;
-          const room = gamePong42Manager.getRoom(roomId);
-
-          if (room && room.gameStarted) {
-            // プレイヤー入力を処理
-            const playerInput = {
-              playerId: socket.id,
-              input: input,
-              timestamp: Date.now()
-            };
-
-            room.processPlayerInput(playerInput);
-            console.log(`🎮 Processed input for player ${socket.id} in room ${roomId}`);
-          }
-        } catch (error) {
-          console.error('❌ Error processing player input:', error);
-        }
-      });
-
-      // ゲーム状態リクエスト
-      socket.on('gamepong42-get-state', (data: { roomId: string }, callback) => {
-        try {
-          const { roomId } = data;
-          const room = gamePong42Manager.getRoom(roomId);
-
-          if (room) {
-            const gameState = room.getGameState();
-            callback({ success: true, gameState });
-          } else {
-            callback({ success: false, error: 'Room not found' });
-          }
-        } catch (error: any) {
-          console.error('❌ Error getting game state:', error);
-          callback({ success: false, error: error?.message || 'Failed to get game state' });
-        }
-      });
-
-      // ゲーム状態配信の設定
-      const setupGameStateDistribution = (roomId: string) => {
-        const room = gamePong42Manager.getRoom(roomId);
-        if (!room) return;
-
-        // ゲーム状態更新コールバックを設定
-        room.onGameStateUpdate = (update) => {
-          try {
-            // 該当ルームの全参加者にSocket.IO経由でゲーム状態を送信
-            io.to(`gamepong42-${roomId}`).emit('gamepong42-game-state-update', update);
-
-            // デバッグログ（頻度を制限）
-            if (Date.now() % 1000 < 17) { // 約60FPSのうち1秒に1回程度
-              console.log(`📊 Game state updated for room ${roomId}, participants: ${room.participants.size}`);
-            }
-          } catch (error) {
-            console.error('❌ Error distributing game state:', error);
-          }
-        };
-
-        console.log(`✅ Game state distribution setup complete for room ${roomId}`);
-      };
-
-      // GamePong42ルーム参加時にゲーム状態配信を設定
-      socket.on('gamepong42-setup-data-channel', (data: { roomId: string }) => {
-        try {
-          const { roomId } = data;
-          console.log(`📊 Setting up data channel for room ${roomId}`);
-          setupGameStateDistribution(roomId);
-        } catch (error) {
-          console.error('❌ Error setting up data channel:', error);
         }
       });
     });
