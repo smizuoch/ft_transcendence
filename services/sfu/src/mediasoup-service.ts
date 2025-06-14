@@ -1,11 +1,12 @@
 import * as mediasoup from 'mediasoup';
-import { Worker, Router, WebRtcTransport, Producer, Consumer } from 'mediasoup/node/lib/types';
+import { Worker, Router, WebRtcTransport, Producer, Consumer, DataProducer } from 'mediasoup/node/lib/types';
 
 export class MediasoupService {
   private worker: Worker | null = null;
   private router: Router | null = null;
   private transports: Map<string, WebRtcTransport> = new Map();
   private producers: Map<string, Producer> = new Map();
+  private dataProducers: Map<string, DataProducer> = new Map();
   private consumers: Map<string, Consumer> = new Map();
 
   async initialize(): Promise<void> {
@@ -87,6 +88,7 @@ export class MediasoupService {
       iceParameters: any;
       iceCandidates: any;
       dtlsParameters: any;
+      sctpParameters?: any;
     };
   }> {
     if (!this.router) {
@@ -109,14 +111,26 @@ export class MediasoupService {
       });
     }
 
-    const transport = await this.router.createWebRtcTransport({
+    const transportOptions = {
       listenIps,
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,
-      // ICE候補の追加設定
-      enableSctp: false,
-      numSctpStreams: { OS: 1024, MIS: 1024 },
+      // データチャンネル用のSCTPを有効化
+      enableSctp: true,
+      numSctpStreams: { OS: 256, MIS: 256 },
+      // SCTPの設定を保守的な値に変更
+      maxSctpMessageSize: 65536,
+    };
+
+    console.log('🔧 Creating WebRTC transport with options:', JSON.stringify(transportOptions, null, 2));
+    
+    const transport = await this.router.createWebRtcTransport(transportOptions);
+    
+    console.log('✅ WebRTC transport created:', {
+      id: transport.id,
+      sctpState: transport.sctpState,
+      sctpParameters: transport.sctpParameters,
     });
 
     this.transports.set(socketId, transport);
@@ -134,6 +148,7 @@ export class MediasoupService {
         iceParameters: transport.iceParameters,
         iceCandidates: transport.iceCandidates,
         dtlsParameters: transport.dtlsParameters,
+        sctpParameters: transport.sctpParameters,
       },
     };
   }
@@ -173,6 +188,36 @@ export class MediasoupService {
     });
 
     return { id: producer.id };
+  }
+
+  async produceData(
+    socketId: string,
+    sctpStreamParameters: any,
+    label: string,
+    protocol: string,
+    appData: any = {}
+  ): Promise<{ id: string }> {
+    const transport = this.transports.get(socketId);
+    if (!transport) {
+      throw new Error('Transport not found');
+    }
+
+    const dataProducer = await transport.produceData({
+      sctpStreamParameters,
+      label,
+      protocol,
+      appData: { ...appData, socketId },
+    });
+
+    this.dataProducers.set(dataProducer.id, dataProducer);
+
+    dataProducer.on('transportclose', () => {
+      console.log('Data producer transport closed');
+      this.dataProducers.delete(dataProducer.id);
+      dataProducer.close();
+    });
+
+    return { id: dataProducer.id };
   }
 
   async consume(
@@ -305,7 +350,7 @@ export class MediasoupService {
   private getLocalIpAddress(): string {
     const { networkInterfaces } = require('os');
     const nets = networkInterfaces();
-    
+
     for (const name of Object.keys(nets)) {
       for (const net of nets[name]) {
         // IPv4で内部ネットワークでないものを探す
@@ -314,7 +359,7 @@ export class MediasoupService {
         }
       }
     }
-    
+
     // フォールバック
     return '127.0.0.1';
   }

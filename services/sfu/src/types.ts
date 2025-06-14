@@ -43,3 +43,25 @@ export interface PlayerInput {
   down: boolean;
   timestamp: number;
 }
+
+export interface GamePong42State {
+  roomId: string;
+  participants: Map<string, PlayerInfo>;
+  countdown: number;
+  gameStarted: boolean;
+  gameOver: boolean;
+  npcCount: number;
+  createdAt: Date;
+  lastActivity: Date;
+}
+
+export interface NPCRequest {
+  roomNumber: string;
+  npcCount: number;
+}
+
+export interface NPCGameState {
+  gameId: string;
+  gameState: GameState;
+  active: boolean;
+}

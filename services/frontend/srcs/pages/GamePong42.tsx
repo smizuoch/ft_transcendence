@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
 import { useNPCManager, NPCGameConfig, NPCGameResponse } from "@/utils/npcManagerService";
+import { useGamePong42SFU } from "@/utils/gamePong42SFU";
 
 interface GamePong42Props {
   navigate: (page: string) => void;
@@ -21,74 +22,85 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<number | null>(null);
-  const [countdown, setCountdown] = useState(5);  // GamePong42特有の状態
+  const [countdown, setCountdown] = useState(30);  // 30秒のカウントダウンに変更
   const [survivors, setSurvivors] = useState(42);
   const [selectedTarget, setSelectedTarget] = useState<number | null>(Math.floor(Math.random() * 41));
   const [showSurvivorsAlert, setShowSurvivorsAlert] = useState(false);
   const [attackAnimation, setAttackAnimation] = useState<{ targetIndex: number; duration: number } | null>(null);
   const [miniGamesReady, setMiniGamesReady] = useState(false); // ミニゲーム初期化完了フラグ
   const [miniGamesDataReady, setMiniGamesDataReady] = useState(false); // ミニゲームデータ取得完了フラグ
+  const [isWaitingForGame, setIsWaitingForGame] = useState(true); // ゲーム開始待機状態
 
   // ミニゲーム状態
   const [miniGames, setMiniGames] = useState<MiniGame[]>([]);
-
   // npc_managerサービスのhook
   const npcManager = useNPCManager();
+  // WebRTC SFUのhook
+  const sfu = useGamePong42SFU();
 
-  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
+  // 固定のプレイヤー情報（useRefで安定化）
+  const playerInfoRef = useRef({
+    id: `player-${Math.random().toString(36).substr(2, 9)}`,
+    avatar: '/images/avatar/default.png',
+    name: 'Player'
+  });const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
-
-  // ミニゲーム初期化（npc_managerサービス使用）
-  useEffect(() => {
+  // ミニゲーム初期化関数
+  const initMiniGames = useCallback(async (npcCount: number) => {
     if (miniGames.length > 0) return; // 既に初期化済みの場合はスキップ
 
-    const initMiniGames = async () => {
-      console.log('🎮 Starting miniGames initialization...');
-      const games: MiniGame[] = [];
-      const miniCanvasSize = { width: 100, height: 100 };      // 41個のNPC vs NPCゲームを作成
-      for (let i = 0; i < 41; i++) {const gameConfig: NPCGameConfig = {          canvasWidth: 100, // ミニゲーム用キャンバス横幅
-          canvasHeight: 100, // ミニゲーム用キャンバス縦幅          paddleWidth: 10, // パドル幅をより小さく
-          paddleHeight: 1.5, // パドル高さをより小さく
-          ballRadius: 2, // ボールサイズをより小さく          paddleSpeed: 6, // パドル速度を下げてより長いラリーを実現
-          initialBallSpeed: 1.0, // 初期ボール速度を下げる
-          maxBallSpeed: 2.5, // ボール最大速度を2.5に制限
-          npc: {
-            enabled: true,
-            player: 1,
-            mode: 'pid',
-            difficulty: 'Easy',
-          },          npc2: {
-            enabled: true,
-            player: 2,
-            mode: 'pid',
-            difficulty: 'Nightmare', // HardからNightmareに変更
-          },
-        };
+    console.log(`🎮 Starting miniGames initialization with ${npcCount} NPCs...`);
+    const games: MiniGame[] = [];
+    const miniCanvasSize = { width: 100, height: 100 };
 
-        try {
-          console.log(`🎯 Creating game ${i}...`);
-          const result = await npcManager.createGame(gameConfig);
-          if (result.success && result.gameId) {
-            console.log(`✅ Game ${i} created with ID: ${result.gameId}`);
-            games.push({
-              id: i,
-              gameId: result.gameId,
-              active: true,
-              gameState: null,
-              canvasSize: miniCanvasSize,
-            });
-          } else {
-            console.error(`❌ Failed to create game ${i}:`, result.error);
-            games.push({
-              id: i,
-              gameId: null,
-              active: false,
-              gameState: null,
-              canvasSize: miniCanvasSize,
-            });
-          }
-        } catch (error) {
-          console.error(`💥 Error creating game ${i}:`, error);
+    // NPCが0の場合（42人満員）はミニゲームを作成しない
+    if (npcCount === 0) {
+      console.log('⚠️ 42 participants detected, no mini-games needed');
+      setMiniGamesReady(true);
+      setGameStarted(true);
+      setIsWaitingForGame(false);
+      return;
+    }
+
+    // NPC数分のNPC vs NPCゲームを作成
+    for (let i = 0; i < npcCount; i++) {
+      const gameConfig: NPCGameConfig = {
+        canvasWidth: 100, // ミニゲーム用キャンバス横幅
+        canvasHeight: 100, // ミニゲーム用キャンバス縦幅
+        paddleWidth: 10, // パドル幅をより小さく
+        paddleHeight: 1.5, // パドル高さをより小さく
+        ballRadius: 2, // ボールサイズをより小さく
+        paddleSpeed: 6, // パドル速度を下げてより長いラリーを実現
+        initialBallSpeed: 1.0, // 初期ボール速度を下げる
+        maxBallSpeed: 2.5, // ボール最大速度を2.5に制限
+        npc: {
+          enabled: true,
+          player: 1,
+          mode: 'pid',
+          difficulty: 'Easy',
+        },
+        npc2: {
+          enabled: true,
+          player: 2,
+          mode: 'pid',
+          difficulty: 'Nightmare', // HardからNightmareに変更
+        },
+      };
+
+      try {
+        console.log(`🎯 Creating game ${i}...`);
+        const result = await npcManager.createGame(gameConfig);
+        if (result.success && result.gameId) {
+          console.log(`✅ Game ${i} created with ID: ${result.gameId}`);
+          games.push({
+            id: i,
+            gameId: result.gameId,
+            active: true,
+            gameState: null,
+            canvasSize: miniCanvasSize,
+          });
+        } else {
+          console.error(`❌ Failed to create game ${i}:`, result.error);
           games.push({
             id: i,
             gameId: null,
@@ -97,94 +109,151 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
             canvasSize: miniCanvasSize,
           });
         }
-      }
-
-      console.log(`🏁 MiniGames initialization complete. Created ${games.filter(g => g.active).length} active games.`);
-      setMiniGames(games);
-      setMiniGamesReady(true); // ミニゲーム初期化完了
-
-      // 初回ゲーム状態データを取得
-      console.log('🔄 Fetching initial game state data...');
-      try {
-        const result = await npcManager.getAllActiveGames();
-        if (result.success && result.data) {
-          const activeGamesData = result.data;
-          console.log('📥 Initial game state data received:', activeGamesData.length, 'games');
-
-          const updatedGames = games.map(game => {
-            if (!game.gameId) return game;
-            const gameData = activeGamesData.find(data => data.gameId === game.gameId);
-            return gameData ? { ...game, gameState: gameData } : game;
-          });
-
-          setMiniGames(updatedGames);
-          setMiniGamesDataReady(true); // データ取得完了
-          console.log('✅ Initial mini games data loaded successfully');
-        } else {
-          console.warn('❌ Failed to get initial active games:', result.error);
-          // データ取得に失敗してもゲームは開始可能
-          setMiniGamesDataReady(true);
-        }
       } catch (error) {
-        console.error('💥 Error fetching initial game state:', error);
-        // エラーが発生してもゲームは開始可能
-        setMiniGamesDataReady(true);
+        console.error(`💥 Error creating game ${i}:`, error);
+        games.push({
+          id: i,
+          gameId: null,
+          active: false,
+          gameState: null,
+          canvasSize: miniCanvasSize,
+        });
       }
-    };
+    }
 
-    // コンポーネントマウント時に即座に初期化開始
-    initMiniGames();
-  }, []); // 依存関係を空配列にして初回マウント時のみ実行
-
-  // ミニゲーム更新ループ（npc_managerサービス使用）
+    console.log(`🏁 MiniGames initialization complete. Created ${games.filter(g => g.active).length} active games.`);
+    setMiniGames(games);
+    setMiniGamesReady(true); // ミニゲーム初期化完了
+  }, [miniGames.length, npcManager]);  // SFUサーバーに接続
   useEffect(() => {
-    if (!miniGamesReady || gameOver) return; // ミニゲーム初期化完了後に開始
+    console.log('🔗 Starting SFU connection process...');
 
-    const updateMiniGames = async () => {
+    try {
+      sfu.connect();
+      console.log('🔗 SFU connect function called successfully');
+    } catch (error) {
+      console.error('❌ Error calling SFU connect:', error);
+    }
+
+    // クリーンアップ
+    return () => {
+      console.log('🔌 Cleaning up SFU connection...');
+      sfu.disconnect();
+    };
+  }, []); // 初回のみ実行
+  // 接続状態をログ出力
+  useEffect(() => {
+    console.log('🔗 SFU connected state changed:', sfu.connected);
+  }, [sfu.connected]);  // 接続完了後に部屋に参加
+  useEffect(() => {
+    if (sfu.connected) {
+      console.log('✅ Connected to SFU server, preparing to join GamePong42 room...');
+
+      const playerInfo = playerInfoRef.current; // 固定のプレイヤー情報を使用
+      const roomNumber = 'gamepong42-room-1'; // 固定の部屋番号
+      console.log('🏠 Attempting to join room:', roomNumber, 'with player info:', playerInfo);
+
       try {
-        console.log('🔄 Updating mini games...');
-        // 全てのアクティブなゲーム状態を一度に取得
-        const result = await npcManager.getAllActiveGames();
-
-        console.log('📥 getAllActiveGames result:', result);
-
-        if (result.success && result.data) {
-          const activeGamesData = result.data;
-          console.log('🎮 Active games data:', activeGamesData);
-
-          setMiniGames(prev => {
-            return prev.map(game => {
-              if (!game.gameId) return game;
-
-              // 対応するゲーム状態を検索
-              const gameData = activeGamesData.find(data => data.gameId === game.gameId);
-
-              if (gameData) {
-                // ゲーム終了チェック
-                if (gameData.winner === 'player1') {
-                  // Player1 (弱いNPC) が勝利 → ゲーム終了（稀なケース）
-                  console.log(`Game ${game.gameId} ended: Player1 won`);
-                  return { ...game, active: false, gameState: gameData };
-                } else {
-                  // ゲーム継続中またはPlayer2勝利
-                  return { ...game, gameState: gameData };
-                }
-              } else {
-                // ゲームが見つからない場合は非アクティブにする
-                console.warn(`Game ${game.gameId} not found in active games`);
-                return { ...game, active: false };
-              }
-            });
-          });
-        } else {
-          console.warn('Failed to get active games:', result.error);
-        }
+        const joinResult = sfu.joinGamePong42Room(roomNumber, playerInfo);
+        console.log('🏠 Join room result:', joinResult);
       } catch (error) {
-        console.error('Error updating mini games:', error);
+        console.error('❌ Error joining room:', error);
       }
-    };    const interval = setInterval(updateMiniGames, 16); // 60FPS（16ms間隔）でリアルタイム更新
-    return () => clearInterval(interval);
-  }, [miniGamesReady, gameOver, npcManager]);
+    } else {
+      console.log('⏳ Waiting for SFU connection to be established...');
+    }
+  }, [sfu.connected]); // sfu.joinGamePong42Roomを依存配列から削除// SFU状態の監視
+  useEffect(() => {
+    console.log('🏠 SFU room state effect triggered, roomState:', sfu.roomState);
+
+    if (sfu.roomState) {
+      console.log('🏠 Room state updated:', sfu.roomState);
+      setCountdown(sfu.roomState.countdown);
+
+      if (sfu.roomState.gameStarted) {
+        console.log('🎮 Game started with', sfu.roomState.participantCount, 'participants and', sfu.roomState.npcCount, 'NPCs');
+        setIsWaitingForGame(false);
+        setGameStarted(true);
+
+        // NPC数が0でない場合のみミニゲームを初期化
+        if (sfu.roomState.npcCount > 0 && miniGames.length === 0) {
+          console.log('🎯 Initializing mini games with NPC count:', sfu.roomState.npcCount);
+          initMiniGames(sfu.roomState.npcCount);
+        } else if (sfu.roomState.npcCount === 0) {
+          console.log('ℹ️ 42 participants detected, no NPCs needed - mini games will show player vs player battles');
+          setMiniGamesReady(true); // NPC無しでもゲーム開始可能
+        }
+      } else {
+        console.log('⏳ Game not started yet, countdown:', sfu.roomState.countdown, 'participants:', sfu.roomState.participantCount);
+      }
+    } else {
+      console.log('❓ No room state available');
+    }
+  }, [sfu.roomState]); // initMiniGamesとminiGames.lengthを依存配列から削除// NPCの状態を監視
+  useEffect(() => {
+    if (sfu.npcStates.length > 0) {
+      console.log('🤖 NPC states updated:', sfu.npcStates.length, 'NPCs');
+
+      // NPCの状態をミニゲームに反映
+      setMiniGames(prev => {
+        const updated = [...prev];
+
+        sfu.npcStates.forEach((npcState, index) => {
+          if (index < updated.length && updated[index]) {
+            updated[index] = {
+              ...updated[index],
+              gameState: npcState.gameState,
+              active: npcState.active
+            };
+          }
+        });
+
+        return updated;
+      });
+    }
+  }, [sfu.npcStates]);// 他のプレイヤーからのゲーム状態を受信してミニゲームに反映
+  useEffect(() => {
+    if (!sfu.socket) return;
+
+    const handlePlayerGameState = (data: any) => {
+      console.log('📨 Received game state from other player:', data);
+
+      // 他のプレイヤーのゲーム状態をいずれかのミニゲームに反映
+      // （実際の実装では、プレイヤーIDとミニゲームのマッピングが必要）
+      const playerIndex = Math.floor(Math.random() * miniGames.length);
+
+      setMiniGames(prev => {
+        const updated = [...prev];
+        if (updated[playerIndex]) {
+          updated[playerIndex] = {
+            ...updated[playerIndex],
+            gameState: {
+              gameId: `player-${data.playerId}`,
+              gameState: data.gameState,
+              isRunning: true,
+              score: { player1: 0, player2: 0 }
+            },
+            active: true
+          };
+        }
+        return updated;
+      });
+    };    sfu.socket.on('gamepong42-state', handlePlayerGameState);
+
+    return () => {
+      sfu.socket?.off('gamepong42-state', handlePlayerGameState);
+    };
+  }, [sfu.socket, miniGames.length]); // sfu.socketを使用// ミニゲーム更新ループ（WebRTC SFU経由でNPCManagerから更新を受信）  // ミニゲーム更新ループ（WebRTC SFU経由でNPCManagerから更新を受信）
+  useEffect(() => {
+    if (!miniGamesReady || gameOver || !sfu.roomState?.gameStarted) return;
+
+    // WebRTC SFU経由でNPCの状態が更新される場合の処理は
+    // 上記のnpcStatesの監視で処理される
+
+    // 従来のポーリング方式は使用しない（WebRTC SFUを使用するため）
+    console.log('ℹ️ Mini games update now handled via WebRTC SFU');
+  }, [miniGamesReady, gameOver, sfu.roomState]);
+
   // 生存者数の更新
   useEffect(() => {
     const activeMiniGames = miniGames.filter(game => game.active).length;
@@ -249,7 +318,6 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       }, 1000);
     }
   }, [selectedTarget, miniGames, npcManager]);
-
   const handleStartGame = useCallback(() => {
     // NPCを上側（Player1）のみに設定
     if (engineRef.current) {
@@ -265,25 +333,6 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     setGameOver(false);
     setWinner(null);
   }, [engineRef]); // getCurrentNPCの依存関係を削除
-
-  // カウントダウン開始（ミニゲーム初期化完了後）
-  useEffect(() => {
-    if (!miniGamesReady || !miniGamesDataReady) return; // ミニゲーム初期化とデータ取得完了を待機
-
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleStartGame();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [handleStartGame, miniGamesReady, miniGamesDataReady]);
-
   // ゲームループの統一管理
   useEffect(() => {
     // カウントダウン中もゲームループを開始（プレイヤーのパドル操作のため）
@@ -291,6 +340,20 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
     return () => stopGameLoop();
   }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, survivors]); // survivorsを依存関係に追加
+  // ゲーム状態をSFU経由で他のプレイヤーに送信（60fps）
+  useEffect(() => {
+    if (!gameStarted || !sfu.connected || !engineRef.current) return;
+
+    const sendGameState = () => {
+      if (engineRef.current && sfu.roomState) {
+        const gameState = engineRef.current.getState();
+        sfu.sendGameState('gamepong42-room-1', gameState);
+      }
+    };
+
+    const interval = setInterval(sendGameState, 1000 / 60); // 60fps
+    return () => clearInterval(interval);
+  }, [gameStarted, sfu.connected, sfu.roomState, engineRef, sfu]);
 
   // Show alert when survivors count reaches milestone
   useEffect(() => {
@@ -374,12 +437,19 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       <div className="absolute inset-0 bg-black bg-opacity-40"></div>      {/* Left side opponents - 21 tables in 7x3 grid (21 out of 41) */}
       {gameStarted && (
         <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
-          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>            {Array.from({ length: Math.min(21, miniGames.length) }).map((_, i) => {
+          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>            {Array.from({ length: 21 }).map((_, i) => {
               const game = miniGames[i];
-              if (!game?.active) return null;
+              const hasNPCGame = game?.active && game.gameState;
+              const hasOtherPlayers = sfu.roomState && sfu.roomState.participants.length > 1;
 
-              const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
+              // NPC vs NPC ゲーム、または他のプレイヤーとの対戦を表示
+              const shouldShowCanvas = hasNPCGame || (hasOtherPlayers && i < (41 - (sfu.roomState?.npcCount || 0)));
+
+              if (!shouldShowCanvas) return null;
+
+              const gameState = game?.gameState?.gameState; // NPCGameResponse.gameState
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要
+              const isPlayerVsPlayer = !hasNPCGame && hasOtherPlayers;
 
               // デバッグ: パドル位置情報をログに出力
               if (gameState && i === 0) { // 最初のゲームのみログ出力
@@ -475,13 +545,20 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       {gameStarted && (
         <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
           <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
-            {Array.from({ length: Math.min(20, Math.max(0, miniGames.length - 21)) }).map((_, i) => {
+            {Array.from({ length: 20 }).map((_, i) => {
               const gameIndex = 21 + i;
               const game = miniGames[gameIndex];
-              if (!game?.active) return null;
+              const hasNPCGame = game?.active && game.gameState;
+              const hasOtherPlayers = sfu.roomState && sfu.roomState.participants.length > 1;
 
-              const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
+              // NPC vs NPC ゲーム、または他のプレイヤーとの対戦を表示
+              const shouldShowCanvas = hasNPCGame || (hasOtherPlayers && gameIndex < (41 - (sfu.roomState?.npcCount || 0)));
+
+              if (!shouldShowCanvas) return null;
+
+              const gameState = game?.gameState?.gameState; // NPCGameResponse.gameState
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要
+              const isPlayerVsPlayer = !hasNPCGame && hasOtherPlayers;
 
               return (
                 <div
@@ -571,17 +648,22 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         {/* play square */}
         <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
           <canvas ref={canvasRef} className="w-full h-full border border-white" />
-        </div>
-
-        {/* countdown screen */}
+        </div>        {/* countdown screen */}
         {!gameStarted && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             {!miniGamesReady ? (
               <>
                 <div className="text-4xl font-bold text-white mb-4">
                   Initializing Mini Games...
-                </div>                <div className="text-xl text-white opacity-80">
+                </div>
+                <div className="text-xl text-white opacity-80">
                   {miniGames.filter(g => g.active).length} / 42 games ready
+                </div>
+                <div className="text-sm text-white opacity-60 mt-4">
+                  SFU Connected: {sfu.connected ? '✅' : '❌'}<br/>
+                  Room State: {sfu.roomState ? '✅' : '❌'}<br/>
+                  Game Started: {sfu.roomState?.gameStarted ? '✅' : '❌'}<br/>
+                  NPC Count: {sfu.roomState?.npcCount || 'N/A'}
                 </div>
               </>
             ) : !miniGamesDataReady ? (
