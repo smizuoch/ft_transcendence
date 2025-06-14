@@ -124,9 +124,9 @@ export class MediasoupService {
     };
 
     console.log('🔧 Creating WebRTC transport with options:', JSON.stringify(transportOptions, null, 2));
-    
+
     const transport = await this.router.createWebRtcTransport(transportOptions);
-    
+
     console.log('✅ WebRTC transport created:', {
       id: transport.id,
       sctpState: transport.sctpState,
@@ -362,5 +362,41 @@ export class MediasoupService {
 
     // フォールバック
     return '127.0.0.1';
+  }
+
+  // データチャンネル経由でクライアントにデータを送信
+  async sendDataToClient(socketId: string, data: string): Promise<boolean> {
+    try {
+      // 該当するDataProducerを検索
+      for (const [id, dataProducer] of this.dataProducers.entries()) {
+        if (dataProducer.appData.socketId === socketId) {
+          // DataProducerはデータ送信用ではなく受信用なので、
+          // 実際の送信は異なる方法で行う必要がある
+          console.log(`📊 Data channel available for ${socketId}, but send method needs implementation`);
+          return false;
+        }
+      }
+
+      console.log(`📊 No data channel found for ${socketId}`);
+      return false;
+    } catch (error) {
+      console.error('❌ Error sending data to client:', error);
+      return false;
+    }
+  }
+
+  // DataProducerの状態を確認
+  hasDataChannel(socketId: string): boolean {
+    for (const [id, dataProducer] of this.dataProducers.entries()) {
+      if (dataProducer.appData.socketId === socketId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 全てのDataProducerを取得
+  getDataProducers(): Map<string, DataProducer> {
+    return this.dataProducers;
   }
 }

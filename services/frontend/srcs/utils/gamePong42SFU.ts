@@ -15,12 +15,50 @@ interface PlayerInfo {
 
 const SFU_URL = 'http://localhost:3001';
 
+// ゲーム状態の型定義
+interface GamePong42GameState {
+  mainGame: {
+    ball: { x: number; y: number; vx: number; vy: number };
+    player: { x: number; y: number; score: number };
+    pidNPC: { x: number; y: number; score: number };
+    gameStarted: boolean;
+    gameOver: boolean;
+    winner: 'player' | 'pidNPC' | null;
+  };
+  sideGames: Array<{
+    id: number;
+    ball: { x: number; y: number; vx: number; vy: number };
+    player1: { x: number; y: number; score: number; type: 'npc' | 'player'; name?: string };
+    player2: { x: number; y: number; score: number; type: 'npc' | 'player'; name?: string };
+    gameStarted: boolean;
+    gameOver: boolean;
+    winner: 1 | 2 | null;
+    active: boolean;
+  }>;
+  roomState: {
+    participantCount: number;
+    npcCount: number;
+    survivors: number;
+    gameStarted: boolean;
+    gameOver: boolean;
+    timestamp: number;
+  };
+}
+
+interface GamePong42Update {
+  type: 'gameState' | 'playerInput' | 'gameEvent';
+  data: GamePong42GameState | any;
+  timestamp: number;
+}
+
 export const useGamePong42SFU = () => {
   const [connected, setConnected] = useState(false);
   const [roomState, setRoomState] = useState<any>(null);
   const [error, setError] = useState<string>('');
   const [npcStates, setNpcStates] = useState<any[]>([]);
   const [webrtcReady, setWebrtcReady] = useState(false);
+  const [gameState, setGameState] = useState<GamePong42GameState | null>(null);
+  const [lastGameUpdate, setLastGameUpdate] = useState<number>(0);
   const socketRef = useRef<Socket | null>(null);
   const webrtcRef = useRef<GamePong42WebRTC | null>(null);
 
@@ -110,22 +148,45 @@ export const useGamePong42SFU = () => {
             webrtcRef.current.onGameStateReceived((gameState) => {
               console.log('📊 Game state received via WebRTC:', gameState);
               setNpcStates(prev => {
-                const newStates = [...prev];
-                newStates.push(gameState);
-                return newStates;
+                // NPCの状態を更新
+                return gameState?.npcStates || prev;
               });
             });
-
-            // データチャンネルの作成
-            await webrtcRef.current.createGameDataChannel();
           } else {
             console.error('❌ Failed to initialize WebRTC');
             setError('Failed to initialize WebRTC');
           }
-        } catch (error: any) {
-          console.error('❌ WebRTC initialization error:', error);
-          setError(`WebRTC error: ${error.message}`);
+        } catch (err: any) {
+          console.error('❌ WebRTC initialization error:', err);
+          setError(`WebRTC error: ${err.message}`);
         }
+      });
+
+      // ゲーム状態更新イベント（Socket.IO経由）
+      socket.on('gamepong42-game-state-update', (update: GamePong42Update) => {
+        try {
+          if (update.type === 'gameState' && update.data) {
+            setGameState(update.data as GamePong42GameState);
+            setLastGameUpdate(update.timestamp);
+
+            // デバッグログ（頻度を制限）
+            if (Date.now() % 1000 < 17) { // 約1秒に1回程度
+              console.log('🎮 Game state updated:', {
+                mainGame: update.data.mainGame,
+                activeSideGames: update.data.sideGames?.filter((g: any) => g.active).length || 0,
+                survivors: update.data.roomState?.survivors
+              });
+            }
+          }
+        } catch (err) {
+          console.error('❌ Error processing game state update:', err);
+        }
+      });
+
+      // ゲーム開始イベント
+      socket.on('gamepong42-game-started', (data) => {
+        console.log('🎮 GamePong42 game started:', data);
+        setRoomState(prev => ({ ...prev, gameStarted: true, ...data }));
       });
 
       socket.on('gamepong42-participant-joined', (data) => {
@@ -231,6 +292,38 @@ export const useGamePong42SFU = () => {
     }
   }, [webrtcReady]);
 
+  // プレイヤー入力を送信
+  const sendPlayerInput = useCallback((roomId: string, input: { up: boolean; down: boolean; attack?: number }) => {
+    if (!socketRef.current?.connected) {
+      console.warn('⚠️ Cannot send player input: not connected to SFU server');
+      return;
+    }
+
+    console.log('🎮 Sending player input:', input);
+    socketRef.current.emit('gamepong42-player-input', {
+      roomId,
+      input
+    });
+  }, []);
+
+  // ゲーム状態をリクエスト
+  const requestGameState = useCallback((roomId: string): Promise<GamePong42GameState | null> => {
+    return new Promise((resolve, reject) => {
+      if (!socketRef.current?.connected) {
+        reject(new Error('Not connected to SFU server'));
+        return;
+      }
+
+      socketRef.current.emit('gamepong42-get-state', { roomId }, (response: any) => {
+        if (response.success) {
+          resolve(response.gameState);
+        } else {
+          reject(new Error(response.error || 'Failed to get game state'));
+        }
+      });
+    });
+  }, []);
+
   // ページ読み込み時に自動接続
   useEffect(() => {
     connect();
@@ -267,13 +360,17 @@ export const useGamePong42SFU = () => {
     roomState,
     error,
     npcStates,
+    gameState,
+    lastGameUpdate,
     socket: socketRef.current,
     webrtc: webrtcRef.current,
     webrtcReady,
     connect,
     disconnect,
     joinGamePong42Room,
-    sendGameState
+    sendGameState,
+    sendPlayerInput,
+    requestGameState
   };
 };
 

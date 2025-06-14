@@ -1,4 +1,4 @@
-import { GamePong42State, PlayerInfo, NPCRequest } from './types';
+import { GamePong42State, PlayerInfo, NPCRequest, GamePong42GameState, GamePong42Input, GamePong42Update, GamePong42Event } from './types';
 
 export class GamePong42Room {
   public id: string;
@@ -9,6 +9,11 @@ export class GamePong42Room {
   public npcCount: number;
   public createdAt: Date;
   public lastActivity: Date;
+
+  // ゲーム状態管理
+  public gameState: GamePong42GameState;
+  public gameLoop: NodeJS.Timeout | null = null;
+
   private countdownTimer: NodeJS.Timeout | null = null;
   private countdownStarted: boolean = false;
 
@@ -21,7 +26,50 @@ export class GamePong42Room {
     this.npcCount = 0;
     this.createdAt = new Date();
     this.lastActivity = new Date();
+
+    // ゲーム状態初期化
+    this.gameState = this.initializeGameState();
   }
+
+  private initializeGameState(): GamePong42GameState {
+    // サイドゲーム（最大41個）を初期化
+    const sideGames = [];
+    for (let i = 0; i < 41; i++) {
+      sideGames.push({
+        id: i,
+        ball: { x: 400, y: 300, vx: 5, vy: 5 },
+        player1: { x: 50, y: 250, score: 0, type: 'npc' as const, name: `NPC${i * 2 + 1}` },
+        player2: { x: 750, y: 250, score: 0, type: 'npc' as const, name: `NPC${i * 2 + 2}` },
+        gameStarted: false,
+        gameOver: false,
+        winner: null,
+        active: false
+      });
+    }
+
+    return {
+      mainGame: {
+        ball: { x: 400, y: 300, vx: 5, vy: 5 },
+        player: { x: 50, y: 250, score: 0 },
+        pidNPC: { x: 750, y: 250, score: 0 },
+        gameStarted: false,
+        gameOver: false,
+        winner: null
+      },
+      sideGames,
+      roomState: {
+        participantCount: 0,
+        npcCount: 42,
+        survivors: 42,
+        gameStarted: false,
+        gameOver: false,
+        timestamp: Date.now()
+      }
+    };
+  }
+
+  // 参加者にゲーム状態を送信するためのコールバック
+  public onGameStateUpdate?: (update: GamePong42Update) => void;
 
   addParticipant(playerId: string, playerInfo: PlayerInfo): void {
     this.lastActivity = new Date();
@@ -39,6 +87,7 @@ export class GamePong42Room {
   removeParticipant(playerId: string): boolean {
     this.lastActivity = new Date();
     const removed = this.participants.delete(playerId);
+    this.gameState.roomState.participantCount = this.participants.size;
 
     // 全員いなくなったらカウントダウン停止
     if (this.participants.size === 0 && this.countdownTimer) {
@@ -46,6 +95,7 @@ export class GamePong42Room {
       this.countdownTimer = null;
       this.countdownStarted = false;
       this.countdown = 30;
+      this.stopGameLoop();
     }
 
     return removed;
@@ -55,6 +105,10 @@ export class GamePong42Room {
     return this.participants.size;
   }
 
+  hasParticipant(playerId: string): boolean {
+    return this.participants.has(playerId);
+  }
+
   getParticipants(): Array<{ playerId: string; playerInfo: PlayerInfo }> {
     return Array.from(this.participants.entries()).map(([playerId, playerInfo]) => ({
       playerId,
@@ -62,12 +116,8 @@ export class GamePong42Room {
     }));
   }
 
-  hasParticipant(playerId: string): boolean {
-    return this.participants.has(playerId);
-  }
-
   shouldStartGame(): boolean {
-    return this.participants.size >= 42 || this.countdown <= 0; // 42人または30秒経過でゲーム開始
+    return this.countdown <= 0 || this.participants.size >= 42;
   }
 
   calculateNPCCount(): number {
@@ -100,7 +150,218 @@ export class GamePong42Room {
 
     this.gameStarted = true;
     this.npcCount = this.calculateNPCCount();
+    this.gameState.roomState.npcCount = this.npcCount;
     console.log(`Game started in room ${this.id} with ${this.participants.size} players and ${this.npcCount} NPCs`);
+
+    // ゲームループ開始
+    this.startGameLoop();
+  }
+
+  // ゲームループ開始
+  public startGameLoop(): void {
+    if (this.gameLoop) return;
+
+    console.log(`Starting game loop for room ${this.id}`);
+    this.gameState.mainGame.gameStarted = true;
+    this.gameState.roomState.gameStarted = true;
+
+    // サイドゲームの一部をアクティブにする
+    const activeCount = Math.min(this.npcCount, 41);
+    for (let i = 0; i < activeCount; i++) {
+      this.gameState.sideGames[i].active = true;
+      this.gameState.sideGames[i].gameStarted = true;
+    }
+
+    // 60FPSでゲーム状態を更新
+    this.gameLoop = setInterval(() => {
+      this.updateGameState();
+
+      // ゲーム状態更新コールバック呼び出し
+      if (this.onGameStateUpdate) {
+        const update: GamePong42Update = {
+          type: 'gameState',
+          data: this.getGameState(),
+          timestamp: Date.now()
+        };
+        this.onGameStateUpdate(update);
+      }
+    }, 1000 / 60);
+  }
+
+  // ゲームループ停止
+  public stopGameLoop(): void {
+    if (this.gameLoop) {
+      clearInterval(this.gameLoop);
+      this.gameLoop = null;
+      console.log(`Stopped game loop for room ${this.id}`);
+    }
+  }
+
+  // ゲーム状態更新
+  private updateGameState(): void {
+    this.gameState.roomState.timestamp = Date.now();
+
+    // メインゲーム更新
+    this.updateMainGame();
+
+    // サイドゲーム更新
+    this.updateSideGames();
+
+    // 勝利条件チェック
+    this.checkWinConditions();
+  }
+
+  private updateMainGame(): void {
+    const { ball, player, pidNPC } = this.gameState.mainGame;
+
+    // ボール移動
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    // 境界チェック
+    if (ball.y <= 0 || ball.y >= 600) {
+      ball.vy = -ball.vy;
+    }
+
+    // パドル衝突判定
+    if (ball.x <= 60 && ball.y >= player.y && ball.y <= player.y + 50) {
+      ball.vx = Math.abs(ball.vx);
+    }
+    if (ball.x >= 740 && ball.y >= pidNPC.y && ball.y <= pidNPC.y + 50) {
+      ball.vx = -Math.abs(ball.vx);
+    }
+
+    // スコア処理
+    if (ball.x <= 0) {
+      pidNPC.score++;
+      this.resetBall(ball);
+    } else if (ball.x >= 800) {
+      player.score++;
+      this.resetBall(ball);
+    }
+
+    // PID NPCの簡易AI
+    const targetY = ball.y - 25; // パドルの中心に合わせる
+    const diff = targetY - pidNPC.y;
+    pidNPC.y += Math.sign(diff) * Math.min(Math.abs(diff), 3);
+    pidNPC.y = Math.max(0, Math.min(550, pidNPC.y));
+  }
+
+  private updateSideGames(): void {
+    this.gameState.sideGames.forEach(game => {
+      if (!game.active || game.gameOver) return;
+
+      // ボール移動
+      game.ball.x += game.ball.vx;
+      game.ball.y += game.ball.vy;
+
+      // 境界チェック
+      if (game.ball.y <= 0 || game.ball.y >= 600) {
+        game.ball.vy = -game.ball.vy;
+      }
+
+      // パドル衝突判定
+      if (game.ball.x <= 60 && game.ball.y >= game.player1.y && game.ball.y <= game.player1.y + 50) {
+        game.ball.vx = Math.abs(game.ball.vx);
+      }
+      if (game.ball.x >= 740 && game.ball.y >= game.player2.y && game.ball.y <= game.player2.y + 50) {
+        game.ball.vx = -Math.abs(game.ball.vx);
+      }
+
+      // スコア処理
+      if (game.ball.x <= 0) {
+        game.player2.score++;
+        this.resetBall(game.ball);
+      } else if (game.ball.x >= 800) {
+        game.player1.score++;
+        this.resetBall(game.ball);
+      }
+
+      // NPCの簡易AI
+      const targetY1 = game.ball.y - 25;
+      const targetY2 = game.ball.y - 25;
+
+      const diff1 = targetY1 - game.player1.y;
+      const diff2 = targetY2 - game.player2.y;
+
+      game.player1.y += Math.sign(diff1) * Math.min(Math.abs(diff1), 2);
+      game.player2.y += Math.sign(diff2) * Math.min(Math.abs(diff2), 2);
+
+      game.player1.y = Math.max(0, Math.min(550, game.player1.y));
+      game.player2.y = Math.max(0, Math.min(550, game.player2.y));
+
+      // ゲーム終了判定（スコア5で勝利）
+      if (game.player1.score >= 5) {
+        game.gameOver = true;
+        game.winner = 1;
+        this.gameState.roomState.survivors--;
+      } else if (game.player2.score >= 5) {
+        game.gameOver = true;
+        game.winner = 2;
+        this.gameState.roomState.survivors--;
+      }
+    });
+  }
+
+  private resetBall(ball: { x: number; y: number; vx: number; vy: number }): void {
+    ball.x = 400;
+    ball.y = 300;
+    ball.vx = (ball.vx > 0 ? -5 : 5) + (Math.random() - 0.5);
+    ball.vy = (Math.random() - 0.5) * 5;
+  }
+
+  private checkWinConditions(): void {
+    // メインゲーム勝利条件（スコア5で勝利）
+    if (this.gameState.mainGame.player.score >= 5) {
+      this.gameState.mainGame.gameOver = true;
+      this.gameState.mainGame.winner = 'player';
+      this.gameState.roomState.gameOver = true;
+      this.stopGameLoop();
+    } else if (this.gameState.mainGame.pidNPC.score >= 5) {
+      this.gameState.mainGame.gameOver = true;
+      this.gameState.mainGame.winner = 'pidNPC';
+      this.gameState.roomState.gameOver = true;
+      this.stopGameLoop();
+    }
+
+    // 全体勝利条件（生存者が1人の場合）
+    if (this.gameState.roomState.survivors <= 1) {
+      this.gameState.roomState.gameOver = true;
+      this.stopGameLoop();
+    }
+  }
+
+  // プレイヤー入力処理
+  public processPlayerInput(input: GamePong42Input): void {
+    // メインゲームのプレイヤー移動
+    if (input.input.up) {
+      this.gameState.mainGame.player.y = Math.max(0, this.gameState.mainGame.player.y - 5);
+    }
+    if (input.input.down) {
+      this.gameState.mainGame.player.y = Math.min(550, this.gameState.mainGame.player.y + 5);
+    }
+
+    // 攻撃処理
+    if (input.input.attack !== undefined) {
+      this.processAttack(input.playerId, input.input.attack);
+    }
+  }
+
+  private processAttack(playerId: string, targetGameId: number): void {
+    if (targetGameId >= 0 && targetGameId < this.gameState.sideGames.length) {
+      const targetGame = this.gameState.sideGames[targetGameId];
+      if (targetGame.active && !targetGame.gameOver) {
+        // 攻撃効果：対象ゲームの速度を上げる
+        targetGame.ball.vx *= 1.1;
+        targetGame.ball.vy *= 1.1;
+        console.log(`Player ${playerId} attacked game ${targetGameId}`);
+      }
+    }
+  }
+
+  // ゲーム状態取得
+  public getGameState(): GamePong42GameState {
+    return JSON.parse(JSON.stringify(this.gameState)); // Deep copy
   }
 
   getFirstParticipant(): string | null {
@@ -113,6 +374,7 @@ export class GamePong42Room {
       clearInterval(this.countdownTimer);
       this.countdownTimer = null;
     }
+    this.stopGameLoop();
   }
 }
 

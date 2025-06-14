@@ -43,8 +43,59 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     id: `player-${Math.random().toString(36).substr(2, 9)}`,
     avatar: '/images/avatar/default.png',
     name: 'Player'
-  });const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
+  });
+
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
+
+  // キーボード入力をSFUに送信
+  const sendPlayerInput = useCallback(() => {
+    if (sfu.connected && sfu.roomState?.roomNumber && gameStarted) {
+      const input = {
+        up: keysRef.current.ArrowUp || keysRef.current.KeyW,
+        down: keysRef.current.ArrowDown || keysRef.current.KeyS,
+        attack: selectedTarget ?? undefined
+      };
+
+      // 入力に変化がある場合のみ送信
+      if (input.up || input.down || input.attack !== undefined) {
+        sfu.sendPlayerInput(sfu.roomState.roomNumber, input);
+      }
+    }
+  }, [sfu, gameStarted, selectedTarget]);
+
+  // ゲーム状態をSFUから受信して反映
+  useEffect(() => {
+    if (sfu.gameState && gameStarted) {
+      const gameState = sfu.gameState;
+
+      // メインゲームの状態を反映
+      if (engineRef.current && gameState.mainGame) {
+        // エンジンの状態を更新（必要に応じて実装）
+        console.log('🎮 Updating main game state:', gameState.mainGame);      }
+
+      // 生存者数の更新
+      if (gameState.roomState.survivors !== survivors) {
+        setSurvivors(gameState.roomState.survivors);
+      }
+
+      // ゲーム終了判定
+      if (gameState.mainGame.gameOver && !gameOver) {
+        setGameOver(true);
+        setWinner(gameState.mainGame.winner === 'player' ? 1 : 2);
+        // stopGameLoopはuseGameEngineから取得されるので、ここでは呼ばない
+      }
+    }
+  }, [sfu.gameState, gameStarted, survivors, gameOver]);
+
+  // 定期的にプレイヤー入力を送信
+  useEffect(() => {
+    if (!gameStarted) return;
+
+    const inputInterval = setInterval(sendPlayerInput, 1000 / 60); // 60FPS
+    return () => clearInterval(inputInterval);
+  }, [gameStarted, sendPlayerInput]);
+
   // ミニゲーム初期化関数
   const initMiniGames = useCallback(async (npcCount: number) => {
     if (miniGames.length > 0) return; // 既に初期化済みの場合はスキップ
