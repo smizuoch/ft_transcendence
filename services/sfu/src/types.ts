@@ -97,6 +97,7 @@ export interface GamePong42GameState {
     survivors: number;
     gameStarted: boolean;
     gameOver: boolean;
+    countdown: number; // countdownプロパティを追加
     timestamp: number;
   };
 }
@@ -114,9 +115,22 @@ export interface GamePong42Input {
 
 // ゲーム更新データ（WebRTCデータチャンネル経由で送信）
 export interface GamePong42Update {
-  type: 'gameState' | 'playerInput' | 'gameEvent';
-  data: GamePong42GameState | GamePong42Input | GamePong42Event;
+  type: 'gameState' | 'playerInput' | 'gameEvent' | 'roomState'; // 'roomState'を追加
+  data: GamePong42GameState | GamePong42Input | GamePong42Event | GamePong42RoomState; // GamePong42RoomStateを追加
   timestamp: number;
+}
+
+// ルーム状態専用の型定義
+export interface GamePong42RoomState {
+  roomState: {
+    participantCount: number;
+    npcCount: number;
+    survivors: number;
+    gameStarted: boolean;
+    gameOver: boolean;
+    countdown: number;
+    timestamp: number;
+  };
 }
 
 // ゲームイベント

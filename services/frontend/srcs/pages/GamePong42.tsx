@@ -43,6 +43,67 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   // WebRTC SFUのhook（純粋なデータ中継）
   const sfu = useGamePong42SFU();
 
+  // 他のプレイヤーのゲーム状態を取得（最新データを確実に取得）
+  const getOtherPlayerGames = useCallback(() => {
+    const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
+    const filteredPlayerGames = allPlayerGames.filter(
+      playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId
+    );
+
+    // デバッグログを10秒ごとに出力
+    if (Date.now() % 10000 < 100) {
+      console.log('🔍 getOtherPlayerGames debug:', {
+        totalPlayers: allPlayerGames.length,
+        activeOtherPlayers: filteredPlayerGames.length,
+        myPlayerId: sfu.playerId,
+        allPlayers: allPlayerGames.map(p => ({ id: p.playerId, isActive: p.isActive })),
+        filteredPlayers: filteredPlayerGames.map(p => ({ id: p.playerId, name: p.playerName }))
+      });
+    }
+
+    return filteredPlayerGames;
+  }, [sfu.gameState.playerGameStates, sfu.playerId]);
+
+  const otherPlayerGames = getOtherPlayerGames();
+
+  // 他のプレイヤーゲーム数のログ（3秒ごと）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (otherPlayerGames.length > 0) {
+        console.log('🎮 Other player games available:', otherPlayerGames.length,
+          'Players:', otherPlayerGames.map(p => p.playerName).join(', '));
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [otherPlayerGames.length]);
+
+  // デバッグ: 他のプレイヤー数の変化を監視
+  useEffect(() => {
+    console.log('👥 Other player games count:', otherPlayerGames.length, 'Total connected players:', sfu.gameState.participantCount);
+    otherPlayerGames.forEach((playerGame, index) => {
+      console.log(`  Player ${index + 1}:`, playerGame.playerName, playerGame.playerId);
+    });
+  }, [otherPlayerGames.length, sfu.gameState.participantCount]);
+
+  // プレイヤーゲーム状態の変化を監視してリアルタイム更新を強制
+  const [, forceUpdate] = useState({});
+  const forceRerender = useCallback(() => {
+    forceUpdate({});
+  }, []);
+
+  // プレイヤーゲーム状態が変化したときにリアルタイム更新をトリガー
+  useEffect(() => {
+    if (otherPlayerGames.length > 0) {
+      // 60fpsで更新をトリガー（約16.67ms間隔）
+      const interval = setInterval(() => {
+        forceRerender();
+      }, 16);
+
+      return () => clearInterval(interval);
+    }
+  }, [otherPlayerGames.length, forceRerender]);
+
   // SFUから取得する状態（Room Leaderが管理）
   const gameStarted = sfu.gameState.gameStarted;
   const countdown = sfu.gameState.countdown;
@@ -543,32 +604,6 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     }
   }, [sfu.receivedData]);
 
-  // ゲームループの統一管理（Canvas要素とエンジンが確実に初期化されてから開始）
-  useEffect(() => {
-    if (!gameStarted || !canvasRef.current || !engineRef.current) {
-      console.log('⏳ Waiting for game conditions: gameStarted =', gameStarted, ', canvas =', !!canvasRef.current, ', engine =', !!engineRef.current);
-      return;
-    }
-
-    console.log('🎮 Starting game loop with all conditions met');
-
-    // パドルとボールの色を取得
-    const getPaddleAndBallColor = () => {
-      if (survivors < 33) return '#ffffff';
-      return '#212121';
-    };
-
-    const handleScore = (scorer: 'player1' | 'player2') => {
-      if (scorer === 'player1') { // NPCが勝利した場合
-        setGameOver(true);
-        setWinner(1);
-      }
-    };
-
-    startGameLoop(handleScore, gameStarted, keysRef, getPaddleAndBallColor());
-    return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, keysRef, survivors, canvasRef.current, engineRef.current]);
-
   // ゲームエンジン初期化（コンポーネントマウント時とリサイズ時）
   useEffect(() => {
     // canvasが利用可能になったら即座に初期化
@@ -611,6 +646,11 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const getPaddleAndBallColor = () => {
     if (survivors < 33) return '#ffffff';
     return '#212121';
+  };
+
+  // プレイヤー対pidNPCキャンバスの色を取得（赤色）
+  const getPlayerVsNPCColor = () => {
+    return '#ff0000'; // 赤色固定
   };
 
   const handleScore = useCallback((scorer: 'player1' | 'player2') => {
@@ -677,7 +717,16 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
       // 少し遅延してからゲームループを開始（エンジン初期化を待つ）
       const timer = setTimeout(() => {
-        startGameLoop(handleScore, gameStarted, keysRef, getPaddleAndBallColor());
+        startGameLoop(
+          handleScore, // onScore
+          gameStarted, // gameStarted
+          keysRef, // keysRef
+          getPaddleAndBallColor(), // paddleAndBallColor
+          true, // isPVEMode
+          null, // remotePlayerInput
+          2, // playerNumber（Player2）
+          sfu.sendPlayerGameState // gameSender（ゲーム状態送信関数）
+        );
       }, 100);
 
       return () => {
@@ -810,17 +859,34 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
               {Array.from({ length: 21 }).map((_, i) => {
                 const game = miniGames[i];
                 const hasNPCGame = game?.active && game.gameState;
-                const hasOtherPlayers = sfu.gameState.participantCount > 1;
+
+                // 他のプレイヤーのゲーム状態を取得（インデックス順）
+                const otherPlayerGame = otherPlayerGames[i];
+                const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
+
+                // デバッグ: プレイヤーゲーム状態をログ出力（最初の3個のみ）
+                if (i < 3 && otherPlayerGame) {
+                  console.log(`🎮 Left Canvas ${i}:`, {
+                    playerId: otherPlayerGame.playerId,
+                    playerName: otherPlayerGame.playerName,
+                    isActive: otherPlayerGame.isActive,
+                    hasGameState: !!otherPlayerGame.gameState,
+                    ballPos: otherPlayerGame.gameState ? {
+                      x: otherPlayerGame.gameState.ball.x.toFixed(1),
+                      y: otherPlayerGame.gameState.ball.y.toFixed(1)
+                    } : 'no ball data'
+                  });
+                }
 
                 // NPC vs NPC ゲーム、または他のプレイヤーとの対戦を表示
-                // ただし、NPCゲームが終了している（active: false）場合は非表示
-                const shouldShowCanvas = (hasNPCGame && game.active) || (hasOtherPlayers && i < (41 - miniGames.length) && !hasNPCGame);
+                const shouldShowCanvas = hasNPCGame || hasPlayerGame;
 
                 if (!shouldShowCanvas) return null;
 
-                const gameState = game?.gameState?.gameState; // NPCGameResponse.gameState
+                // NPCゲームか他のプレイヤーゲームかを判定
+                const gameState = hasNPCGame ? game.gameState?.gameState : otherPlayerGame?.gameState;
                 const isUnderAttack = false; // スピードブースト状態は別途管理が必要
-                const isPlayerVsPlayer = !hasNPCGame && hasOtherPlayers;
+                const isPlayerVsPlayer = hasPlayerGame;
 
                 return (
                   <div
@@ -846,11 +912,13 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                       </div>
                     )}
 
-                    {/* NPC Manager-based mini pong game */}
+                    {/* Mini pong game display */}
                     <div className="w-full h-full border border-white relative overflow-hidden" style={{
-                      backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
+                      backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" :
+                        (isPlayerVsPlayer ? "rgba(255,0,0,0.15)" : "rgba(255,255,255,0.15)")
                     }}>
-                      {gameState && gameState.paddle1 && gameState.paddle2 && gameState.ball ? (
+                      {/* NPC vs NPCゲームの場合 */}
+                      {gameState && gameState.paddle1 && gameState.paddle2 && gameState.ball && !isPlayerVsPlayer ? (
                         <>
                           {/* Player1 paddle */}
                           <div
@@ -890,10 +958,53 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                             }}
                           ></div>
                         </>
+                      ) :
+                      /* プレイヤー vs NPCゲームの場合 */
+                      isPlayerVsPlayer && otherPlayerGame?.gameState ? (
+                        <>
+                          {/* Player1 paddle (赤色) */}
+                          <div
+                            className="absolute rounded"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle1.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle1.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (otherPlayerGame.gameState.paddle1.width / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (otherPlayerGame.gameState.paddle1.height / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPlayerVsNPCColor()
+                            }}
+                          ></div>
+
+                          {/* Player2 paddle (赤色) */}
+                          <div
+                            className="absolute rounded"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle2.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle2.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (otherPlayerGame.gameState.paddle2.width / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (otherPlayerGame.gameState.paddle2.height / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPlayerVsNPCColor()
+                            }}
+                          ></div>
+
+                          {/* Ball (赤色) */}
+                          <div
+                            className="absolute rounded-full"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.ball.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.ball.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (otherPlayerGame.gameState.ball.radius * 2 / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (otherPlayerGame.gameState.ball.radius * 2 / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPlayerVsNPCColor()
+                            }}
+                          ></div>
+                        </>
                       ) : (
-                        /* Placeholder for player vs player battles */
+                        /* Placeholder for loading or player info */
                         <div className="w-full h-full flex items-center justify-center text-white text-xs">
-                          {isPlayerVsPlayer ? 'P vs P' : 'Loading...'}
+                          {isPlayerVsPlayer ?
+                            `${otherPlayerGame?.playerName || 'Player'}` :
+                            'Loading...'
+                          }
                         </div>
                       )}
                     </div>
@@ -917,15 +1028,19 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                 const gameIndex = i + 21; // Right side starts from index 21
                 const game = miniGames[gameIndex];
                 const hasNPCGame = game?.active && game.gameState;
-                const hasOtherPlayers = sfu.gameState.participantCount > 1;
 
-                const shouldShowCanvas = (hasNPCGame && game.active) || (hasOtherPlayers && gameIndex < (41 - miniGames.length) && !hasNPCGame);
+                // 他のプレイヤーのゲーム状態を取得（インデックス順）
+                const otherPlayerGame = otherPlayerGames[gameIndex];
+                const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
+
+                const shouldShowCanvas = hasNPCGame || hasPlayerGame;
 
                 if (!shouldShowCanvas) return null;
 
-                const gameState = game?.gameState?.gameState;
+                // NPCゲームか他のプレイヤーゲームかを判定
+                const gameState = hasNPCGame ? game.gameState?.gameState : otherPlayerGame?.gameState;
                 const isUnderAttack = false;
-                const isPlayerVsPlayer = !hasNPCGame && hasOtherPlayers;
+                const isPlayerVsPlayer = hasPlayerGame;
 
                 return (
                   <div
@@ -951,9 +1066,11 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                     )}
 
                     <div className="w-full h-full border border-white relative overflow-hidden" style={{
-                      backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
+                      backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" :
+                        (isPlayerVsPlayer ? "rgba(255,0,0,0.15)" : "rgba(255,255,255,0.15)")
                     }}>
-                      {gameState && gameState.paddle1 && gameState.paddle2 && gameState.ball ? (
+                      {/* NPC vs NPCゲームの場合 */}
+                      {gameState && gameState.paddle1 && gameState.paddle2 && gameState.ball && !isPlayerVsPlayer ? (
                         <>
                           <div
                             className="absolute rounded"
@@ -990,9 +1107,52 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
                             }}
                           ></div>
                         </>
+                      ) :
+                      /* プレイヤー vs NPCゲームの場合 */
+                      isPlayerVsPlayer && otherPlayerGame?.gameState ? (
+                        <>
+                          {/* Player1 paddle (赤色) */}
+                          <div
+                            className="absolute rounded"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle1.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle1.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (otherPlayerGame.gameState.paddle1.width / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (otherPlayerGame.gameState.paddle1.height / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPlayerVsNPCColor()
+                            }}
+                          ></div>
+
+                          {/* Player2 paddle (赤色) */}
+                          <div
+                            className="absolute rounded"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle2.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle2.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (otherPlayerGame.gameState.paddle2.width / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (otherPlayerGame.gameState.paddle2.height / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPlayerVsNPCColor()
+                            }}
+                          ></div>
+
+                          {/* Ball (赤色) */}
+                          <div
+                            className="absolute rounded-full"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.ball.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
+                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.ball.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
+                              width: `${Math.max(1, (otherPlayerGame.gameState.ball.radius * 2 / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
+                              height: `${Math.max(1, (otherPlayerGame.gameState.ball.radius * 2 / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
+                              backgroundColor: getPlayerVsNPCColor()
+                            }}
+                          ></div>
+                        </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-white text-xs">
-                          {isPlayerVsPlayer ? 'P vs P' : 'Loading...'}
+                          {isPlayerVsPlayer ?
+                            `${otherPlayerGame?.playerName || 'Player'}` :
+                            'Loading...'
+                          }
                         </div>
                       )}
                     </div>

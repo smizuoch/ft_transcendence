@@ -11,6 +11,22 @@ interface PlayerInfo {
   avatar?: string;
 }
 
+// プレイヤーのゲーム状態
+interface PlayerGameState {
+  playerId: string;
+  playerName: string;
+  gameState: {
+    paddle1: { x: number; y: number; width: number; height: number };
+    paddle2: { x: number; y: number; width: number; height: number };
+    ball: { x: number; y: number; radius: number; dx: number; dy: number };
+    canvasWidth: number;
+    canvasHeight: number;
+    score: { player1: number; player2: number };
+  };
+  timestamp: number;
+  isActive: boolean;
+}
+
 const SFU_URL = 'http://localhost:3001';
 
 // クライアント側で管理するゲーム状態の型定義
@@ -23,6 +39,7 @@ interface GamePong42LocalState {
   isRoomLeader: boolean;
   roomLeaderId: string | null;
   connectedPlayers: Set<string>;
+  playerGameStates: Map<string, PlayerGameState>; // 他のプレイヤーのゲーム状態
 }
 
 // WebRTC経由で中継するデータの型定義
@@ -56,6 +73,7 @@ export const useGamePong42SFU = () => {
     isRoomLeader: false,
     roomLeaderId: null,
     connectedPlayers: new Set(),
+    playerGameStates: new Map(), // 他のプレイヤーのゲーム状態
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -219,12 +237,71 @@ export const useGamePong42SFU = () => {
         const newConnectedPlayers = new Set(prev.connectedPlayers);
         newConnectedPlayers.add(data.socketId);
 
-        console.log(`� Player count updated: ${data.participantCount} (another player: ${data.socketId})`);
+        // 新しいプレイヤーをplayerGameStatesマップに追加（空の状態で初期化）
+        const newPlayerGameStates = new Map(prev.playerGameStates);
+        newPlayerGameStates.set(data.socketId, {
+          playerId: data.socketId,
+          playerName: data.userId,
+          gameState: {
+            paddle1: { x: 0, y: 0, width: 0, height: 0 },
+            paddle2: { x: 0, y: 0, width: 0, height: 0 },
+            ball: { x: 0, y: 0, radius: 0, dx: 0, dy: 0 },
+            canvasWidth: 0,
+            canvasHeight: 0,
+            score: { player1: 0, player2: 0 }
+          },
+          timestamp: Date.now(),
+          isActive: false
+        });
+
+        console.log(`🎮 Player count updated: ${data.participantCount} (another player: ${data.socketId})`);
+        console.log(`📊 PlayerGameStates now has ${newPlayerGameStates.size} entries`);
 
         return {
           ...prev,
           connectedPlayers: newConnectedPlayers,
-          participantCount: data.participantCount
+          participantCount: data.participantCount,
+          playerGameStates: newPlayerGameStates
+        };
+      });
+    });
+
+    // Existing players list (received when joining a room with existing players)
+    socket.on('existing-players-list', (data: { roomNumber: string; existingClients: string[]; timestamp: number }) => {
+      console.log('📝 Received existing players list:', data);
+
+      setLocalGameState(prev => {
+        const newPlayerGameStates = new Map(prev.playerGameStates);
+        const newConnectedPlayers = new Set(prev.connectedPlayers);
+
+        // 既存のプレイヤーをplayerGameStatesマップに追加
+        data.existingClients.forEach(clientId => {
+          newConnectedPlayers.add(clientId);
+          if (!newPlayerGameStates.has(clientId)) {
+            newPlayerGameStates.set(clientId, {
+              playerId: clientId,
+              playerName: `Player ${clientId.slice(-4)}`,
+              gameState: {
+                paddle1: { x: 0, y: 0, width: 0, height: 0 },
+                paddle2: { x: 0, y: 0, width: 0, height: 0 },
+                ball: { x: 0, y: 0, radius: 0, dx: 0, dy: 0 },
+                canvasWidth: 0,
+                canvasHeight: 0,
+                score: { player1: 0, player2: 0 }
+              },
+              timestamp: Date.now(),
+              isActive: false
+            });
+          }
+        });
+
+        console.log(`📊 Added ${data.existingClients.length} existing players to game states map`);
+        console.log(`📊 PlayerGameStates now has ${newPlayerGameStates.size} entries`);
+
+        return {
+          ...prev,
+          connectedPlayers: newConnectedPlayers,
+          playerGameStates: newPlayerGameStates
         };
       });
     });
@@ -284,12 +361,12 @@ export const useGamePong42SFU = () => {
       }
     });
 
-    // Game start (relay from Room Leader)
-    socket.on('game-start', (data: { playerCount: number; npcCount: number; from: string; timestamp: number }) => {
+    // Game start (relay from Room Leader or server)
+    socket.on('game-start', (data: { playerCount: number; npcCount: number; from: string; timestamp: number; alreadyStarted?: boolean }) => {
       console.log('🎮 Game start relay:', data);
 
       if (data.from !== playerIdRef.current) {
-        console.log('✅ Non-leader receiving game start from Room Leader');
+        console.log(`✅ ${data.alreadyStarted ? 'Late joiner' : 'Non-leader'} receiving game start from ${data.from}`);
         setLocalGameState(prev => ({
           ...prev,
           gameStarted: true,
@@ -319,6 +396,49 @@ export const useGamePong42SFU = () => {
         payload: { event: 'game-over', ...data }
       };
       setReceivedData(prev => [...prev, gameOverData]);
+    });
+
+    // Player game state relay（他のプレイヤーのゲーム状態を受信）
+    socket.on('player-game-state-relay', (data: { playerGameState: PlayerGameState }) => {
+      console.log('📨 Frontend received player-game-state-relay from:', data.playerGameState.playerId, 'to:', playerIdRef.current);
+
+      // 自分以外のプレイヤーからのゲーム状態のみ処理
+      if (data.playerGameState.playerId !== playerIdRef.current) {
+        console.log('✅ Processing game state from other player:', data.playerGameState.playerId);
+        setLocalGameState(prev => {
+          const newPlayerGameStates = new Map(prev.playerGameStates);
+          newPlayerGameStates.set(data.playerGameState.playerId, {
+            ...data.playerGameState,
+            isActive: true // 受信したデータは必ずアクティブとして設定
+          });
+
+          // まだconnectedPlayersに存在しない場合は追加
+          const newConnectedPlayers = new Set(prev.connectedPlayers);
+          if (!newConnectedPlayers.has(data.playerGameState.playerId)) {
+            newConnectedPlayers.add(data.playerGameState.playerId);
+            console.log(`🆕 Added unknown player to connected list: ${data.playerGameState.playerId}`);
+          }
+
+          console.log(`📊 Updated playerGameStates, total: ${newPlayerGameStates.size}, active players:`, Array.from(newPlayerGameStates.keys()))
+
+          // 🔧 重要な修正: 他のプレイヤーからゲーム状態を受信した場合、ゲームが開始されているとみなす
+          const shouldStartGame = !prev.gameStarted && data.playerGameState.isActive;
+          if (shouldStartGame) {
+            console.log('🎮 Auto-starting game because received active game state from other player');
+          }
+
+          return {
+            ...prev,
+            playerGameStates: newPlayerGameStates,
+            connectedPlayers: newConnectedPlayers,
+            gameStarted: shouldStartGame ? true : prev.gameStarted, // ゲーム自動開始
+          };
+        });
+
+        console.log('📨 Received game state from other player:', data.playerGameState.playerId);
+      } else {
+        console.log('⚠️ Ignoring own game state relay from:', data.playerGameState.playerId);
+      }
     });
 
     // Error handling
@@ -474,6 +594,7 @@ export const useGamePong42SFU = () => {
       isRoomLeader: false,
       roomLeaderId: null,
       connectedPlayers: new Set(),
+      playerGameStates: new Map(), // 他のプレイヤーのゲーム状態
     });
 
     roomNumberRef.current = null;
@@ -507,6 +628,46 @@ export const useGamePong42SFU = () => {
 
     sendData(data);
   }, [sendData]);
+
+  // プレイヤーのゲーム状態を送信
+  const sendPlayerGameState = useCallback((gameState: any) => {
+    if (!socketRef.current) {
+      console.log('⚠️ Cannot send player game state: socket not available');
+      return;
+    }
+
+    if (!playerIdRef.current) {
+      console.log('⚠️ Cannot send player game state: playerId not available');
+      return;
+    }
+
+    if (!roomNumberRef.current) {
+      console.log('⚠️ Cannot send player game state: roomNumber not available');
+      return;
+    }
+
+    const playerGameData: PlayerGameState = {
+      playerId: playerIdRef.current,
+      playerName: `Player ${playerIdRef.current.slice(-4)}`,
+      gameState: {
+        paddle1: gameState.paddle1,
+        paddle2: gameState.paddle2,
+        ball: gameState.ball,
+        canvasWidth: gameState.canvasWidth,
+        canvasHeight: gameState.canvasHeight,
+        score: { player1: 0, player2: 0 },
+      },
+      timestamp: Date.now(),
+      isActive: true,
+    };
+
+    console.log('🚨 About to emit player-game-state from:', playerIdRef.current);
+    socketRef.current.emit('player-game-state', {
+      roomNumber: roomNumberRef.current,
+      playerGameState: playerGameData,
+    });
+    console.log('✅ player-game-state emitted successfully');
+  }, []);
 
   // NPC状態確認（Room Leaderのみ）
   const checkNPCStatus = useCallback(() => {
@@ -696,6 +857,7 @@ export const useGamePong42SFU = () => {
     // データ送信
     sendPlayerInput,
     sendGameState,
+    sendPlayerGameState, // プレイヤーゲーム状態送信
     sendData,
 
     // Room Leader functions
