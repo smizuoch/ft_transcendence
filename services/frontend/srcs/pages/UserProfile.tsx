@@ -35,13 +35,35 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+
+  // JWTトークンから現在のユーザー名を取得
+  useEffect(() => {
+    const getCurrentUser = () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          setCurrentUsername(payload.username);
+        }
+      } catch (error) {
+        console.error('Failed to decode JWT token:', error);
+      }
+    };
+    getCurrentUser();
+  }, []);
+
   // JWT経由でユーザー情報を取得
   useEffect(() => {
     const fetchUserData = async () => {
-      try {        
-        const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
+      try {          const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
         
+        if (!token) {
+          setError('認証が必要です');
+          setLoading(false);
+          return;
+        }
+
         // ユーザー情報を取得
         const endpoint = userId 
           ? `/api/user-search/profile/${userId}` // プロキシ経由に変更
@@ -76,13 +98,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             } else {
               // フレンド状態が取得できない場合は、デフォルトでオフライン扱い
               setAvatarBorderColor('gray');
-            }
-          } else {
+            }          } else {
             // 自分のプロフィールの場合は、そのままオンライン状態を使用
             setAvatarBorderColor(result.data.isOnline ? 'green' : 'gray');
           }
           
-          setShowFollowButton(!!userId); // 他のユーザーの場合のみフォローボタン表示
+          // フォローボタンの表示判定: 他のユーザーかつ自分自身でない場合のみ表示
+          const isOtherUser = !!userId && result.data?.username;
+          const isNotSelf = result.data?.username !== currentUsername;
+          setShowFollowButton(isOtherUser && isNotSelf);
         } else {
           setError('Failed to fetch user data');
         }
@@ -92,10 +116,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       } finally {
         setLoading(false);
       }
-    };
-
-    fetchUserData();
-  }, [userId]);
+    };    fetchUserData();
+  }, [userId, currentUsername]);
 
   // モックデータ（フォールバック用）
   const mockData = {
