@@ -232,8 +232,27 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         setMiniGames(prev => {
           console.log('🎮 Current miniGames length:', prev.length, 'NPCs to process:', data.payload.npcStates.length);
 
+          // miniGames配列が空の場合、動的にプレースホルダーを作成
+          if (prev.length === 0 && data.payload.npcStates.length > 0) {
+            console.log('🔧 Creating dynamic placeholder miniGames for NPC data');
+            const miniCanvasSize = { width: 100, height: 100 };
+            const dynamicGames: MiniGame[] = [];
+
+            for (let i = 0; i < data.payload.npcStates.length; i++) {
+              dynamicGames.push({
+                id: i,
+                gameId: null,
+                active: false,
+                gameState: null,
+                canvasSize: miniCanvasSize,
+              });
+            }
+            prev = dynamicGames;
+            console.log(`✅ Created ${dynamicGames.length} dynamic placeholder miniGames`);
+          }
+
           if (prev.length === 0) {
-            console.warn('⚠️ miniGames array is empty - initMiniGames may not have been called');
+            console.warn('⚠️ miniGames array is still empty after dynamic creation attempt');
             return prev;
           }
 
@@ -322,11 +341,26 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     console.log(`🎮 initMiniGames called with npcCount: ${npcCount}, current miniGames.length: ${miniGames.length}`);
     console.log(`🔍 Room Leader status: ${sfu.gameState.isRoomLeader}, connected: ${sfu.connected}`);
 
-    // Room Leaderでない場合はスキップ
+    // Room Leaderでない場合はNPCデータ受信用のプレースホルダーを作成
     if (!sfu.gameState.isRoomLeader) {
-      console.log('⚠️ Not room leader, skipping NPC game creation');
-      setMiniGames([]); // 空の配列を設定
+      console.log('⚠️ Not room leader, creating placeholder miniGames for NPC data display');
+      const miniCanvasSize = { width: 100, height: 100 };
+      const placeholderGames: MiniGame[] = [];
+
+      // NPC数分のプレースホルダーを作成（NPCデータ受信に対応）
+      for (let i = 0; i < npcCount; i++) {
+        placeholderGames.push({
+          id: i,
+          gameId: null, // Room Leaderではないのでゲーム作成はしない
+          active: false, // NPCデータ受信時にアクティブになる
+          gameState: null,
+          canvasSize: miniCanvasSize,
+        });
+      }
+
+      setMiniGames(placeholderGames);
       setMiniGamesReady(true);
+      console.log(`✅ Created ${placeholderGames.length} placeholder miniGames for NPC data display`);
       return;
     }
 
