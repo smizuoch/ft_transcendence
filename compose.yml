@@ -89,6 +89,17 @@ services:
     env_file:
       - ./secrets/.env
 
+  friend_search:
+    build: ./services/api/friend_search
+    container_name: friend_search
+    restart: unless-stopped
+    networks:
+      - transcendence_net
+    volumes:
+      - friend_search_data:/app/data
+    env_file:
+      - ./secrets/.env
+
   # --- ELK Stack Setup ---
   elk_setup:
     build:
@@ -231,6 +242,7 @@ volumes:
   kibana_data: # Kibanaデータ用ボリューム
   auth_data: # authサービス用SQLiteデータ
   user_search_data: # user_searchサービス用SQLiteデータ
+  friend_search_data: # friend_searchサービス用SQLiteデータ
 
 networks:
   transcendence_net:
