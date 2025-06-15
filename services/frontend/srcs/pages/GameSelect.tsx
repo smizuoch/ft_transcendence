@@ -67,8 +67,8 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
     navigate('GamePong42');
   };
 
-  // Pong8（トーナメント）ゲームへの遷移
-  const navigateToPong8 = () => {
+  // Pong4（トーナメント）ゲームへの遷移
+  const navigateToPong4 = () => {
     navigate('GamePong4');
   };
 
@@ -172,9 +172,9 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
             <img src="/images/icons/pong42.svg" alt="Pong 42" className="w-64 h-64" />
           </button>
 
-          {/* Pong8（Tournament）ボタン */}
+          {/* Pong4（Tournament）ボタン */}
           <button
-            onClick={navigateToPong8}
+            onClick={navigateToPong4}
             className="hover:opacity-80 transition-opacity"
             aria-label="Play Pong Tournament"
           >
