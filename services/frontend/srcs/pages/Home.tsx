@@ -130,9 +130,9 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
       {/* Skip button - 環境変数が設定されている場合のみ表示 */}
       {showSkipButton && (
         <button
-          onClick={() => navigate('MyPage')}
+          onClick={() => navigate('GameSelect')}
           className="absolute bottom-4 right-4 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded border transition-colors"
-          aria-label="Skip to MyPage"
+          aria-label="Skip to GameSelect"
         >
           skip
         </button>

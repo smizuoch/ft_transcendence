@@ -12,6 +12,7 @@ services:
     volumes:
       - ./services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - frontend_dist:/usr/share/nginx/html:ro # frontendのビルド成果物をマウント
+      - ./secrets/certs:/app/certs:ro # 共通証明書をマウント
     depends_on:
       frontend:
         condition: service_completed_successfully # frontendのビルド完了を待つ
@@ -34,8 +35,8 @@ services:
 
   sfu:
     build:
-      context: ./services/sfu
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/sfu/Dockerfile
     container_name: sfu
     ports:
       - "3001:3001"
@@ -54,6 +55,8 @@ services:
       dockerfile: Dockerfile
     container_name: npc_manager
     restart: unless-stopped
+    volumes:
+      - ./secrets/certs:/app/certs:ro # 共通証明書をマウント
     networks:
       - transcendence_net
     healthcheck:
@@ -71,6 +74,7 @@ services:
       - transcendence_net
     volumes:
       - auth_data:/app/data
+      - ./secrets/certs:/app/certs:ro # 共通証明書をマウント
     env_file:
       - ./secrets/.env
 
