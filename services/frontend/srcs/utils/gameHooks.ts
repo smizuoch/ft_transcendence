@@ -7,6 +7,8 @@ export const useGameEngine = (
 ) => {
   const engineRef = useRef<GameEngine | null>(null);
   const animationRef = useRef<number | undefined>(undefined);
+  const lastTimeRef = useRef<number>(performance.now()); // 時間ベース計算用のRef
+  const isFirstFrameRef = useRef<boolean>(true); // 初回フレームを検出
 
   const initializeEngine = useCallback(() => {
     console.log('initializeEngine called, canvasRef.current:', canvasRef.current);
@@ -56,7 +58,11 @@ export const useGameEngine = (
       gameStarted,
       playerNumber
     });
-    
+
+    // 初回実行時にlastTimeRefを現在時刻に設定
+    lastTimeRef.current = performance.now();
+    isFirstFrameRef.current = true; // 初回フレームフラグをリセット
+
     // エンジンが初期化されていない場合は初期化を試行
     if (!engineRef.current) {
       console.log('Engine not initialized, attempting to initialize...');
@@ -66,7 +72,7 @@ export const useGameEngine = (
         return;
       }
     }
-    
+
     if (!canvasRef.current) {
       console.log('Missing canvas, cannot start game loop');
       return;
@@ -80,9 +86,30 @@ export const useGameEngine = (
 
     const loop = () => {
       if (engineRef.current && gameStarted && keysRef.current) {
+        // 時間ベース計算
+        const currentTime = performance.now();
+        const deltaTime = (currentTime - lastTimeRef.current) / 1000; // 秒単位
+        lastTimeRef.current = currentTime;
+
+        // 初回フレームまたは異常に大きなdeltaTimeをスキップ
+        if (isFirstFrameRef.current || deltaTime > 0.1) { // 100ms以上の場合はスキップ
+          isFirstFrameRef.current = false;
+          requestAnimationFrame(loop);
+          return;
+        }
+
+        // deltaTimeを制限して異常値を防ぐ
+        const clampedDeltaTime = Math.min(deltaTime, 1/30); // 最大33ms (30fps)
+
         // キーボード制御の処理
         const state = engineRef.current.getState();
-        const speed = 8; // paddleSpeed
+        const baseSpeed = 240; // pixels per second (NPCと統一)
+        const speed = baseSpeed * clampedDeltaTime; // pixels per second * seconds = pixels
+
+        // デバッグ用ログ（一時的）
+        if (Math.random() < 0.01) { // 1%の確率でログ出力
+          console.log('deltaTime:', deltaTime.toFixed(4), 'clampedDeltaTime:', clampedDeltaTime.toFixed(4), 'speed:', speed.toFixed(2));
+        }
 
         // 観戦者モードの場合はキー入力を一切受け付けない
         if (playerNumber === 'spectator') {

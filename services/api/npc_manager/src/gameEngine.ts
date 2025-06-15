@@ -74,9 +74,11 @@ export class NPCGameEngine {
   private updateBall(deltaTime: number): void {
     const ball = this.state.ball;
 
-    // ボールの位置更新
-    ball.x += ball.dx * deltaTime * 60; // 60FPS基準
-    ball.y += ball.dy * deltaTime * 60;
+    // ボールの位置更新（speedMultiplierを反映）
+    const baseSpeed = 60; // 基準速度
+    const actualSpeed = baseSpeed * ball.speedMultiplier;
+    ball.x += ball.dx * deltaTime * actualSpeed;
+    ball.y += ball.dy * deltaTime * actualSpeed;
 
     // 左右の壁との衝突
     if (ball.x <= ball.radius || ball.x >= this.state.canvasWidth - ball.radius) {
@@ -142,6 +144,8 @@ export class NPCGameEngine {
     }
 
     this.state.paddleHits++;
+    // パドル衝突時にボール速度を加速
+    this.state.ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.08, 4); // 最大4倍まで加速、加速度を小さく
   }
 
   private checkScore(): void {
