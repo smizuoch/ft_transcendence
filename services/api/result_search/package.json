@@ -1,41 +1,84 @@
 {
   "name": "result-search-service",
   "version": "1.0.0",
-  "description": "Game result search and statistics service",
-  "main": "dist/app.js",
+  "description": "Game result search service for ft_transcendence using SQLite",
+  "main": "dist/main.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/app.js",
-    "dev": "ts-node src/app.ts",
+    "build": "nest build",
+    "format": "prettier --write \"srcs/**/*.ts\"",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main.js",
+    "lint": "eslint \"{srcs,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
-    "test:watch": "jest --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node prisma/seed.ts"
   },
+  "prisma": {
+    "seed": "npx ts-node prisma/seed.ts"
+  },
   "dependencies": {
-    "fastify": "^4.24.3",
-    "@fastify/cors": "^8.4.0",
-    "@fastify/jwt": "^7.2.4",
-    "@prisma/client": "^5.7.1",
-    "zod": "^3.22.4"
+    "@fastify/cors": "^8.5.0",
+    "@nestjs/common": "^10.3.2",
+    "@nestjs/config": "^3.1.1",
+    "@nestjs/core": "^10.3.2",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/passport": "^10.0.3",
+    "@nestjs/platform-fastify": "^10.3.2",
+    "@prisma/client": "^6.9.0",
+    "bcryptjs": "^2.4.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "fastify": "^4.26.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
-    "@types/node": "^20.10.5",
-    "typescript": "^5.3.3",
-    "ts-node": "^10.9.2",
+    "@nestjs/cli": "^10.3.0",
+    "@nestjs/schematics": "^10.1.0",
+    "@nestjs/testing": "^10.3.2",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.11.5",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/supertest": "^6.0.2",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
     "jest": "^29.7.0",
-    "@types/jest": "^29.5.8",
-    "prisma": "^5.7.1"
+    "prettier": "^3.2.4",
+    "prisma": "^6.9.0",
+    "source-map-support": "^0.5.21",
+    "supertest": "^6.3.4",
+    "ts-jest": "^29.1.1",
+    "ts-loader": "^9.5.1",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.3.3"
   },
-  "keywords": [
-    "fastify",
-    "typescript",
-    "prisma",
-    "game",
-    "results",
-    "api"
-  ],
-  "author": "",
-  "license": "ISC"
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "srcs",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node"
+  }
 }
