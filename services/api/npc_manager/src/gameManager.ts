@@ -20,12 +20,15 @@ export class NPCGameManager {
       if (session.isRunning) {
         this.updateGameSession(session);
 
-        // ゲームが終了した場合、一定時間後に削除
+        // ゲームが終了した場合の処理
         if (!session.isRunning) {
-          console.log(`🏁 Game ${gameId} finished, scheduling deletion in 5s`);
+          console.log(`🏁 Game ${gameId} finished`);
+
+          // GamePong42では終了したNPCは再起動しない（脱落）
+          // ただし、5秒後にゲームを削除
           setTimeout(() => {
             this.games.delete(gameId);
-            console.log(`🗑️ Game ${gameId} deleted, remaining games: ${this.games.size}`);
+            console.log(`🗑️ Game ${gameId} deleted (NPC defeated), remaining games: ${this.games.size}`);
           }, 5000); // 5秒後に削除
         }
       }
@@ -60,22 +63,25 @@ export class NPCGameManager {
       // Player2が得点
       session.score.player2++;
       console.log(`🏓 Player2 scored! Score: ${session.score.player1}-${session.score.player2}`);
+
+      // GamePong42ルール: Player2が得点してもゲーム継続（スコアリセット）
+      session.score.player1 = 0;
+      session.score.player2 = 0;
       this.resetGameBall(session, 'player2');
+      console.log(`🔄 Game continues - scores reset to 0-0`);
     } else if (ball.x >= session.gameState.canvasWidth - ball.radius) {
       // Player1が得点
       session.score.player1++;
       console.log(`🏓 Player1 scored! Score: ${session.score.player1}-${session.score.player2}`);
-      this.resetGameBall(session, 'player1');
+
+      // GamePong42ルール: Player1が得点したら即座にゲーム終了
+      console.log(`💀 Game Over - Player1 (upper NPC) scored, game terminated`);
+      session.isRunning = false;
+      return; // 以下の処理をスキップ
     }
 
-    // 勝利条件をチェック
-    if (session.score.player1 >= session.config.winningScore) {
-      console.log(`🏆 Player1 wins! Final score: ${session.score.player1}-${session.score.player2}`);
-      session.isRunning = false;
-    } else if (session.score.player2 >= session.config.winningScore) {
-      console.log(`🏆 Player2 wins! Final score: ${session.score.player1}-${session.score.player2}`);
-      session.isRunning = false;
-    }
+    // Player2が得点した場合はゲーム継続のため、勝利条件チェックは不要
+    // Player1が得点した場合は既にゲーム終了しているため、ここには到達しない
   }
 
   private checkPaddleCollisions(session: NPCGameSession): void {
@@ -134,29 +140,36 @@ export class NPCGameManager {
     const gameState = session.gameState;
     const ball = gameState.ball;
 
-    // Player1 (上のパドル) のNPC更新 - より控えめな追跡
+    // GamePong42仕様: より長いラリーを実現するためのバランス調整
+
+    // Player1 (上のパドル) のNPC更新 - 意図的に弱くして得点しにくくする
     const paddle1CenterX = gameState.paddle1.x + gameState.paddle1.width / 2;
     const ballCenterX = ball.x;
-    const paddle1Speed = 120 * deltaTime; // さらに遅い移動速度
+    const paddle1Speed = 80 * deltaTime; // より遅い移動速度
 
-    if (Math.abs(ballCenterX - paddle1CenterX) > 5) { // 許容範囲を拡大してミスを増やす
+    // Player1は意図的にミスしやすくする（反応が遅い）
+    const paddle1Tolerance = 15; // 大きな許容範囲でミスを誘発
+    if (Math.abs(ballCenterX - paddle1CenterX) > paddle1Tolerance) {
+      // さらに遅い反応速度を追加
+      const reactionDelay = Math.random() > 0.7 ? 0.5 : 1.0; // 30%の確率で反応が半分になる
+      const actualSpeed = paddle1Speed * reactionDelay;
+
       if (ballCenterX > paddle1CenterX) {
-        // ボールが右にある場合は右に移動
         gameState.paddle1.x = Math.min(
           gameState.canvasWidth - gameState.paddle1.width,
-          gameState.paddle1.x + paddle1Speed
+          gameState.paddle1.x + actualSpeed
         );
       } else {
-        // ボールが左にある場合は左に移動
-        gameState.paddle1.x = Math.max(0, gameState.paddle1.x - paddle1Speed);
+        gameState.paddle1.x = Math.max(0, gameState.paddle1.x - actualSpeed);
       }
     }
 
-    // Player2 (下のパドル) のNPC更新 - バランス調整
+    // Player2 (下のパドル) のNPC更新 - より強くして長時間ラリーを続ける
     const paddle2CenterX = gameState.paddle2.x + gameState.paddle2.width / 2;
-    const paddle2Speed = 200 * deltaTime; // 速度を少し下げる
+    const paddle2Speed = 140 * deltaTime; // 適度な速度
 
-    if (Math.abs(ballCenterX - paddle2CenterX) > 2) { // 許容範囲を少し拡大
+    const paddle2Tolerance = 8; // より正確な追跡
+    if (Math.abs(ballCenterX - paddle2CenterX) > paddle2Tolerance) {
       if (ballCenterX > paddle2CenterX) {
         gameState.paddle2.x = Math.min(
           gameState.canvasWidth - gameState.paddle2.width,
@@ -173,13 +186,16 @@ export class NPCGameManager {
     ball.x = session.gameState.canvasWidth / 2;
     ball.y = session.gameState.canvasHeight / 2;
 
-    // ランダムな方向でボール射出
-    const angle = (Math.random() * 0.167 + 0.083) * Math.PI;
+    // GamePong42仕様: より長いラリーのためのボール射出角度調整
+    // より水平に近い角度でボールを射出して、急激な得点を防ぐ
+    const angle = (Math.random() * 0.1 + 0.05) * Math.PI; // より浅い角度 (9°-18°)
     const direction = Math.random() > 0.5 ? 1 : -1;
     const verticalDirection = Math.random() > 0.5 ? 1 : -1;
 
-    ball.dx = ball.speed * Math.sin(angle) * direction;
-    ball.dy = ball.speed * Math.cos(angle) * verticalDirection;
+    // ボール速度も少し遅くして、NPCが反応しやすくする
+    const ballSpeed = ball.speed * 0.8; // 20%速度減少
+    ball.dx = ballSpeed * Math.sin(angle) * direction;
+    ball.dy = ballSpeed * Math.cos(angle) * verticalDirection;
     ball.speedMultiplier = 1;
     session.gameState.paddleHits = 0;
   }
@@ -250,12 +266,9 @@ export class NPCGameManager {
     };
 
     if (!session.isRunning) {
-      // 正しい勝者を決定
-      if (session.score.player1 >= session.config.winningScore) {
-        response.winner = 'player1';
-      } else if (session.score.player2 >= session.config.winningScore) {
-        response.winner = 'player2';
-      }
+      // GamePong42ルール: Player1が得点したら終了
+      // Player1が得点した場合のみゲーム終了するため、常にplayer1が勝者
+      response.winner = 'player1';
     }
 
     return response;

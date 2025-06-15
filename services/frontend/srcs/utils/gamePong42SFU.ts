@@ -346,6 +346,40 @@ export const useGamePong42SFU = () => {
       if (data.roomNumber === roomNumberRef.current) {
         console.log(`Room ${data.roomNumber} now has ${data.npcCount} NPCs`);
       }
+    });    // NPCデータの受信 (npc_manager → SFU → client)
+    socket.on('gamepong42-data', (data: any) => {
+      console.log('🤖 Received NPC data:', data);
+
+      // データ構造を確認
+      const payload = data.payload || data;
+      const npcStates = payload.npcStates || data.npcStates;
+
+      console.log('📊 Data structure:', {
+        hasPayload: !!data.payload,
+        hasDirectNpcStates: !!data.npcStates,
+        payloadNpcStatesCount: payload.npcStates?.length || 0,
+        directNpcStatesCount: data.npcStates?.length || 0
+      });
+
+      // NPCデータをreceivedDataに追加
+      if (npcStates && Array.isArray(npcStates)) {
+        const npcData: GamePong42Data = {
+          type: 'gameState',
+          playerId: 'npc-manager',
+          timestamp: Date.now(),
+          payload: {
+            npcStates: npcStates,
+            survivors: payload.survivors || data.survivors || 42,
+            roomNumber: payload.roomNumber || data.roomNumber
+          }
+        };
+
+        setReceivedData(prev => [...prev.slice(-49), npcData]); // 最新50件を保持
+        console.log('✅ NPC data processed and added to receivedData, count:', npcStates.length);
+      } else {
+        console.warn('⚠️ Received NPC data without valid npcStates:', data);
+        console.warn('⚠️ Payload structure:', payload);
+      }
     });
 
   }, []);
@@ -613,6 +647,36 @@ export const useGamePong42SFU = () => {
     });
   }, [localGameState.isRoomLeader]);
 
+  // ゲーム状態のリセット機能
+  const resetGameState = useCallback(() => {
+    console.log('🔄 Resetting game state for new game');
+
+    // ローカル状態をリセット
+    setLocalGameState(prev => ({
+      ...prev,
+      countdown: 30,
+      gameStarted: false,
+      gameOver: false,
+      isRoomLeader: false,
+      roomLeaderId: null,
+      // participantCountとconnectedPlayersは維持（接続は継続）
+    }));
+
+    // カウントダウンタイマーをクリア
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+
+    // カウントダウン開始フラグをリセット
+    countdownStartedRef.current = false;
+
+    // 受信データをクリア
+    setReceivedData([]);
+
+    console.log('✅ Game state reset complete');
+  }, []);
+
   return {
     // 接続状態
     connected: state.connected,
@@ -644,6 +708,9 @@ export const useGamePong42SFU = () => {
     createNPCGame,
     applySpeedBoostToNPCGame,
     stopNPCGame,
+
+    // ゲーム管理
+    resetGameState,
 
     // プレイヤー情報
     playerId: playerIdRef.current,

@@ -206,6 +206,40 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Pure data relay - GamePong42 data (including NPC states)
+  socket.on('gamepong42-data', (data) => {
+    const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);
+    if (roomNumber) {
+      console.log(`Relaying GamePong42 data from ${socket.id} in room ${roomNumber}`);
+
+      // Relay to all clients in the room (including sender for verification)
+      io.to(roomNumber).emit('gamepong42-data', {
+        ...data,
+        from: socket.id,
+        relayTimestamp: Date.now()
+      });
+    }
+  });
+
+  // NPC Manager specific room joining (different from regular players)
+  socket.on('join-gamepong42-room', (data) => {
+    const { roomNumber, playerInfo } = data;
+    console.log(`NPC Manager joining GamePong42 room ${roomNumber} as ${playerInfo?.name || 'unknown'}`);
+
+    socket.join(roomNumber);
+
+    // Track NPC Manager connections separately if needed
+    if (playerInfo?.isNPCManager) {
+      console.log(`NPC Manager connected to room ${roomNumber}`);
+    }
+
+    // Confirm join to NPC Manager
+    socket.emit('gamepong42-room-joined', {
+      roomNumber,
+      timestamp: Date.now()
+    });
+  });
+
   // NPC Request relay - クライアント→SFU→npc_manager
   socket.on('npc-request', async (data) => {
     const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);

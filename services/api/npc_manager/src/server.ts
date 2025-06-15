@@ -140,6 +140,7 @@ async function handleNPCRoomCreation(roomNumber: string, npcCount: number, sfuSe
         paddleSpeed: 6,
         initialBallSpeed: 1.0,
         maxBallSpeed: 2.5,
+        winningScore: 999999, // GamePong42用: 実質無制限
         npc: {
           enabled: true,
           player: 1,
@@ -244,14 +245,25 @@ function startNPCDataTransmission(roomNumber: string) {
     }
 
     // 各NPCゲームの状態を取得して送信
-    const npcStates = roomData.gameInstances.map(gameId => {
+    // 削除されたゲームIDを除去しながら状態を取得
+    const npcStates = [];
+    const activeGameIds = [];
+
+    for (const gameId of roomData.gameInstances) {
       const gameState = gameManager.getGameState(gameId);
-      return {
-        gameId,
-        gameState: gameState?.gameState || null,
-        active: gameState?.isRunning || false
-      };
-    });
+      if (gameState) {
+        // ゲームが存在する場合のみ追加
+        npcStates.push({
+          gameId,
+          gameState: gameState.gameState,
+          active: gameState.isRunning
+        });
+        activeGameIds.push(gameId);
+      }
+    }
+
+    // 削除されたゲームIDをgameInstancesから除去
+    roomData.gameInstances = activeGameIds;
 
     // SFUを通じて全クライアントにNPCデータを送信
     roomData.sfuSocket.emit('gamepong42-data', {
