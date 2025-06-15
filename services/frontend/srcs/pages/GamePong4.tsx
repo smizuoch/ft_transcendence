@@ -52,7 +52,7 @@ const defaultPlayers = {
   player2: { id: 2, avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
 };
 
-const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
+const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayers }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   // ゲーム状態
@@ -70,7 +70,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [tournamentId, setTournamentId] = useState<string>('');
   const [isInTournament, setIsInTournament] = useState(false);
-  const [tournamentRole, setTournamentRole] = useState<'player' | 'spectator' | null>(null);
   const [currentMatch, setCurrentMatch] = useState<TournamentMatch | null>(null);
   const [showTournamentLobby, setShowTournamentLobby] = useState(true);
   const [isEliminated, setIsEliminated] = useState(false);
@@ -78,15 +77,13 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   const [tournamentWinner, setTournamentWinner] = useState<TournamentPlayer | null>(null);
   const [participants, setParticipants] = useState<{
     players: TournamentPlayer[];
-    spectators: Array<{ playerId: string; playerInfo: PlayerInfo; joinedAt: Date }>;
-  }>({ players: [], spectators: [] });
+  }>({ players: [] });
   
   // 通信対戦状態
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [playerNumber, setPlayerNumber] = useState<1 | 2 | 'spectator' | null>(null);
   const [remotePlayerInput, setRemotePlayerInput] = useState<PlayerInput | null>(null);
   const [isAuthoritativeClient, setIsAuthoritativeClient] = useState(false);
-  const [isSpectator, setIsSpectator] = useState(false);
   
   // 新規追加: ゲームが初期化されたかどうかを追跡
   const [isGameInitialized, setIsGameInitialized] = useState(false);
@@ -121,7 +118,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
           console.log('Tournament created:', data);
           setTournament(data.tournament);
           setTournamentId(data.tournamentId);
-          setTournamentRole(data.role);
           setIsInTournament(true);
           setShowTournamentLobby(true);
         });
@@ -130,7 +126,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
           console.log('Tournament joined:', data);
           setTournament(data.tournament);
           setTournamentId(data.tournamentId);
-          setTournamentRole(data.role);
           setIsInTournament(true);
           setParticipants(data.participants);
           setShowTournamentLobby(true);
@@ -184,7 +179,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
             setIsMultiplayer(false);
             setPlayerNumber(null);
             setIsAuthoritativeClient(false);
-            setIsSpectator(false);
             
             // ゲームエンジンのクリーンアップ
             stopGameLoop();
@@ -199,7 +193,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
             setIsMultiplayer(false);
             setPlayerNumber(null);
             setIsAuthoritativeClient(false);
-            setIsSpectator(false);
             
             // ゲームエンジンのクリーンアップ
             stopGameLoop();
@@ -255,7 +248,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
             setIsEliminated(false);
             setIsMultiplayer(false); // 一度リセット
             setIsAuthoritativeClient(false);
-            setIsSpectator(false);
             
             // トーナメントロビーに戻す（次の試合開始まで待機）
             setShowTournamentLobby(true);
@@ -285,7 +277,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
           setIsMultiplayer(false);
           setPlayerNumber(null);
           setIsAuthoritativeClient(false);
-          setIsSpectator(false);
           
           console.log(`Tournament completed! Winner: ${data.winner?.playerInfo.name || '不明'}`);
         });
@@ -312,13 +303,18 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
           // スコアを必ずリセット
           setScore({ player1: 0, player2: 0 });
           
+          // 4人制トーナメントでは観戦者は許可しない
+          if (data.isSpectator || data.playerNumber === 'spectator') {
+            alert('This tournament does not support spectators');
+            return;
+          }
+          
           setPlayerNumber(data.playerNumber);
-          setIsSpectator(data.isSpectator || data.playerNumber === 'spectator');
-          console.log(`Joined match room as ${data.isSpectator ? 'spectator' : `player ${data.playerNumber}`}`);
+          console.log(`Joined match room as player ${data.playerNumber}`);
           
           // 修正: 権威クライアントの設定を簡潔に
           // トーナメントでは常にプレイヤー1が権威クライアント
-          const isAuth = data.playerNumber === 1 && !data.isSpectator;
+          const isAuth = data.playerNumber === 1;
           setIsAuthoritativeClient(isAuth);
           console.log('Is authoritative client:', isAuth);
           
@@ -527,9 +523,9 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   };
 
   // トーナメント作成
-  const handleCreateTournament = async (maxPlayers: number) => {
+  const handleCreateTournament = async () => {
     try {
-      console.log('Creating tournament with', maxPlayers, 'players');
+      console.log('Creating 4-player tournament');
       
       // 接続状態を確認
       if (!multiplayerService.isConnectedToServer()) {
@@ -545,7 +541,8 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
       };
 
       console.log('Sending create tournament request with playerInfo:', playerInfo);
-      multiplayerService.createTournament(maxPlayers, playerInfo);
+      // 4人制のトーナメントのみを作成
+      multiplayerService.createTournament(4, playerInfo);
     } catch (error) {
       console.error('Failed to create tournament:', error);
       alert('トーナメントの作成に失敗しました: ' + error);
@@ -555,7 +552,13 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   // トーナメント参加
   const handleJoinTournament = async () => {
     if (!tournamentId) {
-      alert('トーナメントIDを入力してください');
+      alert('Tournament ID is required');
+      return;
+    }
+
+    // 参加者数をチェック（4人以上なら参加を拒否）
+    if (participants.players.length >= 4) {
+      alert('Tournament is full (4 players maximum)');
       return;
     }
 
@@ -575,6 +578,12 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
   // トーナメント開始
   const handleStartTournament = () => {
     if (!tournamentId) return;
+
+    // 4人きっかりでないとトーナメントを開始できない
+    if (participants.players.length !== 4) {
+      alert(`Need exactly 4 players to start tournament. Current: ${participants.players.length}`);
+      return;
+    }
 
     multiplayerService.startTournament(tournamentId);
   };
@@ -690,7 +699,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
     if (gameStarted) {
       if (isMultiplayer) {
         // マルチプレイヤーゲーム
-        if (!isSpectator && multiplayerService.isPlayer()) {
+        if (multiplayerService.isPlayer()) {
           const sendInputs = () => {
             if (keysRef.current) {
               let up = false;
@@ -737,9 +746,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
             clearInterval(inputInterval);
             stopGameLoop();
           };
-        } else if (isSpectator) {
-          const emptyKeysRef = { current: {} };
-          startGameLoop(handleScore, gameStarted, emptyKeysRef, '#212121', false, remotePlayerInput, 'spectator');
         }
       } else {
         // ローカルゲーム（トーナメントテスト用）
@@ -751,7 +757,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
     }
 
     return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, isMultiplayer, isSpectator, remotePlayerInput, playerNumber, isAuthoritativeClient]);
+  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, isMultiplayer, remotePlayerInput, playerNumber, isAuthoritativeClient]);
 
   // 修正: 権威クライアントのコールバック設定
   useEffect(() => {
@@ -902,33 +908,37 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
       <div className="relative z-10 w-full h-full flex items-center justify-center">
         {/* Tournament Completed Screen */}
         {tournamentCompleted && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-75">
-            <div className="bg-white bg-opacity-90 p-8 rounded-lg max-w-2xl w-full mx-4 text-center">
-              <h1 className="text-4xl font-bold mb-6 text-black">
-                🏆 トーナメント終了！ 🏆
+          <div className="absolute inset-0 flex items-center justify-center bg-white">
+            <div className="flex flex-col items-center justify-center w-full h-full max-w-2xl mx-8">
+              {/* 勝利アイコン */}
+              <div className="mb-8">
+                <img src="/images/icons/win.svg" alt="Tournament Winner" className="w-32 h-32" />
+              </div>
+              
+              {/* タイトル */}
+              <h1 className="text-6xl font-bold mb-8 text-slate-500">
+                CHAMPION
               </h1>
-              <div className="mb-6">
-                <div className="text-2xl text-green-600 font-bold mb-4">
-                  優勝者: {tournamentWinner?.playerInfo.name || '不明'}
-                </div>
+              
+              {/* 勝者情報 */}
+              <div className="flex flex-col items-center mb-12">
                 <img 
                   src={tournamentWinner?.playerInfo.avatar || '/images/avatar/default_avatar.png'} 
                   alt="winner avatar" 
-                  className="w-24 h-24 rounded-full mx-auto mb-4"
+                  className="w-24 h-24 rounded-full mb-6 border-4 border-slate-500"
                 />
-                <p className="text-lg text-gray-600">
-                  おめでとうございます！
-                </p>
+                <div className="text-3xl font-bold text-slate-500">
+                  {tournamentWinner?.playerInfo.name || 'Champion'}
+                </div>
               </div>
               
+              {/* 戻るボタン */}
               <button
-                onClick={() => {
-                  // ホーム画面に戻る
-                  window.location.reload();
-                }}
-                className="px-8 py-3 bg-green-600 text-white rounded hover:bg-green-700"
+                onClick={() => navigate('MyPage')}
+                className="hover:opacity-80 transition-opacity"
+                aria-label="Back to My Page"
               >
-                ホームに戻る
+                <img src="/images/icons/mypage.svg" alt="MyPage" className="w-16 h-16" />
               </button>
             </div>
           </div>
@@ -936,40 +946,44 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
 
         {/* Eliminated Player Screen */}
         {isEliminated && !tournamentCompleted && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-75">
-            <div className="bg-white bg-opacity-90 p-8 rounded-lg max-w-2xl w-full mx-4 text-center">
-              <h1 className="text-3xl font-bold mb-6 text-black">
-                トーナメント結果
-              </h1>
-              <div className="mb-6">
-                <p className="text-xl text-gray-700 mb-4">お疲れさまでした！</p>
-                <p className="text-lg text-gray-600">
-                  あなたはトーナメントから敗退しました。
-                </p>
+          <div className="absolute inset-0 flex items-center justify-center bg-white">
+            <div className="flex flex-col items-center justify-center w-full h-full max-w-2xl mx-8">
+              {/* 敗退アイコン */}
+              <div className="mb-8">
+                <img src="/images/icons/close.svg" alt="Eliminated" className="w-24 h-24" />
               </div>
               
+              {/* タイトル */}
+              <h1 className="text-5xl font-bold mb-8 text-slate-500">
+                ELIMINATED
+              </h1>
+              
+              {/* メッセージ */}
+              <div className="text-xl text-center mb-12 text-gray-400">
+                Better luck next time!
+              </div>
+              
+              {/* トーナメント情報 */}
               {tournament && (
-                <div className="mb-6 space-y-3">
-                  <h3 className="text-lg font-semibold text-black">トーナメント状況</h3>
-                  <p className="text-gray-600">
-                    状態: {tournament.status === 'IN_PROGRESS' ? '進行中' : '完了'}
-                  </p>
+                <div className="text-center mb-12">
+                  <div className="text-lg mb-2 text-slate-500">
+                    Tournament Status: {tournament.status === 'IN_PROGRESS' ? 'In Progress' : 'Completed'}
+                  </div>
                   {tournament.status === 'COMPLETED' && tournament.winner && (
-                    <p className="text-green-600 font-bold">
-                      優勝者: {tournament.winner.playerInfo.name}
-                    </p>
+                    <div className="text-lg font-bold text-green-500">
+                      Winner: {tournament.winner.playerInfo.name}
+                    </div>
                   )}
                 </div>
               )}
               
+              {/* 戻るボタン */}
               <button
-                onClick={() => {
-                  // ホーム画面に戻る（navigate実装があれば使用）
-                  window.location.reload();
-                }}
-                className="px-8 py-3 bg-blue-600 text-white rounded hover:bg-blue-700"
+                onClick={() => navigate('MyPage')}
+                className="hover:opacity-80 transition-opacity"
+                aria-label="Back to My Page"
               >
-                ホームに戻る
+                <img src="/images/icons/mypage.svg" alt="MyPage" className="w-16 h-16" />
               </button>
             </div>
           </div>
@@ -977,144 +991,178 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
 
         {/* Tournament Lobby */}
         {showTournamentLobby && !gameStarted && !isEliminated && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-75">
-            <div className="bg-white bg-opacity-90 p-8 rounded-lg max-w-2xl w-full mx-4">
-              <h1 className="text-3xl font-bold mb-6 text-center text-black">
-                Pong Tournament (8 Players Max)
-              </h1>
+          <div className="absolute inset-0 flex items-center justify-center bg-white">
+            {/* メインロビー画面 */}
+            <div className="flex flex-col items-center justify-center w-full h-full relative">
               
               {!isInTournament ? (
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <h2 className="text-xl mb-4 text-black">トーナメントを作成または参加</h2>
-                    <div className="flex flex-col gap-4">
-                      <button
-                        onClick={() => handleCreateTournament(8)}
-                        className="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700"
-                      >
-                        8人トーナメントを作成
-                      </button>
-                      <button
-                        onClick={() => handleCreateTournament(4)}
-                        className="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700"
-                      >
-                        4人トーナメントを作成
-                      </button>
+                <>
+                  {/* メインタイトル */}
+                  <h1 className="text-9xl font-bold mb-16 text-slate-500">
+                    PONG4
+                  </h1>
+
+                  {/* ゲームモード選択ボタン */}
+                  <div className="flex flex-col items-center space-y-8">
+                    {/* トーナメント作成ボタン */}
+                    <button
+                      onClick={handleCreateTournament}
+                      className="hover:opacity-80 transition-opacity"
+                      aria-label="Create Tournament"
+                    >
+                      <img src="/images/icons/pong.svg" alt="Create Tournament" className="w-64 h-64" />
+                    </button>
+
+                    {/* トーナメント参加エリア */}
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="flex items-center space-x-4">
+                        <input
+                          type="text"
+                          value={tournamentId}
+                          onChange={(e) => setTournamentId(e.target.value)}
+                          placeholder="Tournament ID"
+                          className="w-64 px-4 py-3 border-2 border-slate-400 rounded-lg text-slate-700 text-lg focus:outline-none focus:border-slate-600"
+                          style={{
+                            fontSize: '18px',
+                            textAlign: 'center'
+                          }}
+                        />
+                        <button
+                          onClick={handleJoinTournament}
+                          className="hover:opacity-80 transition-opacity"
+                          aria-label="Join Tournament"
+                        >
+                          <img src="/images/icons/signin.svg" alt="Join Tournament" className="w-16 h-16" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="border-t pt-6">
-                    <h3 className="text-lg mb-3 text-black">既存のトーナメントに参加</h3>
-                    <div className="flex gap-3">
-                      <input
-                        type="text"
-                        value={tournamentId}
-                        onChange={(e) => setTournamentId(e.target.value)}
-                        placeholder="トーナメントID"
-                        className="flex-1 px-3 py-2 border rounded text-black"
-                      />
-                      <button
-                        onClick={handleJoinTournament}
-                        className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-                      >
-                        参加
-                      </button>
-                    </div>
-                  </div>
-                </div>
+
+                  {/* マイページボタン - 右下 */}
+                  <button
+                    onClick={() => navigate('MyPage')}
+                    className="absolute bottom-16 right-16 hover:opacity-80 transition-opacity"
+                    aria-label="Back to My Page"
+                  >
+                    <img src="/images/icons/mypage.svg" alt="MyPage" className="w-16 h-16" />
+                  </button>
+                </>
               ) : (
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <h2 className="text-xl mb-2 text-black">
-                      トーナメント ID: {tournamentId}
-                    </h2>
-                    <p className="text-gray-600">
-                      あなたの役割: {tournamentRole === 'player' ? 'プレイヤー' : '観戦者'}
-                    </p>
-                    <p className="text-gray-600">
-                      状態: {tournament?.status === 'WAITING' ? '待機中' : 
-                             tournament?.status === 'IN_PROGRESS' ? '進行中' : '完了'}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3 text-black">
-                        プレイヤー ({participants.players.length}/{tournament?.maxPlayers})
-                      </h3>
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {participants.players.map((player, idx) => (
-                          <div key={player.playerId} className="flex items-center gap-2 p-2 bg-gray-100 rounded">
-                            <img 
-                              src={player.playerInfo.avatar} 
-                              alt="avatar" 
-                              className="w-8 h-8 rounded-full"
-                            />
-                            <span className="text-black">{player.playerInfo.name || `Player ${idx + 1}`}</span>
-                          </div>
-                        ))}
-                      </div>
+                /* トーナメント待機画面 */
+                <div className="flex flex-col items-center justify-center w-full h-full max-w-4xl mx-8">
+                  {/* タイトルエリア */}
+                  <div className="text-center mb-12">
+                    <h1 className="text-6xl font-bold mb-4 text-slate-500">
+                      PONG4
+                    </h1>
+                    <div className="flex items-center justify-center text-2xl mb-2 text-slate-500">
+                      <img src="/images/icons/key.svg" alt="Tournament ID" className="w-8 h-8 mr-3" />
+                      {tournamentId}
                     </div>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3 text-black">
-                        観戦者 ({participants.spectators.length})
-                      </h3>
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {participants.spectators.map((spectator, idx) => (
-                          <div key={spectator.playerId} className="flex items-center gap-2 p-2 bg-gray-100 rounded">
-                            <img 
-                              src={spectator.playerInfo.avatar} 
-                              alt="avatar" 
-                              className="w-8 h-8 rounded-full"
-                            />
-                            <span className="text-black">{spectator.playerInfo.name || `Spectator ${idx + 1}`}</span>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="text-lg text-gray-400">
+                      {tournament?.status === 'IN_PROGRESS' ? 'Tournament in progress' : 
+                       tournament?.status === 'COMPLETED' ? 'Completed' : ''}
                     </div>
                   </div>
 
-                  {tournament?.status === 'WAITING' && participants.players.length >= 2 && (
-                    <div className="text-center">
+                  {/* プレイヤーグリッド */}
+                  <div className="w-full mb-12">
+                    <div className="text-xl font-semibold mb-6 text-center text-slate-500">
+                      Players ({participants.players.length}/4)
+                    </div>
+                    <div className="grid grid-cols-2 gap-8 max-w-lg mx-auto">
+                      {Array.from({ length: 4 }, (_, idx) => {
+                        const player = participants.players[idx];
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex flex-col items-center p-6 border-2 rounded-lg ${
+                              player ? 'border-slate-500 bg-slate-50' : 'border-gray-200 bg-gray-50'
+                            }`}
+                          >
+                            <div className="w-16 h-16 mb-3">
+                              {player ? (
+                                <img 
+                                  src={player.playerInfo.avatar} 
+                                  alt="player avatar" 
+                                  className="w-full h-full rounded-full object-cover border-2 border-slate-500"
+                                />
+                              ) : (
+                                <div className="w-full h-full rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center">
+                                  <div className="text-2xl text-gray-300">
+                                    ?
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div className={`text-sm font-medium text-center ${
+                              player ? 'text-slate-500' : 'text-gray-400'
+                            }`}>
+                              {player ? (player.playerInfo.name || `Player ${idx + 1}`) : `Waiting...`}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* アクションボタン */}
+                  <div className="flex flex-col items-center space-y-6">
+                    {tournament?.status === 'WAITING' && participants.players.length === 4 && (
                       <button
                         onClick={handleStartTournament}
-                        className="px-8 py-3 bg-red-600 text-white rounded hover:bg-red-700 text-lg"
+                        className="hover:opacity-80 transition-opacity"
+                        aria-label="Start Tournament"
                       >
-                        トーナメント開始
+                        <img src="/images/icons/check.svg" alt="Start Tournament" className="w-32 h-32" />
                       </button>
-                    </div>
-                  )}
+                    )}
 
-                  {tournament?.status === 'IN_PROGRESS' && currentMatch && (
-                    <div className="text-center">
-                      <h3 className="text-lg mb-3 text-black">あなたの次の試合</h3>
-                      <p className="text-gray-600 mb-4">
-                        Round {currentMatch.round}: {currentMatch.player1?.playerInfo.name} vs {currentMatch.player2?.playerInfo.name}
-                      </p>
-                      <p className="text-gray-600 mb-4">
-                        部屋番号: {currentMatch.roomNumber}
-                      </p>
-                      <button
-                        onClick={() => setShowTournamentLobby(false)}
-                        className="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700"
-                      >
-                        試合開始
-                      </button>
-                    </div>
-                  )}
-                  
-                  {tournament?.status === 'IN_PROGRESS' && !currentMatch && !isEliminated && (
-                    <div className="text-center">
-                      <h3 className="text-lg mb-3 text-black">次のラウンドを待機中...</h3>
-                      <p className="text-gray-600 mb-4">
-                        現在のラウンドの試合が終了するまでお待ちください
-                      </p>
-                      <div className="flex justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    {tournament?.status === 'WAITING' && participants.players.length < 4 && (
+                      <div className="text-center">
+                        <div className="text-lg mb-4 text-gray-400">
+                          Need {4 - participants.players.length} more player{4 - participants.players.length !== 1 ? 's' : ''}
+                        </div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-500 mx-auto"></div>
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                    {tournament?.status === 'IN_PROGRESS' && currentMatch && (
+                      <div className="text-center space-y-4">
+                        <div className="text-xl font-semibold text-slate-500">
+                          Your Match - Round {currentMatch.round}
+                        </div>
+                        <div className="text-lg text-slate-500">
+                          {currentMatch.player1?.playerInfo.name} vs {currentMatch.player2?.playerInfo.name}
+                        </div>
+                        <button
+                          onClick={() => setShowTournamentLobby(false)}
+                          className="hover:opacity-80 transition-opacity"
+                          aria-label="Start Match"
+                        >
+                          <img src="/images/icons/open.svg" alt="Start Match" className="w-24 h-24" />
+                        </button>
+                      </div>
+                    )}
+                    
+                    {tournament?.status === 'IN_PROGRESS' && !currentMatch && !isEliminated && (
+                      <div className="text-center space-y-4">
+                        <div className="text-xl text-slate-500">
+                          Waiting for next round...
+                        </div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-500 mx-auto"></div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 戻るボタン */}
+                  <button
+                    onClick={() => navigate('MyPage')}
+                    className="absolute bottom-16 right-16 hover:opacity-80 transition-opacity"
+                    aria-label="Back to My Page"
+                  >
+                    <img src="/images/icons/mypage.svg" alt="MyPage" className="w-16 h-16" />
+                  </button>
                 </div>
               )}
             </div>
@@ -1123,7 +1171,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
 
         {/* Game Canvas */}
         {!showTournamentLobby && !isEliminated && !tournamentCompleted && (
-          <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
+          <div className="relative w-[90vmin] h-[90vmin]">
             <canvas 
               ref={canvasRefCallback}
               className={`w-full h-full border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
@@ -1160,7 +1208,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ players = defaultPlayers }) => {
             {/* Game start screen */}
             {!gameStarted && !showTournamentLobby && (
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-5xl mb-4 tracking-widest" style={{ color: "#212121" }}>
+                <div className="text-5xl mb-4 tracking-widest text-slate-800">
                   {isInTournament ? `Round ${currentMatch?.round}` : "Tournament Match"}
                 </div>
                 <img
