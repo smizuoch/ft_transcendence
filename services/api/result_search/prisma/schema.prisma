@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = env("RESULT_SEARCH_DATABASE_URL")
 }
 
 model GameResultPong2 {
