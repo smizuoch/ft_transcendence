@@ -1,6 +1,9 @@
 # Use Node.js 18 Alpine as base image
 FROM node:18-alpine
 
+# Install bash and sqlite3 for debugging and database operations
+RUN apk add --no-cache bash sqlite
+
 # Set working directory
 WORKDIR /app
 
@@ -30,5 +33,5 @@ RUN mkdir -p /app/data
 # Expose port
 EXPOSE 3003
 
-# Start the application with database migration
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
+# Start the application with database schema push
+CMD ["sh", "-c", "npx prisma db push && npm run start:prod"]
