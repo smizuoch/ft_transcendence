@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
-import { useNPCManager, NPCGameConfig, NPCGameResponse } from "@/utils/npcManagerService";
+import { NPCGameResponse, NPCGameConfig } from "@/utils/npcManagerService";
 import { useGamePong42SFU } from "@/utils/gamePong42SFU";
 
 interface GamePong42Props {
@@ -28,8 +28,6 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
   // ミニゲーム状態
   const [miniGames, setMiniGames] = useState<MiniGame[]>([]);
-  // npc_managerサービスのhook
-  const npcManager = useNPCManager();
   // WebRTC SFUのhook（純粋なデータ中継）
   const sfu = useGamePong42SFU();
 
@@ -45,9 +43,49 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     avatar: '/images/avatar/default.png'
   });
 
+  // Canvas初期化状態の追跡
+  const canvasInitializedRef = useRef(false);
+  const initRetryCountRef = useRef(0);
+  const MAX_INIT_RETRIES = 50; // 5秒間リトライ
+
   // ゲームエンジンとキーボード制御を追加
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
+
+  // コンポーネントマウント時にCanvas要素を確実に初期化
+  useEffect(() => {
+    if (canvasInitializedRef.current) {
+      return; // 既に初期化済み
+    }
+
+    // DOM がレンダリングされるまで待つ
+    const initializeCanvasWhenReady = () => {
+      if (canvasRef.current && canvasRef.current.offsetParent !== null) {
+        console.log('🎮 Canvas found and visible, initializing engine...');
+        initializeEngine();
+        canvasInitializedRef.current = true;
+        return;
+      }
+
+      initRetryCountRef.current++;
+      if (initRetryCountRef.current < MAX_INIT_RETRIES) {
+        console.log(`⏳ Canvas not ready yet, retrying (${initRetryCountRef.current}/${MAX_INIT_RETRIES}) in 100ms...`);
+        setTimeout(initializeCanvasWhenReady, 100);
+      } else {
+        console.error('❌ Canvas initialization failed after', MAX_INIT_RETRIES, 'retries');
+        // 強制的に初期化を試行
+        if (canvasRef.current) {
+          console.log('🔄 Forcing canvas initialization...');
+          initializeEngine();
+          canvasInitializedRef.current = true;
+        }
+      }
+    };
+
+    // 最初の試行を少し遅延
+    const timeoutId = setTimeout(initializeCanvasWhenReady, 100);
+    return () => clearTimeout(timeoutId);
+  }, [initializeEngine]);
 
   // SFUのローカルゲーム状態を監視してUIを更新
   useEffect(() => {
@@ -71,6 +109,33 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       }
     }
   }, [sfu.gameState, gameStarted]);
+
+  // Room Leaderがカウントダウンを開始するロジック（一度だけ実行）
+  const countdownStartedRef = useRef(false);
+
+  useEffect(() => {
+    const { gameState } = sfu;
+
+    // Room Leader確定時にカウントダウンを開始
+    if (gameState.isRoomLeader &&
+        !gameState.gameStarted &&
+        gameState.participantCount > 0 &&
+        !countdownStartedRef.current) {
+
+      console.log('👑 Room Leader confirmed, auto-starting countdown with', gameState.participantCount, 'participants');
+      countdownStartedRef.current = true; // フラグを設定
+
+      // 少し遅延してからカウントダウン開始（他のプレイヤーの参加を待つ）
+      const timeoutId = setTimeout(() => {
+        if (gameState.isRoomLeader && !gameState.gameStarted) { // 再確認
+          console.log('🏆 Starting Room Leader countdown...');
+          sfu.startRoomLeaderCountdown();
+        }
+      }, 1000); // 1秒遅延（サーバー応答を待つ）
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [sfu.gameState.isRoomLeader, sfu.gameState.participantCount, sfu]);
 
   // 他のプレイヤーからの入力を受信
   useEffect(() => {
@@ -228,7 +293,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
       try {
         console.log(`🎯 Creating game ${i}...`);
-        const result = await npcManager.createGame(gameConfig);
+        const result = await sfu.createNPCGame(gameConfig) as { success: boolean; gameId?: string; error?: string };
         if (result.success && result.gameId) {
           console.log(`✅ Game ${i} created with ID: ${result.gameId}`);
           games.push({
@@ -263,7 +328,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     console.log(`🏁 MiniGames initialization complete. Created ${games.filter(g => g.active).length} active games.`);
     setMiniGames(games);
     setMiniGamesReady(true); // ミニゲーム初期化完了
-  }, [miniGames.length, npcManager]);
+  }, [miniGames.length, sfu]);
 
   // SFUサーバーに接続
   useEffect(() => {
@@ -343,9 +408,14 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     }
   }, [sfu.receivedData]);
 
-  // ゲームループの統一管理
+  // ゲームループの統一管理（Canvas要素とエンジンが確実に初期化されてから開始）
   useEffect(() => {
-    if (!gameStarted) return;
+    if (!gameStarted || !canvasRef.current || !engineRef.current) {
+      console.log('⏳ Waiting for game conditions: gameStarted =', gameStarted, ', canvas =', !!canvasRef.current, ', engine =', !!engineRef.current);
+      return;
+    }
+
+    console.log('🎮 Starting game loop with all conditions met');
 
     // パドルとボールの色を取得
     const getPaddleAndBallColor = () => {
@@ -362,22 +432,38 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
     startGameLoop(handleScore, gameStarted, keysRef, getPaddleAndBallColor());
     return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, keysRef, survivors]);
+  }, [gameStarted, startGameLoop, stopGameLoop, keysRef, survivors, canvasRef.current, engineRef.current]);
 
-  // ゲームエンジン初期化
+  // ゲームエンジン初期化（コンポーネントマウント時とリサイズ時）
   useEffect(() => {
-    const handleResize = () => {
+    // canvasが利用可能になったら即座に初期化
+    if (canvasRef.current) {
+      console.log('🎮 Canvas detected, initializing engine...');
       initializeEngine();
+    }
+
+    const handleResize = () => {
+      if (canvasRef.current) {
+        console.log('🔄 Resizing and re-initializing engine...');
+        initializeEngine();
+      }
     };
 
     window.addEventListener("resize", handleResize);
-    handleResize();
 
     return () => {
       window.removeEventListener("resize", handleResize);
       stopGameLoop();
     };
   }, [initializeEngine, stopGameLoop]);
+
+  // Canvas要素が利用可能になったときの追加の初期化チェック
+  useEffect(() => {
+    if (canvasRef.current && !engineRef.current) {
+      console.log('🎮 Canvas available, ensuring engine is initialized...');
+      initializeEngine();
+    }
+  }, [canvasRef.current, initializeEngine]);
 
   const getBackgroundImage = () => {
     if (survivors >= 33) return '/images/background/noon.png';
@@ -415,7 +501,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       const targetGame = miniGames[selectedTarget];
       if (targetGame?.active && targetGame.gameId) {
         try {
-          await npcManager.applySpeedBoostToGame(targetGame.gameId);
+          await sfu.applySpeedBoostToNPCGame(targetGame.gameId);
         } catch (error) {
           console.error('Failed to apply speed boost:', error);
         }
@@ -431,7 +517,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         }
       }, 1000);
     }
-  }, [selectedTarget, miniGames, npcManager]);
+  }, [selectedTarget, miniGames, sfu]);
 
   const handleStartGame = useCallback(() => {
     // NPCを上側（Player1）のみに設定
@@ -447,11 +533,31 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
   // ゲームループの統一管理
   useEffect(() => {
-    // カウントダウン中もゲームループを開始（プレイヤーのパドル操作のため）
-    startGameLoop(handleScore, gameStarted, keysRef, getPaddleAndBallColor());
+    // ゲーム開始時のみゲームループを開始
+    if (gameStarted && canvasRef.current) {
+      // エンジンが初期化されていない場合、まず初期化
+      if (!engineRef.current) {
+        initializeEngine();
+      }
 
-    return () => stopGameLoop();
-  }, [gameStarted, startGameLoop, stopGameLoop, handleScore, keysRef, survivors]);
+      // 少し遅延してからゲームループを開始（エンジン初期化を待つ）
+      const timer = setTimeout(() => {
+        startGameLoop(handleScore, gameStarted, keysRef, getPaddleAndBallColor());
+      }, 100);
+
+      return () => {
+        clearTimeout(timer);
+        stopGameLoop();
+      };
+    }
+  }, [gameStarted, initializeEngine, startGameLoop, stopGameLoop, handleScore, keysRef, survivors]);
+
+  // キャンバスマウント時の初期化
+  useEffect(() => {
+    if (canvasRef.current) {
+      initializeEngine();
+    }
+  }, [canvasRef.current, initializeEngine]);
 
   // Show alert when survivors count reaches milestone
   useEffect(() => {
@@ -461,19 +567,25 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     }
   }, [survivors]);
 
+  // リサイズ処理
   useEffect(() => {
     const handleResize = () => {
-      initializeEngine();
+      if (canvasRef.current) {
+        initializeEngine();
+      }
     };
 
     window.addEventListener("resize", handleResize);
-    handleResize();
+
+    // 初回の初期化
+    if (canvasRef.current) {
+      initializeEngine();
+    }
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      stopGameLoop();
     };
-  }, [initializeEngine, stopGameLoop]);
+  }, [initializeEngine]);
 
   useEffect(() => {
     if (gameOver && winner) {
@@ -481,7 +593,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       miniGames.forEach(async (game) => {
         if (game.gameId && game.active) {
           try {
-            await npcManager.stopGame(game.gameId);
+            await sfu.stopNPCGame(game.gameId);
           } catch (error) {
             console.error(`Failed to stop game ${game.gameId}:`, error);
           }
@@ -491,7 +603,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       const t = setTimeout(() => navigate("GameResult"), 1200);
       return () => clearTimeout(t);
     }
-  }, [gameOver, winner, navigate, miniGames, npcManager]);
+  }, [gameOver, winner, navigate, miniGames, sfu]);
 
   const handleTargetSelect = (index: number) => {
     if (miniGames[index]?.active) {
@@ -659,7 +771,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
           <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
             <canvas
               ref={canvasRef}
-              className="bg-transparent"
+              className="border border-white bg-black bg-opacity-30"
               style={{
                 width: '60vmin',
                 height: '40vmin',

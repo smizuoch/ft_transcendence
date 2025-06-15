@@ -4,6 +4,20 @@ import { NPCGameManager } from './gameManager';
 import { GameConfig } from './types';
 import { io as SocketIOClient, Socket } from 'socket.io-client';
 
+// SFU接続用の型定義
+interface SFURoomRequest {
+  roomNumber: string;
+  npcCount: number;
+  sfuServerUrl: string;
+}
+
+interface NPCRoomData {
+  roomNumber: string;
+  npcCount: number;
+  gameInstances: string[];
+  sfuSocket: Socket | null;
+}
+
 const fastify = Fastify({
   logger: {
     level: 'info'
@@ -18,50 +32,110 @@ fastify.register(cors, {
 
 const gameManager = new NPCGameManager();
 
+// 部屋ごとのNPCデータを管理
+const roomNPCs = new Map<string, NPCRoomData>();
+
 // SFUサーバーへの接続
-let sfuSocket: Socket | null = null;
-const sfuUrl = process.env.SFU_URL || 'http://sfu:3001';
+let defaultSfuSocket: Socket | null = null;
+const defaultSfuUrl = process.env.SFU_URL || 'http://sfu:3001';
 
-// SFUサーバーに接続
-function connectToSFU() {
-  console.log(`Connecting to SFU server at ${sfuUrl}...`);
+// 特定の部屋用にSFUサーバーに接続
+function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<Socket> {
+  return new Promise((resolve, reject) => {
+    console.log(`Connecting to SFU server at ${sfuServerUrl} for room ${roomNumber}...`);
 
-  sfuSocket = SocketIOClient(sfuUrl, {
-    transports: ['websocket', 'polling']
-  });
+    const sfuSocket = SocketIOClient(sfuServerUrl, {
+      transports: ['websocket', 'polling'],
+      timeout: 10000
+    });
 
-  sfuSocket.on('connect', () => {
-    console.log('Connected to SFU server');
-  });
+    sfuSocket.on('connect', () => {
+      console.log(`Connected to SFU server for room ${roomNumber}`);
 
-  sfuSocket.on('disconnect', () => {
-    console.log('Disconnected from SFU server');
-  });
+      // SFU部屋に参加
+      sfuSocket.emit('join-gamepong42-room', {
+        roomNumber: roomNumber,
+        playerInfo: {
+          name: 'NPC_Manager',
+          avatar: '/images/avatar/npc.png',
+          isNPCManager: true
+        }
+      });
 
-  sfuSocket.on('request-npc', (data: { roomNumber: string; npcCount: number }) => {
-    console.log(`SFU requested ${data.npcCount} NPCs for room ${data.roomNumber}`);
-    handleNPCRequest(data.roomNumber, data.npcCount);
-  });
+      resolve(sfuSocket);
+    });
 
-  sfuSocket.on('error', (error: any) => {
-    console.error('SFU connection error:', error);
+    sfuSocket.on('disconnect', () => {
+      console.log(`Disconnected from SFU server for room ${roomNumber}`);
+    });
+
+    sfuSocket.on('error', (error: any) => {
+      console.error(`SFU connection error for room ${roomNumber}:`, error);
+      reject(error);
+    });
+
+    sfuSocket.on('connect_error', (error: any) => {
+      console.error(`Failed to connect to SFU for room ${roomNumber}:`, error);
+      reject(error);
+    });
+
+    // タイムアウト処理
+    setTimeout(() => {
+      if (!sfuSocket.connected) {
+        sfuSocket.disconnect();
+        reject(new Error(`Connection timeout for room ${roomNumber}`));
+      }
+    }, 10000);
   });
 }
 
-// NPCリクエストを処理
-async function handleNPCRequest(roomNumber: string, npcCount: number) {
-  console.log(`Creating ${npcCount} NPCs for GamePong42 room ${roomNumber}`);
+// デフォルトSFUサーバーに接続
+function connectToDefaultSFU() {
+  console.log(`Connecting to default SFU server at ${defaultSfuUrl}...`);
 
-  const npcGames: Array<{ gameId: string; active: boolean }> = [];
+  defaultSfuSocket = SocketIOClient(defaultSfuUrl, {
+    transports: ['websocket', 'polling']
+  });
 
-  for (let i = 0; i < npcCount; i++) {
-    try {
-      const config: GameConfig = {
-        winningScore: 11,
+  defaultSfuSocket.on('connect', () => {
+    console.log('Connected to default SFU server');
+  });
+
+  defaultSfuSocket.on('disconnect', () => {
+    console.log('Disconnected from default SFU server');
+  });
+
+  defaultSfuSocket.on('error', (error: any) => {
+    console.error('Default SFU connection error:', error);
+  });
+}
+
+// NPCの部屋作成処理
+async function handleNPCRoomCreation(roomNumber: string, npcCount: number, sfuServerUrl: string): Promise<{ success: boolean; message: string; npcInstances?: string[] }> {
+  try {
+    console.log(`Creating ${npcCount} NPCs for room ${roomNumber}`);
+
+    if (npcCount === 0) {
+      console.log('No NPCs needed for this room');
+      return {
+        success: true,
+        message: 'No NPCs needed',
+        npcInstances: []
+      };
+    }
+
+    // SFUサーバーに接続
+    const sfuSocket = await connectToSFUForRoom(roomNumber, sfuServerUrl);
+
+    // NPCゲームインスタンスを作成
+    const gameInstances: string[] = [];
+
+    for (let i = 0; i < npcCount; i++) {
+      const gameConfig: Partial<GameConfig> = {
         canvasWidth: 100,
         canvasHeight: 100,
         paddleWidth: 10,
-        paddleHeight: 15,
+        paddleHeight: 1.5,
         ballRadius: 2,
         paddleSpeed: 6,
         initialBallSpeed: 1.0,
@@ -70,73 +144,162 @@ async function handleNPCRequest(roomNumber: string, npcCount: number) {
           enabled: true,
           player: 1,
           mode: 'pid',
-          difficulty: 'Easy',
           reactionDelay: 0.1,
-          positionNoise: 0.05,
+          positionNoise: 5,
           followGain: 0.8,
-          returnRate: 0.9,
-          reactionDelayMs: 100,
-          maxSpeed: 4,
-          trackingNoise: 0.1,
-          trackingTimeout: 500
+          returnRate: 0.65,
+          reactionDelayMs: 350,
+          maxSpeed: 0.55,
+          trackingNoise: 15,
+          trackingTimeout: 4000,
+          difficulty: 'Easy',
+          pid: {
+            kp: 0.70,
+            ki: 0.08,
+            kd: 0.03,
+            maxIntegral: 60,
+            derivativeFilter: 0.25,
+            maxControlSpeed: 450,
+          },
+          technician: {
+            predictionAccuracy: 0.65,
+            courseAccuracy: 0.55,
+          },
         },
         npc2: {
           enabled: true,
           player: 2,
           mode: 'pid',
+          reactionDelay: 0.05,
+          positionNoise: 2,
+          followGain: 0.99,
+          returnRate: 0.99,
+          reactionDelayMs: 50,
+          maxSpeed: 1.2,
+          trackingNoise: 2,
+          trackingTimeout: 10000,
           difficulty: 'Nightmare',
-          reactionDelay: 0.02,
-          positionNoise: 0.01,
-          followGain: 1.0,
-          returnRate: 0.95,
-          reactionDelayMs: 20,
-          maxSpeed: 8,
-          trackingNoise: 0.02,
-          trackingTimeout: 200
-        }
+          pid: {
+            kp: 1.50,
+            ki: 0.04,
+            kd: 0.15,
+            maxIntegral: 120,
+            derivativeFilter: 0.6,
+            maxControlSpeed: 900,
+          },
+          technician: {
+            predictionAccuracy: 0.95,
+            courseAccuracy: 0.9,
+          },
+        },
       };
 
-      const gameId = gameManager.createGame(config);
-      npcGames.push({ gameId, active: true });
-      console.log(`Created NPC game ${i + 1}/${npcCount} with ID: ${gameId}`);
-    } catch (error) {
-      console.error(`Failed to create NPC game ${i + 1}:`, error);
-      npcGames.push({ gameId: '', active: false });
+      const gameId = gameManager.createGame(gameConfig);
+      gameInstances.push(gameId);
+      console.log(`Created NPC game ${i + 1}/${npcCount}: ${gameId}`);
     }
+
+    // 部屋データを保存
+    roomNPCs.set(roomNumber, {
+      roomNumber,
+      npcCount,
+      gameInstances,
+      sfuSocket
+    });
+
+    // 60fpsでNPCデータをSFUに送信開始
+    startNPCDataTransmission(roomNumber);
+
+    return {
+      success: true,
+      message: `Created ${gameInstances.length} NPCs for room ${roomNumber}`,
+      npcInstances: gameInstances
+    };
+
+  } catch (error: any) {
+    console.error(`Error creating NPCs for room ${roomNumber}:`, error);
+    return {
+      success: false,
+      message: error?.message || 'Failed to create NPCs'
+    };
+  }
+}
+
+// 60fpsでNPCデータをSFUに送信
+function startNPCDataTransmission(roomNumber: string) {
+  const roomData = roomNPCs.get(roomNumber);
+  if (!roomData || !roomData.sfuSocket) {
+    console.error(`No room data or SFU socket for room ${roomNumber}`);
+    return;
   }
 
-  // NPCゲーム状態を定期的にSFUに送信（60fps）
-  const gameUpdateInterval = setInterval(() => {
-    const npcStates = npcGames
-      .filter(game => game.active && game.gameId)
-      .map(game => {
-        const gameState = gameManager.getGameState(game.gameId);
-        return {
-          gameId: game.gameId,
-          gameState,
-          active: gameState !== null
-        };
-      })
-      .filter(state => state.active);
+  console.log(`Starting NPC data transmission for room ${roomNumber} (${roomData.gameInstances.length} NPCs)`);
 
-    if (sfuSocket && npcStates.length > 0) {
-      sfuSocket.emit('npc-states-update', {
-        roomNumber,
-        npcStates
-      });
+  const transmissionInterval = setInterval(() => {
+    const roomData = roomNPCs.get(roomNumber);
+    if (!roomData || !roomData.sfuSocket || !roomData.sfuSocket.connected) {
+      console.log(`Stopping NPC data transmission for room ${roomNumber} - room deleted or disconnected`);
+      clearInterval(transmissionInterval);
+      return;
     }
 
-    // 全てのゲームが終了したらintervalを停止
-    const activeGames = npcGames.filter(game => game.active);
-    if (activeGames.length === 0) {
-      clearInterval(gameUpdateInterval);
-      console.log(`All NPC games for room ${roomNumber} have ended`);
-    }
+    // 各NPCゲームの状態を取得して送信
+    const npcStates = roomData.gameInstances.map(gameId => {
+      const gameState = gameManager.getGameState(gameId);
+      return {
+        gameId,
+        gameState: gameState?.gameState || null,
+        active: gameState?.isRunning || false
+      };
+    });
+
+    // SFUを通じて全クライアントにNPCデータを送信
+    roomData.sfuSocket.emit('gamepong42-data', {
+      roomNumber: roomNumber,
+      payload: {
+        type: 'npcStates',
+        npcStates: npcStates,
+        timestamp: Date.now(),
+        source: 'npc_manager'
+      }
+    });
+
   }, 1000 / 60); // 60fps
 }
 
+// 部屋のNPCを停止
+function stopRoomNPCs(roomNumber: string): { success: boolean; message: string } {
+  const roomData = roomNPCs.get(roomNumber);
+  if (!roomData) {
+    return {
+      success: false,
+      message: `Room ${roomNumber} not found`
+    };
+  }
+
+  console.log(`Stopping NPCs for room ${roomNumber}`);
+
+  // 全てのNPCゲームを停止
+  roomData.gameInstances.forEach(gameId => {
+    gameManager.stopGame(gameId);
+  });
+
+  // SFU接続を切断
+  if (roomData.sfuSocket) {
+    roomData.sfuSocket.disconnect();
+  }
+
+  // 部屋データを削除
+  roomNPCs.delete(roomNumber);
+
+  return {
+    success: true,
+    message: `Stopped ${roomData.gameInstances.length} NPCs for room ${roomNumber}`
+  };
+}
+
 // サーバー起動時にSFUに接続
-connectToSFU();
+connectToDefaultSFU();
 
 // ヘルスチェック
 fastify.get('/health', async () => {
@@ -383,6 +546,173 @@ const start = async () => {
 
 start();
 
+// SFU経由専用エンドポイント - クライアント→SFU→npc_manager
+fastify.post('/api/npc/request-via-sfu', async (request: any, reply: any) => {
+  try {
+    // SFU経由のリクエストかどうかを確認
+    const sfuHeader = request.headers['x-sfu-request'];
+    if (!sfuHeader) {
+      reply.status(403).send({
+        success: false,
+        error: 'Direct access not allowed. Must go through SFU.'
+      });
+      return;
+    }
+
+    const { type, roomNumber, npcCount, sfuServerUrl, requesterId, gameConfig, gameId } = request.body;
+    console.log(`🔄 SFU relay request - Type: ${type}, Room: ${roomNumber}, NPCs: ${npcCount}, Requester: ${requesterId}`);
+
+    if (!roomNumber || !type) {
+      reply.status(400).send({
+        success: false,
+        error: 'Invalid request parameters'
+      });
+      return;
+    }
+
+    let result;
+
+    switch (type) {
+      case 'join':
+        // NPCを部屋に追加
+        if (typeof npcCount !== 'number' || npcCount < 0) {
+          reply.status(400).send({
+            success: false,
+            error: 'Invalid npcCount for join request'
+          });
+          return;
+        }
+
+        if (npcCount === 0) {
+          console.log(`Room ${roomNumber} has 42 participants, no NPCs needed`);
+          result = {
+            success: true,
+            message: `Room ${roomNumber} is full (42 participants), no NPCs created`,
+            roomNumber,
+            npcCount: 0
+          };
+        } else {
+          await handleNPCRoomCreation(roomNumber, npcCount, sfuServerUrl || defaultSfuUrl);
+          result = {
+            success: true,
+            message: `Created ${npcCount} NPCs for room ${roomNumber}`,
+            roomNumber,
+            npcCount
+          };
+        }
+        break;
+
+      case 'leave':
+        // NPCを部屋から削除
+        result = stopRoomNPCs(roomNumber);
+        break;
+
+      case 'status':
+        // 部屋のNPC状態を取得
+        const roomData = roomNPCs.get(roomNumber);
+        result = {
+          success: true,
+          roomNumber,
+          npcCount: roomData ? roomData.npcCount : 0,
+          hasNPCs: !!roomData,
+          gameInstances: roomData ? roomData.gameInstances.length : 0
+        };
+        break;
+
+      case 'create-game':
+        // 個別のNPCゲームを作成
+        if (!gameConfig) {
+          reply.status(400).send({
+            success: false,
+            error: 'Game config required for create-game request'
+          });
+          return;
+        }
+
+        try {
+          const createdGameId = gameManager.createGame(gameConfig);
+          result = {
+            success: true,
+            gameId: createdGameId,
+            message: `Game ${createdGameId} created successfully`
+          };
+        } catch (error: any) {
+          result = {
+            success: false,
+            error: `Failed to create game: ${error.message || error}`
+          };
+        }
+        break;
+
+      case 'speed-boost':
+        // 特定のゲームにスピードブーストを適用
+        if (!gameId) {
+          reply.status(400).send({
+            success: false,
+            error: 'Game ID required for speed-boost request'
+          });
+          return;
+        }
+
+        try {
+          const boostSuccess = gameManager.applySpeedBoostToGame(gameId);
+          result = {
+            success: boostSuccess,
+            message: boostSuccess ? `Speed boost applied to game ${gameId}` : `Failed to apply speed boost to game ${gameId}`,
+            gameId: gameId
+          };
+        } catch (error: any) {
+          result = {
+            success: false,
+            error: `Failed to apply speed boost: ${error.message || error}`
+          };
+        }
+        break;
+
+      case 'stop-game':
+        // 特定のゲームを停止
+        if (!gameId) {
+          reply.status(400).send({
+            success: false,
+            error: 'Game ID required for stop-game request'
+          });
+          return;
+        }
+
+        try {
+          const stopSuccess = gameManager.stopGame(gameId);
+          result = {
+            success: stopSuccess,
+            message: stopSuccess ? `Game ${gameId} stopped successfully` : `Failed to stop game ${gameId}`,
+            gameId: gameId
+          };
+        } catch (error: any) {
+          result = {
+            success: false,
+            error: `Failed to stop game: ${error.message || error}`
+          };
+        }
+        break;
+
+      default:
+        reply.status(400).send({
+          success: false,
+          error: `Unknown request type: ${type}`
+        });
+        return;
+    }
+
+    reply.send(result);
+  } catch (error) {
+    console.error('❌ Error handling SFU relay request:', error);
+    request.log.error(error);
+    reply.status(500).send({
+      success: false,
+      error: 'Failed to process NPC request via SFU'
+    });
+  }
+});
+
 // GamePong42専用エンドポイント - NPCリクエスト処理
 fastify.post('/gamepong42/request-npcs', async (request: any, reply: any) => {
   try {
@@ -410,7 +740,7 @@ fastify.post('/gamepong42/request-npcs', async (request: any, reply: any) => {
     }
 
     // GamePong42用のNPCゲームを作成してSFU経由で配信開始
-    await handleNPCRequest(roomNumber, npcCount);
+    await handleNPCRoomCreation(roomNumber, npcCount, defaultSfuUrl);
 
     reply.send({
       success: true,
