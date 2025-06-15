@@ -548,10 +548,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       />
 
       <div className="relative z-10 w-full h-full flex items-center justify-center">
-        <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
-          <canvas 
+        <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>          <canvas 
             ref={canvasRef} 
-            className={`w-full h-full border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
+            className={`w-full h-full border border-white ${playerNumber === 1 && !npcEnabled ? 'rotate-180' : ''}`}
           />
 
           {gameStarted && !gameOver && (
