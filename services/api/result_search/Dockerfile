@@ -24,8 +24,11 @@ COPY tsconfig.json ./
 # Build the application
 RUN npm run build
 
+# Create data directory and initialize database
+RUN mkdir -p /app/data
+
 # Expose port
 EXPOSE 3003
 
-# Start the application
-CMD ["npm", "run", "start:prod"]
+# Start the application with database migration
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
