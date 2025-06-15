@@ -905,16 +905,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
           {/* Central canvas */}
           <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
-            <canvas
-              ref={canvasRef}
-              className="border border-white bg-black bg-opacity-30"
-              style={{
-                width: '60vmin',
-                height: '40vmin',
-                maxWidth: '80vw',
-                maxHeight: '60vh',
-              }}
-            />
+            <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
+              <canvas ref={canvasRef} className="w-full h-full border border-white bg-black bg-opacity-30" />
+            </div>
           </div>
 
           {/* Right side opponents - 20 tables in 7x3 grid (positions 21-40 out of 41) */}
