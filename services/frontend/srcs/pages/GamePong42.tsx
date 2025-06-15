@@ -4,6 +4,18 @@ import { DEFAULT_CONFIG } from "@/utils/gameEngine";
 import { NPCGameResponse, NPCGameConfig } from "@/utils/npcManagerService";
 import { useGamePong42SFU } from "@/utils/gamePong42SFU";
 
+// GamePong42専用のカスタムConfig（中央キャンバスでpidNPCを有効にする）
+const GAMEPONG42_CONFIG = {
+  ...DEFAULT_CONFIG,
+  npc: {
+    ...DEFAULT_CONFIG.npc,
+    enabled: true,
+    player: 1 as const, // Player1をpidNPCに設定
+    mode: 'pid' as const,
+    difficulty: 'Hard' as const,
+  },
+};
+
 interface GamePong42Props {
   navigate: (page: string) => void;
 }
@@ -52,7 +64,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const MAX_INIT_RETRIES = 50; // 5秒間リトライ
 
   // ゲームエンジンとキーボード制御を追加
-  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, GAMEPONG42_CONFIG);
   const keysRef = useKeyboardControls();
 
   // コンポーネントマウント時にゲーム状態をリセット

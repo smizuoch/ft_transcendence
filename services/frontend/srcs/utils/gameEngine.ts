@@ -100,7 +100,7 @@ export class GameEngine {
       canvasWidth,
       canvasHeight,
       paddleHits: 0,
-      
+
       // multiplayerService.tsとの互換性のため
       players: {
         player1: {
@@ -120,6 +120,12 @@ export class GameEngine {
     };
 
     this.resetBall();
+
+    // NPC設定が有効な場合は初期化
+    if (config.npc.enabled) {
+      console.log('🤖 Initializing NPC during GameEngine construction:', config.npc);
+      this.updateNPCConfig(config.npc);
+    }
   }
 
   public getState(): GameState {
@@ -188,27 +194,31 @@ export class GameEngine {
     // NPC更新（Player1用）
     if (this.npcEngine) {
       this.npcEngine.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+    } else if (this.config.npc.enabled && this.config.npc.player === 1) {
+      console.warn('⚠️ NPC for Player1 should be enabled but npcEngine is null');
     }
 
     // NPC更新（Player2用）
     if (this.npcEngine2) {
       this.npcEngine2.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+    } else if (this.config.npc.enabled && this.config.npc.player === 2) {
+      console.warn('⚠️ NPC for Player2 should be enabled but npcEngine2 is null');
     }
 
     this.updatePaddles();
-    
+
     // ボールの更新（権威クライアントまたはローカルゲームのみ）
     if (this.isAuthoritativeClient || !this.gameStateUpdateCallback) {
       this.updateBall();
     }
-    
+
     const result = this.checkGoals();
-    
+
     // 権威クライアントのみゲーム状態を送信
     if (this.isAuthoritativeClient && this.gameStateUpdateCallback) {
       this.gameStateUpdateCallback(this.getGameState());
     }
-    
+
     return result;
   }
 
@@ -263,7 +273,7 @@ export class GameEngine {
     const maxSpeed = Math.min(effectiveSpeedMultiplier, this.config.maxBallSpeed / ball.speed);
     ball.dx = (ball.dx / currentSpeed) * ball.speed * maxSpeed;
     ball.dy = (ball.dy / currentSpeed) * ball.speed * maxSpeed;
-    
+
     // vx, vyも同期
     ball.vx = ball.dx;
     ball.vy = ball.dy;
@@ -346,33 +356,33 @@ export class GameEngine {
       if (this.attackEffect.isActive) {
         this.clearAttackEffect();
       }
-      
+
       // スコア更新
       this.score.player2++;
       this.state.score.player2++;
       console.log('Player2 scored! New score:', this.score);
-      
+
       this.resetBall('player2');
-      
+
       // マルチプレイヤー時: 権威クライアントのみスコア更新を送信
       if (this.isAuthoritativeClient && this.scoreUpdateCallback) {
         this.scoreUpdateCallback('player2');
       }
-      
+
       return 'player2';
     } else if (ball.y + ball.radius > this.state.canvasHeight) {
       // Player1が得点
       this.score.player1++;
       this.state.score.player1++;
       console.log('Player1 scored! New score:', this.score);
-      
+
       this.resetBall('player1');
-      
+
       // マルチプレイヤー時: 権威クライアントのみスコア更新を送信
       if (this.isAuthoritativeClient && this.scoreUpdateCallback) {
         this.scoreUpdateCallback('player1');
       }
-      
+
       return 'player1';
     }
 
@@ -452,7 +462,7 @@ export class GameEngine {
       canvasWidth: this.state.canvasWidth,
       canvasHeight: this.state.canvasHeight,
       paddleHits: this.state.paddleHits || 0,
-      
+
       // multiplayerService.tsとの互換性のため
       players: {
         player1: {
@@ -532,7 +542,7 @@ export class GameEngine {
   // リモートゲーム状態の同期（マルチプレイヤー用）
   public syncGameState(remoteState: GameState): void {
     console.log('Syncing game state:', remoteState);
-    
+
     // ボール状態の同期
     this.state.ball.x = remoteState.ball.x;
     this.state.ball.y = remoteState.ball.y;
@@ -557,11 +567,11 @@ export class GameEngine {
       this.score = { ...remoteState.score };
       this.state.score = { ...remoteState.score };
     }
-    
+
     this.gameStarted = remoteState.gameStarted;
     this.gameOver = remoteState.gameOver;
     this.winner = remoteState.winner;
-    
+
     this.state.gameStarted = remoteState.gameStarted;
     this.state.gameOver = remoteState.gameOver;
     this.state.winner = remoteState.winner;
@@ -584,14 +594,14 @@ export class GameEngine {
     if (this.npcEngine2) {
       this.npcEngine2 = null;
     }
-    
+
     // 状態をリセット
     this.state.gameStarted = false;
     this.state.gameOver = false;
     this.state.winner = null;
     this.state.score.player1 = 0;
     this.state.score.player2 = 0;
-    
+
     // ボールをリセット
     this.resetBall();
   }
