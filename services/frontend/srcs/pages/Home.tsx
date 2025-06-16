@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { apiClient } from '../utils/authApiClient';
-// import { Link } from 'react-router-dom'; // 削除
 
 interface HomeProps {
   navigate: (page: string) => void;
@@ -8,7 +7,37 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = ({ navigate }) => {
   const [isMuted, setIsMuted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // URLパラメータからエラーメッセージを取得
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get('error');
+    const message = urlParams.get('message');
+    
+    if (error) {
+      switch (error) {
+        case 'invalid_username':
+          setErrorMessage('Google認証に失敗しました。ユーザー名は英数字のみ使用可能です。');
+          break;
+        case 'username_too_long':
+          setErrorMessage('Google認証に失敗しました。ユーザー名は16文字以下である必要があります。');
+          break;
+        case 'username_taken':
+          setErrorMessage('Google認証に失敗しました。このユーザー名は既に使用されています。');
+          break;
+        case 'auth_failed':
+          setErrorMessage('Google認証に失敗しました。再度お試しください。');
+          break;
+        default:
+          setErrorMessage(message || 'Google認証に失敗しました。');
+      }
+      
+      // URLからエラーパラメータを削除
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     // コンポーネントマウント時にオーディオ要素を作成
@@ -68,6 +97,33 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
 
   return (
     <div className="relative flex flex-col items-center justify-center min-h-screen bg-white text-slate-700 font-sans overflow-hidden">
+      {/* エラーメッセージ表示 */}
+      {errorMessage && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 max-w-md z-50">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg">
+            <div className="flex">
+              <div className="py-1">
+                <svg className="fill-current h-4 w-4 text-red-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm">{errorMessage}</p>
+              </div>
+              <div className="pl-2">
+                <button 
+                  onClick={() => setErrorMessage('')}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Central PONG text */}
       <h1 className="text-9xl font-bold" style={{ color: iconColor }}>
         PONG
