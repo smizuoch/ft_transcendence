@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiClient } from "@/utils/authApi";
 
 interface PlayerInfo {
   id: number | string;
@@ -7,9 +8,10 @@ interface PlayerInfo {
 }
 
 interface GameResultProps {
-  navigate: (page: string, userId?: string, roomNumber?: string) => void;
+  navigate: (page: string, userId?: string, roomNumber?: string, ranking?: number) => void;
   gameMode?: 'Pong2' | 'Pong4' | 'Pong42';
   winner?: PlayerInfo;
+  ranking?: number; // GamePong42からの順位情報
   gameResult?: {
     winner: PlayerInfo;
     gameMode: 'Pong2' | 'Pong4' | 'Pong42';
@@ -17,10 +19,17 @@ interface GameResultProps {
   };
 }
 
+// JWTから取得するユーザー情報
+interface JWTUserInfo {
+  id: string;
+  username: string;
+  avatar_url?: string;
+}
+
 // デモ用のランキングデータ
 const generateDemoRanking = (gameMode: 'Pong2' | 'Pong4' | 'Pong42' = 'Pong2'): PlayerInfo[] => {
   const demoPlayers: PlayerInfo[] = [];
-  
+
   for (let i = 1; i <= 42; i++) {
     // アバター画像のパスを修正（デフォルトアバターを使用）
     const avatarIndex = (i % 2) + 1; // 1または2
@@ -30,17 +39,59 @@ const generateDemoRanking = (gameMode: 'Pong2' | 'Pong4' | 'Pong42' = 'Pong2'): 
       name: `NAME`
     });
   }
-  
+
   return demoPlayers;
 };
 
-const GameResult: React.FC<GameResultProps> = ({ 
-  navigate, 
-  gameMode = 'Pong2', 
+const GameResult: React.FC<GameResultProps> = ({
+  navigate,
+  gameMode = 'Pong2',
   winner,
-  gameResult 
+  ranking: playerRanking,
+  gameResult
 }) => {
-  const [ranking, setRanking] = useState<PlayerInfo[]>([]);
+  const [rankingData, setRankingData] = useState<PlayerInfo[]>([]);
+  const [userInfo, setUserInfo] = useState<JWTUserInfo | null>(null);
+
+  // JWTからユーザー情報を取得する関数
+  const getUserInfoFromJWT = (): JWTUserInfo | null => {
+    const token = apiClient.getStoredToken();
+    console.log('🔍 GameResult JWT check - Token exists:', !!token);
+
+    if (!token) return null;
+
+    try {
+      // JWTの形式をチェック（Base64デコードして基本的な検証）
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        console.log('❌ Invalid JWT format');
+        return null;
+      }
+
+      // ペイロードをデコード
+      const payload = JSON.parse(atob(parts[1]));
+      console.log('🔍 JWT Payload:', payload);
+
+      // トークンの有効期限をチェック
+      if (payload.exp && payload.exp < Date.now() / 1000) {
+        console.log('❌ Token expired');
+        return null;
+      }
+
+      // ユーザー情報を抽出
+      const userInfo: JWTUserInfo = {
+        id: payload.sub || payload.userId || 'unknown',
+        username: payload.username || payload.name || 'Unknown Player',
+        avatar_url: payload.avatar_url || payload.avatar
+      };
+
+      console.log('✅ User info extracted from JWT:', userInfo);
+      return userInfo;
+    } catch (error) {
+      console.log('❌ JWT decode error:', error);
+      return null;
+    }
+  };
 
   // 背景画像を決定
   const getBackgroundImage = () => {
@@ -52,12 +103,18 @@ const GameResult: React.FC<GameResultProps> = ({
       default:
         return '/images/background/noon.png';
     }
-  };  // 初期化時にランキングデータを設定
+  };  // 初期化時にランキングデータとユーザー情報を設定
   useEffect(() => {
+    // JWTからユーザー情報を取得
+    const jwtUserInfo = getUserInfoFromJWT();
+    setUserInfo(jwtUserInfo);
+    console.log('📊 Player ranking from GamePong42:', playerRanking);
+    console.log('👤 User info from JWT:', jwtUserInfo);
+
     // localStorageからゲーム結果を取得
     const storedGameResult = localStorage.getItem('gameResult');
     let parsedGameResult = null;
-    
+
     if (storedGameResult) {
       try {
         parsedGameResult = JSON.parse(storedGameResult);
@@ -67,10 +124,10 @@ const GameResult: React.FC<GameResultProps> = ({
         console.error('Failed to parse game result from localStorage:', error);
       }
     }
-    
+
     const effectiveGameMode = parsedGameResult?.gameMode || gameMode;
     const demoRanking = generateDemoRanking(effectiveGameMode as 'Pong2' | 'Pong4' | 'Pong42');
-    
+
     // ゲーム結果がある場合、勝者を1位に設定
     const resultToUse = parsedGameResult || gameResult;
     if (resultToUse?.winner) {
@@ -85,11 +142,11 @@ const GameResult: React.FC<GameResultProps> = ({
         updatedRanking.unshift(resultToUse.winner);
         updatedRanking.pop(); // 最後の要素を削除して42人を維持
       }
-      setRanking(updatedRanking);
+      setRankingData(updatedRanking);
     } else {
-      setRanking(demoRanking);
+      setRankingData(demoRanking);
     }
-  }, [gameMode, gameResult]);
+  }, [gameMode, gameResult, playerRanking]);
 
   const handleMyPageClick = () => {
     navigate("MyPage");
@@ -102,13 +159,12 @@ const GameResult: React.FC<GameResultProps> = ({
         src={getBackgroundImage()}
         alt="bg"
         className="absolute inset-0 w-full h-full object-cover"
-      />      {/* 中央のランキングパネル */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      />      {/* 中央のランキングパネル */}      <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
           <div className="w-full h-full border border-white overflow-hidden">
             {/* ランキングリスト */}
             <div className="h-full overflow-y-auto p-8">
-              {ranking.map((player, index) => (
+              {rankingData.map((player, index) => (
                 <div
                   key={player.id}
                   className="flex items-center py-4 border-b border-gray-200 last:border-b-0"
