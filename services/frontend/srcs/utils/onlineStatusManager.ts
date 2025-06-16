@@ -3,7 +3,7 @@ export class OnlineStatusManager {
   private static instance: OnlineStatusManager;
   private isInitialized = false;
   private heartbeatInterval: number | null = null;
-  private readonly HEARTBEAT_INTERVAL = 30000; // 30秒間隔
+  private readonly HEARTBEAT_INTERVAL = 5000; // 5秒間隔
 
   private constructor() {}
 

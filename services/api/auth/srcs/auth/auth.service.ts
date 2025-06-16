@@ -82,18 +82,31 @@ export class AuthService {
     }
 
     const { email, username } = req.user;
+    console.log('GoogleLogin service - email:', email, 'username:', username);
 
-    // 既存ユーザーをチェック
+    // 既存ユーザーをメールアドレスで検索（最優先）
     let user = await this.userService.findByEmail(email);
-    // 名前もチェック
+    console.log('GoogleLogin service - user found by email:', !!user);
+    
+    // メールアドレスで見つからない場合のみ、ユーザー名で検索
     if (!user) {
       user = await this.userService.findByUsername(username);
+      console.log('GoogleLogin service - user found by username:', !!user);
+      
+      // 既存ユーザーが見つかったが、メールアドレスが異なる場合はエラー
+      if (user && user.email !== email) {
+        console.error('GoogleLogin service - username exists with different email');
+        throw new UnauthorizedException('Username already exists with different email');
+      }
     }
 
     // ユーザーが存在しない場合は新規作成
     if (!user) {
+      console.log('GoogleLogin service - creating new user');
       // Google認証専用メソッドを使用してユーザーを作成
       user = await this.userService.createGoogleUser(email, username);
+    } else {
+      console.log('GoogleLogin service - existing user found, proceeding with login');
     }
 
     // Google認証の場合は直接本番JWTを発行（2FA不要）
