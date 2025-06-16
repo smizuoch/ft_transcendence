@@ -37,6 +37,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const [showSurvivorsAlert, setShowSurvivorsAlert] = useState(false);
   const [attackAnimation, setAttackAnimation] = useState<{ targetIndex: number; duration: number } | null>(null);
   const [miniGamesReady, setMiniGamesReady] = useState(false);
+  const [miniGamesDataReady, setMiniGamesDataReady] = useState(false);
 
   // ミニゲーム状態
   const [miniGames, setMiniGames] = useState<MiniGame[]>([]);
@@ -140,6 +141,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     setShowSurvivorsAlert(false);
     setAttackAnimation(null);
     setMiniGamesReady(false);
+    setMiniGamesDataReady(false);
     setMiniGames([]);
     setSurvivors(42);
     setGameInitialized(false); // ゲーム初期化フラグもリセット
@@ -355,6 +357,12 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
           });
 
           console.log('🎮 Updated', updatedCount, 'mini games with NPC data');
+
+          // NPCデータが更新された場合、データ読み込み完了をマーク
+          if (updatedCount > 0) {
+            setMiniGamesDataReady(true);
+          }
+
           return updated;
         });
       }
@@ -832,392 +840,349 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       {/* Background overlay */}
       <div className="absolute inset-0 bg-black bg-opacity-40"></div>
 
-      {/* Waiting screen */}
-      {isWaitingForGame && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
-          <div className="text-center text-white">
-            <h1 className="text-6xl font-bold mb-8">GamePong42</h1>
-            <div className="text-3xl mb-4">Waiting for players...</div>
-            <div className="text-2xl mb-4">
-              Players: {sfu.gameState.participantCount} / 42
-            </div>
-            {countdown > 0 && (
-              <div className="text-4xl font-bold animate-pulse">
-                Game starts in: {countdown}
-              </div>
-            )}
+      {/* Left side opponents - 21 tables in 7x3 grid (21 out of 41) */}
+      {gameStarted && (
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
+          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
+            {Array.from({ length: Math.min(21, miniGames.length) }).map((_, i) => {
+              const game = miniGames[i];
+
+              // 他のプレイヤーのゲーム状態を取得（インデックス順）
+              const otherPlayerGame = getOtherPlayerGames()[i];
+              const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
+              const hasNPCGame = game?.active;
+
+              // NPCゲームか他のプレイヤーゲームどちらかが表示可能な場合のみ表示
+              if (!hasNPCGame && !hasPlayerGame) return null;
+
+              // NPCゲームか他のプレイヤーゲームかを判定
+              const gameState = hasPlayerGame ? otherPlayerGame.gameState : game?.gameState?.gameState;
+              const isUnderAttack = false; // スピードブースト状態は別途管理が必要
+              const isPlayerVsPlayer = hasPlayerGame;
+
+              // デバッグ: パドル位置情報をログに出力
+              if (gameState && i === 0) { // 最初のゲームのみログ出力
+                console.log(`🎯 Game ${i} paddle positions:`, {
+                  paddle1: { x: gameState.paddle1.x, y: gameState.paddle1.y },
+                  paddle2: { x: gameState.paddle2.x, y: gameState.paddle2.y },
+                  ball: { x: gameState.ball.x, y: gameState.ball.y }
+                });
+              }
+
+              return (
+                <div
+                  key={`left-${i}`}
+                  className={`cursor-pointer transition-all duration-200 relative ${
+                    selectedTarget === i ? 'scale-105' : 'hover:scale-102'
+                  } ${isUnderAttack ? 'ring-2 ring-red-500 ring-opacity-75' : ''}`}
+                  style={{ width: "12.8vmin", height: "12.8vmin" }}
+                  onClick={() => handleTargetSelect(i)}
+                >
+                  {selectedTarget === i && (
+                    <img
+                      src="/images/icons/target_circle.svg"
+                      alt="Target"
+                      className="absolute inset-0 w-full h-full opacity-80 z-10"
+                    />
+                  )}
+
+                  {/* 攻撃効果表示 */}
+                  {isUnderAttack && (
+                    <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
+                      BOOST
+                    </div>
+                  )}
+
+                  {/* NPC Manager-based mini pong game */}
+                  <div className="w-full h-full border border-white relative overflow-hidden" style={{
+                    backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
+                  }}>
+                    {gameState && gameState.paddle1 && gameState.paddle2 && gameState.ball && gameState.canvasWidth && gameState.canvasHeight ? (
+                      <>
+                        {/* Player1 paddle */}
+                        <div
+                          className="absolute rounded"
+                          style={{
+                            left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
+                            top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
+                            width: `${Math.max(1, (gameState.paddle1.width / gameState.canvasWidth) * 100)}%`,
+                            height: `${Math.max(1, (gameState.paddle1.height / gameState.canvasHeight) * 100)}%`,
+                            backgroundColor: isPlayerVsPlayer ? getPlayerVsNPCColor() : getPaddleAndBallColor()
+                          }}
+                        ></div>
+
+                        {/* Player2 paddle */}
+                        <div
+                          className="absolute rounded"
+                          style={{
+                            left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
+                            top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
+                            width: `${Math.max(1, (gameState.paddle2.width / gameState.canvasWidth) * 100)}%`,
+                            height: `${Math.max(1, (gameState.paddle2.height / gameState.canvasHeight) * 100)}%`,
+                            backgroundColor: isPlayerVsPlayer ? getPlayerVsNPCColor() : getPaddleAndBallColor()
+                          }}
+                        ></div>
+
+                        {/* Ball with attack effect */}
+                        <div
+                          className={`absolute rounded-full  ${
+                            isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
+                          }`}
+                          style={{
+                            left: `${Math.max(0, Math.min(100, (gameState.ball.x / gameState.canvasWidth) * 100))}%`,
+                            top: `${Math.max(0, Math.min(100, (gameState.ball.y / gameState.canvasHeight) * 100))}%`,
+                            width: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasWidth) * 100)}%`,
+                            height: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasHeight) * 100)}%`,
+                            transform: 'translate(-50%, -50%)',
+                            backgroundColor: isUnderAttack ? '#ff4444' : (isPlayerVsPlayer ? getPlayerVsNPCColor() : getPaddleAndBallColor())
+                          }}
+                        ></div>
+                      </>
+                    ) : (
+                      /* Loading state */
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-white text-xs opacity-60">Loading...</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Game UI */}
+      {/* Right side opponents - 20 tables in 7x3 grid (remaining 20 out of 41) */}
       {gameStarted && (
-        <>
-          {/* Left side opponents - 21 tables in 7x3 grid (21 out of 41) */}
-          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
-            <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
-              {Array.from({ length: 21 }).map((_, i) => {
-                const game = miniGames[i];
-                const hasNPCGame = game?.active && game.gameState;
+        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
+          <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
+            {Array.from({ length: Math.min(20, Math.max(0, miniGames.length - 21)) }).map((_, i) => {
+              const gameIndex = 21 + i;
+              const game = miniGames[gameIndex];
+              if (!game?.active) return null;
 
-                // 他のプレイヤーのゲーム状態を取得（インデックス順）
-                const otherPlayerGame = otherPlayerGames[i];
-                const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
+              const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
+              const isUnderAttack = false; // スピードブースト状態は別途管理が必要
+              const isPlayerVsPlayer = false; // 右側は純粋にNPCゲーム
 
-                // デバッグ: プレイヤーゲーム状態をログ出力（最初の3個のみ）
-                if (i < 3 && otherPlayerGame) {
-                  console.log(`🎮 Left Canvas ${i}:`, {
-                    playerId: otherPlayerGame.playerId,
-                    playerName: otherPlayerGame.playerName,
-                    isActive: otherPlayerGame.isActive,
-                    hasGameState: !!otherPlayerGame.gameState,
-                    ballPos: otherPlayerGame.gameState ? {
-                      x: otherPlayerGame.gameState.ball.x.toFixed(1),
-                      y: otherPlayerGame.gameState.ball.y.toFixed(1)
-                    } : 'no ball data'
-                  });
-                }
+              return (
+                <div
+                  key={`right-${gameIndex}`}
+                  className={`cursor-pointer transition-all duration-200 relative ${
+                    selectedTarget === gameIndex ? 'scale-105' : 'hover:scale-102'
+                  } ${isUnderAttack ? 'ring-2 ring-red-500 ring-opacity-75' : ''}`}
+                  style={{ width: "12.8vmin", height: "12.8vmin" }}
+                  onClick={() => handleTargetSelect(gameIndex)}
+                >
+                  {selectedTarget === gameIndex && (
+                    <img
+                      src="/images/icons/target_circle.svg"
+                      alt="Target"
+                      className="absolute inset-0 w-full h-full opacity-80 z-10"
+                    />
+                  )}
 
-                // NPC vs NPC ゲーム、または他のプレイヤーとの対戦を表示
-                const shouldShowCanvas = hasNPCGame || hasPlayerGame;
+                  {/* 攻撃効果表示 */}
+                  {isUnderAttack && (
+                    <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
+                      BOOST
+                    </div>
+                  )}
 
-                if (!shouldShowCanvas) return null;
+                  {/* NPC Manager-based mini pong game */}
+                  <div className="w-full h-full border border-white relative overflow-hidden" style={{
+                    backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" : "rgba(255,255,255,0.15)"
+                  }}>
+                    {gameState && gameState.paddle1 && gameState.paddle2 && gameState.ball && gameState.canvasWidth && gameState.canvasHeight ? (
+                      <>
+                        {/* Player1 paddle */}
+                        <div
+                          className="absolute rounded"
+                          style={{
+                            left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
+                            top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
+                            width: `${Math.max(1, (gameState.paddle1.width / gameState.canvasWidth) * 100)}%`,
+                            height: `${Math.max(1, (gameState.paddle1.height / gameState.canvasHeight) * 100)}%`,
+                            backgroundColor: isPlayerVsPlayer ? getPlayerVsNPCColor() : getPaddleAndBallColor()
+                          }}
+                        ></div>
 
-                // NPCゲームか他のプレイヤーゲームかを判定
-                const gameState = hasNPCGame ? game.gameState?.gameState : otherPlayerGame?.gameState;
-                const isUnderAttack = false; // スピードブースト状態は別途管理が必要
-                const isPlayerVsPlayer = hasPlayerGame;
+                        {/* Player2 paddle */}
+                        <div
+                          className="absolute rounded"
+                          style={{
+                            left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
+                            top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
+                            width: `${Math.max(1, (gameState.paddle2.width / gameState.canvasWidth) * 100)}%`,
+                            height: `${Math.max(1, (gameState.paddle2.height / gameState.canvasHeight) * 100)}%`,
+                            backgroundColor: isPlayerVsPlayer ? getPlayerVsNPCColor() : getPaddleAndBallColor()
+                          }}
+                        ></div>
 
-                return (
-                  <div
-                    key={`left-${i}`}
-                    className={`cursor-pointer transition-all duration-200 relative ${
-                      selectedTarget === i ? 'scale-105' : 'hover:scale-102'
-                    } ${isUnderAttack ? 'ring-2 ring-red-500 ring-opacity-75' : ''}`}
-                    style={{ width: "12.8vmin", height: "12.8vmin" }}
-                    onClick={() => handleTargetSelect(i)}
-                  >
-                    {selectedTarget === i && (
-                      <img
-                        src="/images/icons/target_circle.svg"
-                        alt="Target"
-                        className="absolute inset-0 w-full h-full opacity-80 z-10"
-                      />
-                    )}
-
-                    {/* 攻撃効果表示 */}
-                    {isUnderAttack && (
-                      <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
-                        BOOST
+                        {/* Ball with attack effect */}
+                        <div
+                          className={`absolute rounded-full  ${
+                            isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
+                          }`}
+                          style={{
+                            left: `${Math.max(0, Math.min(100, (gameState.ball.x / gameState.canvasWidth) * 100))}%`,
+                            top: `${Math.max(0, Math.min(100, (gameState.ball.y / gameState.canvasHeight) * 100))}%`,
+                            width: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasWidth) * 100)}%`,
+                            height: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasHeight) * 100)}%`,
+                            transform: 'translate(-50%, -50%)',
+                            backgroundColor: isUnderAttack ? '#ff4444' : (isPlayerVsPlayer ? getPlayerVsNPCColor() : getPaddleAndBallColor())
+                          }}
+                        ></div>
+                      </>
+                    ) : (
+                      /* Loading state */
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-white text-xs opacity-60">Loading...</div>
                       </div>
                     )}
-
-                    {/* Mini pong game display */}
-                    <div className="w-full h-full border border-white relative overflow-hidden" style={{
-                      backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" :
-                        (isPlayerVsPlayer ? "rgba(255,0,0,0.15)" : "rgba(255,255,255,0.15)")
-                    }}>
-                      {/* NPC vs NPCゲームの場合 */}
-                      {gameState && gameState.paddle1 && gameState.paddle2 && gameState.ball && !isPlayerVsPlayer ? (
-                        <>
-                          {/* Player1 paddle */}
-                          <div
-                            className="absolute rounded"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (gameState.paddle1.width / gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (gameState.paddle1.height / gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPaddleAndBallColor()
-                            }}
-                          ></div>
-
-                          {/* Player2 paddle */}
-                          <div
-                            className="absolute rounded"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (gameState.paddle2.width / gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (gameState.paddle2.height / gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPaddleAndBallColor()
-                            }}
-                          ></div>
-
-                          {/* Ball */}
-                          <div
-                            className={`absolute rounded-full ${
-                              isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
-                            }`}
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (gameState.ball.x / gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (gameState.ball.y / gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: isUnderAttack ? '#ff0000' : getPaddleAndBallColor()
-                            }}
-                          ></div>
-                        </>
-                      ) :
-                      /* プレイヤー vs NPCゲームの場合 */
-                      isPlayerVsPlayer && otherPlayerGame?.gameState ? (
-                        <>
-                          {/* Player1 paddle (赤色) */}
-                          <div
-                            className="absolute rounded"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle1.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle1.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (otherPlayerGame.gameState.paddle1.width / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (otherPlayerGame.gameState.paddle1.height / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPlayerVsNPCColor()
-                            }}
-                          ></div>
-
-                          {/* Player2 paddle (赤色) */}
-                          <div
-                            className="absolute rounded"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle2.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle2.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (otherPlayerGame.gameState.paddle2.width / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (otherPlayerGame.gameState.paddle2.height / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPlayerVsNPCColor()
-                            }}
-                          ></div>
-
-                          {/* Ball (赤色) */}
-                          <div
-                            className="absolute rounded-full"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.ball.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.ball.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (otherPlayerGame.gameState.ball.radius * 2 / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (otherPlayerGame.gameState.ball.radius * 2 / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPlayerVsNPCColor()
-                            }}
-                          ></div>
-                        </>
-                      ) : (
-                        /* Placeholder for loading or player info */
-                        <div className="w-full h-full flex items-center justify-center text-white text-xs">
-                          {isPlayerVsPlayer ?
-                            `${otherPlayerGame?.playerName || 'Player'}` :
-                            'Loading...'
-                          }
-                        </div>
-                      )}
-                    </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
+        </div>
+      )}
 
-          {/* Central canvas */}
-          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
-            <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
-              <canvas ref={canvasRef} className="w-full h-full border border-white bg-black bg-opacity-30" />
-            </div>
+      {/* central content */}
+      <div className="relative z-10 w-full h-full flex items-center justify-center">
+        {/* play square */}
+        <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
+          <canvas ref={canvasRef} className="w-full h-full border border-white" />
+        </div>
+
+        {/* countdown screen */}
+        {!gameStarted && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-50">
+            {countdown > 0 ? (
+              <>
+                <div className="text-8xl font-bold text-white animate-pulse mb-4">
+                  {countdown}
+                </div>
+              </>
+            ) : !miniGamesReady ? (
+              <>
+                <div className="text-4xl font-bold text-white mb-4">
+                  Initializing Mini Games...
+                </div>
+                <div className="text-xl text-white opacity-80">
+                  {miniGames.filter(g => g.active).length} / 42 games ready
+                </div>
+              </>
+            ) : !miniGamesDataReady ? (
+              <>
+                <div className="text-4xl font-bold text-white mb-4">
+                  Loading Game Data...
+                </div>
+                <div className="text-xl text-white opacity-80">
+                  Fetching initial game states...
+                </div>
+              </>
+            ) : null}
           </div>
+        )}
+      </div>
 
-          {/* Right side opponents - 20 tables in 7x3 grid (positions 21-40 out of 41) */}
-          <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
-            <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
-              {Array.from({ length: 20 }).map((_, i) => {
-                const gameIndex = i + 21; // Right side starts from index 21
-                const game = miniGames[gameIndex];
-                const hasNPCGame = game?.active && game.gameState;
+      {/* Survivors count */}
+      {gameStarted && (
+        <div
+          className="absolute z-30"
+          style={{
+            fontSize: "12.8vmin",
+            lineHeight: 1,
+            right: "1rem",
+            bottom: "calc(50vh - 48vmin)",
+            width: "12.8vmin",
+            height: "12.8vmin",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <span className="text-white font-bold">{survivors}</span>
+        </div>
+      )}
 
-                // 他のプレイヤーのゲーム状態を取得（インデックス順）
-                const otherPlayerGame = otherPlayerGames[gameIndex];
-                const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
+      {/* Participant count during countdown */}
+      {!gameStarted && countdown > 0 && (
+        <div
+          className="absolute z-30"
+          style={{
+            fontSize: "12.8vmin",
+            lineHeight: 1,
+            right: "1rem",
+            bottom: "calc(50vh - 48vmin)",
+            width: "12.8vmin",
+            height: "12.8vmin",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <span className="text-white font-bold">{sfu.gameState.participantCount}</span>
+        </div>
+      )}
 
-                const shouldShowCanvas = hasNPCGame || hasPlayerGame;
-
-                if (!shouldShowCanvas) return null;
-
-                // NPCゲームか他のプレイヤーゲームかを判定
-                const gameState = hasNPCGame ? game.gameState?.gameState : otherPlayerGame?.gameState;
-                const isUnderAttack = false;
-                const isPlayerVsPlayer = hasPlayerGame;
-
-                return (
-                  <div
-                    key={`right-${gameIndex}`}
-                    className={`cursor-pointer transition-all duration-200 relative ${
-                      selectedTarget === gameIndex ? 'scale-105' : 'hover:scale-102'
-                    } ${isUnderAttack ? 'ring-2 ring-red-500 ring-opacity-75' : ''}`}
-                    style={{ width: "12.8vmin", height: "12.8vmin" }}
-                    onClick={() => handleTargetSelect(gameIndex)}
-                  >
-                    {selectedTarget === gameIndex && (
-                      <img
-                        src="/images/icons/target_circle.svg"
-                        alt="Target"
-                        className="absolute inset-0 w-full h-full opacity-80 z-10"
-                      />
-                    )}
-
-                    {isUnderAttack && (
-                      <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-bl z-20">
-                        BOOST
-                      </div>
-                    )}
-
-                    <div className="w-full h-full border border-white relative overflow-hidden" style={{
-                      backgroundColor: isUnderAttack ? "rgba(255,0,0,0.2)" :
-                        (isPlayerVsPlayer ? "rgba(255,0,0,0.15)" : "rgba(255,255,255,0.15)")
-                    }}>
-                      {/* NPC vs NPCゲームの場合 */}
-                      {gameState && gameState.paddle1 && gameState.paddle2 && gameState.ball && !isPlayerVsPlayer ? (
-                        <>
-                          <div
-                            className="absolute rounded"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (gameState.paddle1.x / gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (gameState.paddle1.y / gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (gameState.paddle1.width / gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (gameState.paddle1.height / gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPaddleAndBallColor()
-                            }}
-                          ></div>
-
-                          <div
-                            className="absolute rounded"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (gameState.paddle2.x / gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (gameState.paddle2.y / gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (gameState.paddle2.width / gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (gameState.paddle2.height / gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPaddleAndBallColor()
-                            }}
-                          ></div>
-
-                          <div
-                            className={`absolute rounded-full ${
-                              isUnderAttack ? 'animate-pulse shadow-lg shadow-red-500' : ''
-                            }`}
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (gameState.ball.x / gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (gameState.ball.y / gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (gameState.ball.radius * 2 / gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: isUnderAttack ? '#ff0000' : getPaddleAndBallColor()
-                            }}
-                          ></div>
-                        </>
-                      ) :
-                      /* プレイヤー vs NPCゲームの場合 */
-                      isPlayerVsPlayer && otherPlayerGame?.gameState ? (
-                        <>
-                          {/* Player1 paddle (赤色) */}
-                          <div
-                            className="absolute rounded"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle1.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle1.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (otherPlayerGame.gameState.paddle1.width / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (otherPlayerGame.gameState.paddle1.height / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPlayerVsNPCColor()
-                            }}
-                          ></div>
-
-                          {/* Player2 paddle (赤色) */}
-                          <div
-                            className="absolute rounded"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle2.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.paddle2.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (otherPlayerGame.gameState.paddle2.width / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (otherPlayerGame.gameState.paddle2.height / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPlayerVsNPCColor()
-                            }}
-                          ></div>
-
-                          {/* Ball (赤色) */}
-                          <div
-                            className="absolute rounded-full"
-                            style={{
-                              left: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.ball.x / otherPlayerGame.gameState.canvasWidth) * 100))}%`,
-                              top: `${Math.max(0, Math.min(100, (otherPlayerGame.gameState.ball.y / otherPlayerGame.gameState.canvasHeight) * 100))}%`,
-                              width: `${Math.max(1, (otherPlayerGame.gameState.ball.radius * 2 / otherPlayerGame.gameState.canvasWidth) * 100)}%`,
-                              height: `${Math.max(1, (otherPlayerGame.gameState.ball.radius * 2 / otherPlayerGame.gameState.canvasHeight) * 100)}%`,
-                              backgroundColor: getPlayerVsNPCColor()
-                            }}
-                          ></div>
-                        </>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white text-xs">
-                          {isPlayerVsPlayer ?
-                            `${otherPlayerGame?.playerName || 'Player'}` :
-                            'Loading...'
-                          }
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+      {/* Survivors milestone alert */}
+      {showSurvivorsAlert && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+          <div className="text-8xl font-bold text-white animate-pulse text-center">
+            {survivors}
           </div>
+        </div>
+      )}
 
-          {/* UI Elements */}
-          <div className="absolute top-4 left-4 text-white z-30">
-            <div className="text-2xl font-bold">Survivors: {survivors}</div>
-            <div className="text-sm">Players: {sfu.gameState.participantCount}</div>
-          </div>
+      {/* Attack ray animation */}
+      {attackAnimation && (
+        <div className="absolute inset-0 pointer-events-none z-30">
+          {(() => {
+            const targetPos = getTargetPosition(attackAnimation.targetIndex);
+            const centerX = '50vw';
+            const centerY = '50vh';
 
-          {/* Attack Animation Ray */}
-          {attackAnimation && (
-            <div
-              className="absolute pointer-events-none z-40"
-              style={{
-                left: '50%',
-                top: '50%',
-                width: '2px',
-                height: '2px',
-                transform: 'translate(-50%, -50%)',
-              }}
-            >
+            // Calculate angle and distance for ray
+            const deltaX = parseFloat(targetPos.x.replace(/[^0-9.-]/g, '')) - 50;
+            const deltaY = parseFloat(targetPos.y.replace(/[^0-9.-]/g, '')) - 50;
+            const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            return (
               <div
-                className="absolute bg-red-500 shadow-lg shadow-red-500 animate-pulse"
+                className="absolute origin-left"
                 style={{
-                  width: '4px',
-                  height: '200px',
-                  transformOrigin: 'center bottom',
-                  transform: `rotate(${Math.atan2(
-                    parseFloat(getTargetPosition(attackAnimation.targetIndex).y.replace('vh', '')) - 50,
-                    parseFloat(getTargetPosition(attackAnimation.targetIndex).x.replace(/v[mw]/, '')) - 50
-                  )}rad)`,
-                  transition: `opacity ${attackAnimation.duration}ms ease-out`,
+                  left: centerX,
+                  top: centerY,
+                  width: `${distance}vmin`,
+                  height: '4px',
+                  background: 'linear-gradient(90deg, #ff6b6b, #ffd93d)',
+                  transform: `rotate(${angle}deg)`,
+                  transformOrigin: '0 50%',
+                  opacity: 0,
+                  animation: 'ray-attack 1s ease-out forwards'
                 }}
               />
-            </div>
-          )}
-
-          {/* Survivors Alert */}
-          {showSurvivorsAlert && (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 text-center">
-              <div className="bg-black bg-opacity-75 text-white px-8 py-4 rounded-lg text-3xl font-bold animate-pulse">
-                {survivors} Survivors Remaining!
-              </div>
-            </div>
-          )}
-
-          {/* Game Over Screen */}
-          {gameOver && (
-            <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-              <div className="text-center text-white">
-                <h1 className="text-6xl font-bold mb-4">
-                  {winner === 1 ? 'NPC Wins!' : 'You Win!'}
-                </h1>
-                <p className="text-2xl">Redirecting to results...</p>
-              </div>
-            </div>
-          )}
-        </>
+            );
+          })()}
+        </div>
       )}
+
+      {/* Global styles */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes ray-attack {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+          }
+          .text-shadow-lg {
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+          }
+        `
+      }} />
     </div>
   );
 };
