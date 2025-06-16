@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
-import { DEFAULT_CONFIG } from "@/utils/gameEngine";
+import { useGameEngine, useKeyboardControls } from "@/utils/gamePong42Hooks";
+import { DEFAULT_CONFIG } from "@/utils/gamePong42Engine";
 import { NPCGameResponse, NPCGameConfig } from "@/utils/npcManagerService";
 import { useGamePong42SFU } from "@/utils/gamePong42SFU";
 
