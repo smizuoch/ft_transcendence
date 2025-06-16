@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { GameEngine, GameConfig } from './gameEngine';
-import { PlayerInput } from './multiplayerService';
 
 export const useGameEngine = (
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
@@ -8,8 +7,6 @@ export const useGameEngine = (
 ) => {
   const engineRef = useRef<GameEngine | null>(null);
   const animationRef = useRef<number | undefined>(undefined);
-  const lastTimeRef = useRef<number>(performance.now()); // 時間ベース計算用のRef
-  const isFirstFrameRef = useRef<boolean>(true); // 初回フレームを検出
 
   const initializeEngine = useCallback(() => {
     console.log('initializeEngine called, canvasRef.current:', canvasRef.current);
@@ -49,10 +46,9 @@ export const useGameEngine = (
     gameStarted: boolean,
     keysRef: React.RefObject<{ [key: string]: boolean }>,
     paddleAndBallColor?: string, // 色パラメータ
-    isPVEMode?: boolean, // PVEモード（npcEnabledに対応）
-    remotePlayerInput?: PlayerInput | boolean | any, // リモートプレイヤー入力
-    playerNumber?: number | 'spectator' | boolean, // プレイヤー番号
-    gameSender?: (gameState: any) => void, // ゲーム状態送信関数（GamePong42専用）
+    isPVEMode?: boolean, // PVEモードかどうか
+    remotePlayerInput?: { up: boolean; down: boolean; timestamp: number } | null, // マルチプレイヤー入力
+    playerNumber?: 1 | 2 | 'spectator' | null // プレイヤー番号（観戦者を含む）
   ) => {
     console.log('startGameLoop called', {
       hasEngine: !!engineRef.current,
@@ -60,10 +56,6 @@ export const useGameEngine = (
       gameStarted,
       playerNumber
     });
-
-    // 初回実行時にlastTimeRefを現在時刻に設定
-    lastTimeRef.current = performance.now();
-    isFirstFrameRef.current = true; // 初回フレームフラグをリセット
 
     // エンジンが初期化されていない場合は初期化を試行
     if (!engineRef.current) {
@@ -88,36 +80,15 @@ export const useGameEngine = (
 
     const loop = () => {
       if (engineRef.current && gameStarted && keysRef.current) {
-        // 時間ベース計算
-        const currentTime = performance.now();
-        const deltaTime = (currentTime - lastTimeRef.current) / 1000; // 秒単位
-        lastTimeRef.current = currentTime;
-
-        // 初回フレームまたは異常に大きなdeltaTimeをスキップ
-        if (isFirstFrameRef.current || deltaTime > 0.1) { // 100ms以上の場合はスキップ
-          isFirstFrameRef.current = false;
-          requestAnimationFrame(loop);
-          return;
-        }
-
-        // deltaTimeを制限して異常値を防ぐ
-        const clampedDeltaTime = Math.min(deltaTime, 1/30); // 最大33ms (30fps)
-
         // キーボード制御の処理
         const state = engineRef.current.getState();
-        const baseSpeed = 240; // pixels per second (NPCと統一)
-        const speed = baseSpeed * clampedDeltaTime; // pixels per second * seconds = pixels
-
-        // デバッグ用ログ（一時的）
-        if (Math.random() < 0.01) { // 1%の確率でログ出力
-          console.log('deltaTime:', deltaTime.toFixed(4), 'clampedDeltaTime:', clampedDeltaTime.toFixed(4), 'speed:', speed.toFixed(2));
-        }
+        const speed = 8; // paddleSpeed
 
         // 観戦者モードの場合はキー入力を一切受け付けない
         if (playerNumber === 'spectator') {
           // 観戦者モード: キー入力は完全に無効
           // ゲーム状態の更新のみ行う（パドル移動なし）
-        } else if (isPVEMode || (typeof playerNumber === 'boolean' && playerNumber)) {
+        } else if (isPVEMode) {
           // PVEモード: Player1 = NPC, Player2 = プレイヤー
           // Player 2 controls (下のパドル)
           if (keysRef.current['arrowLeft'] || keysRef.current['a']) {
@@ -146,10 +117,10 @@ export const useGameEngine = (
             }
 
             // リモートPlayer2（下のパドル）の入力を反映
-            if (remotePlayerInput && typeof remotePlayerInput === 'object' && 'up' in remotePlayerInput && remotePlayerInput.up && state.paddle2.x > 0) {
+            if (remotePlayerInput.up && state.paddle2.x > 0) {
               state.paddle2.x -= speed; // P2のup（左）
             }
-            if (remotePlayerInput && typeof remotePlayerInput === 'object' && 'down' in remotePlayerInput && remotePlayerInput.down && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
+            if (remotePlayerInput.down && state.paddle2.x + state.paddle2.width < state.canvasWidth) {
               state.paddle2.x += speed; // P2のdown（右）
             }
           } else if (playerNumber === 2) {
@@ -166,10 +137,10 @@ export const useGameEngine = (
             }
 
             // リモートPlayer1（上のパドル）の入力を反映
-            if (remotePlayerInput && typeof remotePlayerInput === 'object' && 'up' in remotePlayerInput && remotePlayerInput.up && state.paddle1.x > 0) {
+            if (remotePlayerInput.up && state.paddle1.x > 0) {
               state.paddle1.x -= speed; // P1のup（左）
             }
-            if (remotePlayerInput && typeof remotePlayerInput === 'object' && 'down' in remotePlayerInput && remotePlayerInput.down && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
+            if (remotePlayerInput.down && state.paddle1.x + state.paddle1.width < state.canvasWidth) {
               state.paddle1.x += speed; // P1のdown（右）
             }
           }
@@ -213,19 +184,6 @@ export const useGameEngine = (
 
       if (engineRef.current) {
         engineRef.current.draw(ctx, paddleAndBallColor || '#212121');
-      }
-
-      // ゲーム状態を60fpsで送信（GamePong42の場合は常に送信、観戦者モードは除く）
-      if (gameSender && playerNumber !== 'spectator' && engineRef.current) {
-        const gameState = engineRef.current.getState();
-        // 毎フレーム確実に送信
-        gameSender({
-          paddle1: gameState.paddle1,
-          paddle2: gameState.paddle2,
-          ball: gameState.ball,
-          canvasWidth: gameState.canvasWidth,
-          canvasHeight: gameState.canvasHeight,
-        });
       }
 
       animationRef.current = requestAnimationFrame(loop);
