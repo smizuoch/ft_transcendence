@@ -33,16 +33,16 @@ services:
       - transcendence_net
     # このサービスはビルド後終了するため、restartポリシーは不要
 
-  sfu:
+  sfu42:
     build:
       context: .
-      dockerfile: ./services/sfu/Dockerfile
-    container_name: sfu
+      dockerfile: ./services/sfu42/Dockerfile
+    container_name: sfu42
     ports:
-      - "3001:3001"
-      - "10000-10100:10000-10100/udp" # RTC用ポート範囲
+      - "3042:3042"
+      - "10100-10200:10100-10200/udp" # RTC用ポート範囲
     environment:
-      - PORT=3001
+      - PORT=3042
       - DOCKER_ENV=true
       - HOST_IP=${HOST_IP:-192.168.1.100}  # ホストマシンのローカルIPアドレス
     networks:

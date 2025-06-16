@@ -27,7 +27,7 @@ interface PlayerGameState {
   isActive: boolean;
 }
 
-const SFU_URL = 'http://localhost:3001';
+const SFU_URL = 'http://localhost:3042';
 
 // クライアント側で管理するゲーム状態の型定義
 interface GamePong42LocalState {

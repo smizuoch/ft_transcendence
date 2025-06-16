@@ -37,7 +37,7 @@ const roomNPCs = new Map<string, NPCRoomData>();
 
 // SFUサーバーへの接続
 let defaultSfuSocket: Socket | null = null;
-const defaultSfuUrl = process.env.SFU_URL || 'http://sfu:3001';
+const defaultSfuUrl = process.env.SFU_URL || 'http://sfu42:3042';
 
 // 特定の部屋用にSFUサーバーに接続
 function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<Socket> {

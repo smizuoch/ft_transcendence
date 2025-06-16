@@ -14,16 +14,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # package.jsonとpackage-lock.jsonをコピー
-COPY services/sfu/package*.json ./
+COPY services/sfu42/package*.json ./
 
 # 依存関係をインストール（ビルド用にdevDependenciesも含める）
 RUN npm install --verbose
 
 # TypeScript設定ファイルをコピー
-COPY services/sfu/tsconfig.json ./
+COPY services/sfu42/tsconfig.json ./
 
 # ソースコードとスクリプトをコピー
-COPY services/sfu/src/ ./src/
+COPY services/sfu42/src/ ./src/
 
 # SSL証明書ディレクトリを作成（権限も設定）
 RUN mkdir -p /app/certs /app/internal-certs && chmod 755 /app/certs /app/internal-certs

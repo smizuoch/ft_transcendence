@@ -535,7 +535,7 @@ fastify.get('/rooms/:roomNumber/info', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
-    const PORT = parseInt(process.env.PORT || '3001');
+    const PORT = parseInt(process.env.PORT || '3042');
 
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`SFU Data Relay Server running on port ${PORT}`);
