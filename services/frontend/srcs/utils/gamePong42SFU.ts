@@ -388,7 +388,48 @@ export const useGamePong42SFU = () => {
 
     // Player game over event
     socket.on('player-game-over', (data: { from: string; timestamp: number }) => {
-      console.log('💀 Player game over:', data);
+      console.log('� GAMEOVER EVENT RECEIVED - Player game over received:', data);
+      console.log('💀💀💀 IMPORTANT: Another player has been eliminated! 💀💀💀');
+
+      // 該当プレイヤーのゲーム状態を非アクティブに設定
+      setLocalGameState(prev => {
+        const newPlayerGameStates = new Map(prev.playerGameStates);
+        const playerState = newPlayerGameStates.get(data.from);
+
+        console.log('🔍 Before update - playerGameStates:', {
+          total: newPlayerGameStates.size,
+          players: Array.from(newPlayerGameStates.entries()).map(([id, state]) => ({
+            id,
+            isActive: state.isActive,
+            name: state.playerName
+          }))
+        });
+
+        if (playerState) {
+          newPlayerGameStates.set(data.from, {
+            ...playerState,
+            isActive: false
+          });
+          console.log(`🚫💀 Player ${data.from} set to inactive in playerGameStates`);
+        } else {
+          console.log(`⚠️❌ Player ${data.from} not found in playerGameStates`);
+        }
+
+        console.log('🔍 After update - playerGameStates:', {
+          total: newPlayerGameStates.size,
+          players: Array.from(newPlayerGameStates.entries()).map(([id, state]) => ({
+            id,
+            isActive: state.isActive,
+            name: state.playerName
+          }))
+        });
+
+        return {
+          ...prev,
+          playerGameStates: newPlayerGameStates
+        };
+      });
+
       const gameOverData: GamePong42Data = {
         type: 'gameEvent',
         playerId: data.from,
@@ -669,6 +710,34 @@ export const useGamePong42SFU = () => {
     console.log('✅ player-game-state emitted successfully');
   }, []);
 
+  // ゲーム終了を送信
+  const sendGameOver = useCallback((winner: number) => {
+    console.log('� GAMEOVER EVENT START - Sending game over notification, winner:', winner);
+    console.log('🔍 Connection status:', {
+      socketConnected: !!socketRef.current,
+      socketId: socketRef.current?.id,
+      roomNumber: roomNumberRef.current,
+      playerId: playerIdRef.current
+    });
+
+    if (socketRef.current && roomNumberRef.current) {
+      const gameOverData = {
+        winner: winner,
+        playerId: playerIdRef.current,
+        timestamp: Date.now()
+      };
+
+      console.log('📡 Emitting player-game-over event with data:', gameOverData);
+      socketRef.current.emit('player-game-over', gameOverData);
+      console.log('✅ player-game-over event emitted successfully');
+    } else {
+      console.error('❌ Cannot send game over: socket or room not available', {
+        socketExists: !!socketRef.current,
+        roomExists: !!roomNumberRef.current
+      });
+    }
+  }, []);
+
   // NPC状態確認（Room Leaderのみ）
   const checkNPCStatus = useCallback(() => {
     if (!localGameState.isRoomLeader || !socketRef.current || !roomNumberRef.current) {
@@ -858,6 +927,7 @@ export const useGamePong42SFU = () => {
     sendPlayerInput,
     sendGameState,
     sendPlayerGameState, // プレイヤーゲーム状態送信
+    sendGameOver, // ゲーム終了送信
     sendData,
 
     // Room Leader functions

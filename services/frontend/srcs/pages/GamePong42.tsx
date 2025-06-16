@@ -44,6 +44,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   // WebRTC SFUのhook（純粋なデータ中継）
   const sfu = useGamePong42SFU();
 
+  // 各キャンバスの最後の更新時刻を追跡
+  const [lastUpdateTimes, setLastUpdateTimes] = useState<Map<string, number>>(new Map());
+
   // 他のプレイヤーのゲーム状態を取得（最新データを確実に取得）
   const getOtherPlayerGames = useCallback(() => {
     const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
@@ -51,21 +54,71 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId
     );
 
-    // デバッグログを10秒ごとに出力
-    if (Date.now() % 10000 < 100) {
+    // デバッグログを2秒ごとに出力
+    if (Date.now() % 2000 < 100) {
       console.log('🔍 getOtherPlayerGames debug:', {
         totalPlayers: allPlayerGames.length,
         activeOtherPlayers: filteredPlayerGames.length,
         myPlayerId: sfu.playerId,
-        allPlayers: allPlayerGames.map(p => ({ id: p.playerId, isActive: p.isActive })),
-        filteredPlayers: filteredPlayerGames.map(p => ({ id: p.playerId, name: p.playerName }))
+        allPlayers: allPlayerGames.map(p => ({ id: p.playerId, isActive: p.isActive, name: p.playerName })),
+        filteredPlayers: filteredPlayerGames.map(p => ({ id: p.playerId, name: p.playerName, isActive: p.isActive }))
       });
     }
 
     return filteredPlayerGames;
   }, [sfu.gameState.playerGameStates, sfu.playerId]);
 
+  // プレイヤーゲームの更新時刻を記録（別のuseEffect）
+  useEffect(() => {
+    const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
+    const filteredPlayerGames = allPlayerGames.filter(
+      playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId
+    );
+
+    if (filteredPlayerGames.length > 0) {
+      setLastUpdateTimes(prev => {
+        const newTimes = new Map(prev);
+        let hasChanges = false;
+
+        filteredPlayerGames.forEach(playerGame => {
+          const key = `player-${playerGame.playerId}`;
+          const prevTime = prev.get(key) || 0;
+          if (playerGame.timestamp && playerGame.timestamp > prevTime) {
+            newTimes.set(key, playerGame.timestamp);
+            hasChanges = true;
+          }
+        });
+
+        return hasChanges ? newTimes : prev;
+      });
+    }
+  }, [sfu.gameState.playerGameStates, sfu.playerId]);
+
   const otherPlayerGames = getOtherPlayerGames();
+
+  // 定期的に古いタイムスタンプをクリーンアップ（メモリ効率化）
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      setLastUpdateTimes(prev => {
+        const cleaned = new Map();
+        prev.forEach((timestamp, canvasId) => {
+          // 5分以上古いタイムスタンプは削除
+          if (now - timestamp < 5 * 60 * 1000) {
+            cleaned.set(canvasId, timestamp);
+          }
+        });
+
+        if (cleaned.size !== prev.size) {
+          console.log('🧹 Cleaned up old timestamps:', prev.size - cleaned.size, 'removed');
+        }
+
+        return cleaned;
+      });
+    }, 30000); // 30秒ごとにクリーンアップ
+
+    return () => clearInterval(cleanupInterval);
+  }, []);
 
   // 他のプレイヤーゲーム数のログ（3秒ごと）
   useEffect(() => {
@@ -113,6 +166,29 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
   // ゲーム開始済みフラグ（ローカル管理）
   const [gameInitialized, setGameInitialized] = useState(false);
+
+  // 1秒以上更新されていないキャンバスかどうかを判定する関数
+  const isCanvasStale = useCallback((canvasId: string): boolean => {
+    // ゲームが開始されていない場合は、1秒ルールを適用しない
+    if (!gameStarted) {
+      if (Date.now() % 5000 < 100) { // 5秒ごとにログ出力
+        console.log(`⏰ Canvas ${canvasId}: 1秒ルール無効 (ゲーム開始前/カウントダウン中)`);
+      }
+      return false;
+    }
+
+    const lastUpdate = lastUpdateTimes.get(canvasId);
+    if (!lastUpdate) return false; // 初回は非表示にしない
+
+    const now = Date.now();
+    const isStale = (now - lastUpdate) > 1000; // 1秒以上更新なし
+
+    if (isStale && Date.now() % 3000 < 100) { // 3秒ごとにログ出力
+      console.log(`⏰💀 Canvas ${canvasId} is stale (ゲーム開始後): ${now - lastUpdate}ms since last update`);
+    }
+
+    return isStale;
+  }, [lastUpdateTimes, gameStarted]);
 
   // 固定のプレイヤー情報
   const playerInfoRef = useRef({
@@ -369,6 +445,33 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     });
   }, [sfu.receivedData]);
 
+  // NPCゲームの更新時刻を記録（別途処理）
+  useEffect(() => {
+    const npcData = sfu.receivedData.find(data =>
+      data.type === 'gameState' && data.playerId === 'npc-manager' && data.payload.npcStates
+    );
+
+    if (npcData) {
+      const now = Date.now();
+      setLastUpdateTimes(prevTimes => {
+        const newTimes = new Map(prevTimes);
+        let hasChanges = false;
+
+        npcData.payload.npcStates.forEach((npcState: any, index: number) => {
+          if (npcState.active !== false) {
+            const key = `npc-${index}`;
+            if (!prevTimes.has(key) || now > (prevTimes.get(key) || 0)) {
+              newTimes.set(key, now);
+              hasChanges = true;
+            }
+          }
+        });
+
+        return hasChanges ? newTimes : prevTimes;
+      });
+    }
+  }, [sfu.receivedData]);
+
   // ミニゲーム更新ループ（WebRTC SFU経由でNPCManagerから更新を受信）
   useEffect(() => {
     if (!miniGamesReady || gameOver || !gameStarted) return;
@@ -416,6 +519,19 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     const inputInterval = setInterval(sendPlayerInput, 1000 / 60); // 60FPS
     return () => clearInterval(inputInterval);
   }, [gameStarted, sendPlayerInput]);
+
+  // 他のプレイヤーのゲーム終了を監視（ログ出力のみ）
+  useEffect(() => {
+    const gameOverEvents = sfu.receivedData.filter(
+      data => data.type === 'gameEvent' && data.payload.event === 'game-over'
+    );
+
+    gameOverEvents.forEach(gameOverEvent => {
+      const deadPlayerId = gameOverEvent.playerId;
+      console.log('💀 Player game over detected from SFU:', deadPlayerId);
+      console.log(`🚫 Player ${deadPlayerId} canvas will be hidden automatically through getOtherPlayerGames()`);
+    });
+  }, [sfu.receivedData]);
 
   // ミニゲーム初期化関数
   const initMiniGames = useCallback(async (npcCount: number) => {
@@ -661,30 +777,21 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     return '#ff0000'; // 赤色固定
   };
 
-  const handleScore = useCallback((scorer: 'player1' | 'player2') => {
-    // GamePong42では得点システムではなく生存者システム
-    if (scorer === 'player1') { // NPCが勝利した場合（Player1 = NPC）
-      setGameOver(true);
-      setWinner(1);
-    }
-    // プレイヤーが勝利した場合（Player2）は攻撃フェーズに移行
-    if (scorer === 'player2') {
-      // プレイヤーがNPCに勝利 - 自動攻撃実行
-      executeAutoAttack();
-    }
-  }, [selectedTarget, survivors]);
-
   const executeAutoAttack = useCallback(async () => {
-    if (selectedTarget !== null) {
+    const currentTarget = selectedTarget;
+    const currentMiniGames = miniGames;
+    const currentSfu = sfu;
+
+    if (currentTarget !== null) {
       // Show attack animation from center to target opponent
-      setAttackAnimation({ targetIndex: selectedTarget, duration: 1000 });
+      setAttackAnimation({ targetIndex: currentTarget, duration: 1000 });
       setTimeout(() => setAttackAnimation(null), 1000);
 
       // 選択されたミニゲームにスピードブースト攻撃を適用
-      const targetGame = miniGames[selectedTarget];
+      const targetGame = currentMiniGames[currentTarget];
       if (targetGame?.active && targetGame.gameId) {
         try {
-          await sfu.applySpeedBoostToNPCGame(targetGame.gameId);
+          await currentSfu.applySpeedBoostToNPCGame(targetGame.gameId);
         } catch (error) {
           console.error('Failed to apply speed boost:', error);
         }
@@ -692,15 +799,31 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
       // 新しいターゲットを選択（アクティブなゲームのみ）
       setTimeout(() => {
-        const activeGames = miniGames.filter((game, index) => game.active && index !== selectedTarget);
+        const activeGames = currentMiniGames.filter((game, index) => game.active && index !== currentTarget);
         if (activeGames.length > 0) {
           const randomActiveGame = activeGames[Math.floor(Math.random() * activeGames.length)];
-          const newTargetIndex = miniGames.findIndex(game => game.id === randomActiveGame.id);
+          const newTargetIndex = currentMiniGames.findIndex(game => game.id === randomActiveGame.id);
           setSelectedTarget(newTargetIndex);
         }
       }, 1000);
     }
   }, [selectedTarget, miniGames, sfu]);
+
+  const handleScore = useCallback((scorer: 'player1' | 'player2') => {
+    console.log('🎯 handleScore called with scorer:', scorer);
+    // GamePong42では得点システムではなく生存者システム
+    if (scorer === 'player1') { // NPCが勝利した場合（Player1 = NPC）
+      console.log('💀 Player lost to NPC - ending game');
+      setGameOver(true);
+      setWinner(1);
+    }
+    // プレイヤーが勝利した場合（Player2）は攻撃フェーズに移行
+    if (scorer === 'player2') {
+      console.log('⚡ Player defeated NPC - executing auto attack');
+      // プレイヤーがNPCに勝利 - 自動攻撃実行
+      executeAutoAttack();
+    }
+  }, [executeAutoAttack]);
 
   const handleStartGame = useCallback(() => {
     // NPCを上側（Player1）のみに設定
@@ -714,10 +837,58 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     }
   }, [engineRef]);
 
+  // 安定したスコアハンドラーを作成
+  const stableHandleScore = useCallback((scorer: 'player1' | 'player2') => {
+    console.log('🎯🎯🎯 stableHandleScore called with scorer:', scorer);
+    console.log('📊 Current game state:', { gameOver, winner, gameStarted });
+
+    // GamePong42では得点システムではなく生存者システム
+    if (scorer === 'player1') { // NPCが勝利した場合（Player1 = NPC）
+      console.log('💀💀💀 Player lost to NPC - setting game over state');
+      console.log('🔥 About to call setGameOver(true) and setWinner(1)');
+      setGameOver(true);
+      setWinner(1);
+      console.log('✅ setGameOver(true) and setWinner(1) have been called');
+    }
+    // プレイヤーが勝利した場合（Player2）は攻撃フェーズに移行
+    if (scorer === 'player2') {
+      console.log('⚡⚡⚡ Player defeated NPC - executing auto attack');
+      // プレイヤーがNPCに勝利 - 自動攻撃実行
+      const currentTarget = selectedTarget;
+      const currentMiniGames = miniGames;
+      const currentSfu = sfu;
+
+      if (currentTarget !== null) {
+        // Show attack animation from center to target opponent
+        setAttackAnimation({ targetIndex: currentTarget, duration: 1000 });
+        setTimeout(() => setAttackAnimation(null), 1000);
+
+        // 選択されたミニゲームにスピードブースト攻撃を適用
+        const targetGame = currentMiniGames[currentTarget];
+        if (targetGame?.active && targetGame.gameId) {
+          currentSfu.applySpeedBoostToNPCGame(targetGame.gameId).catch(error => {
+            console.error('Failed to apply speed boost:', error);
+          });
+        }
+
+        // 新しいターゲットを選択（アクティブなゲームのみ）
+        setTimeout(() => {
+          const activeGames = currentMiniGames.filter((game, index) => game.active && index !== currentTarget);
+          if (activeGames.length > 0) {
+            const randomActiveGame = activeGames[Math.floor(Math.random() * activeGames.length)];
+            const newTargetIndex = currentMiniGames.findIndex(game => game.id === randomActiveGame.id);
+            setSelectedTarget(newTargetIndex);
+          }
+        }, 1000);
+      }
+    }
+  }, []);  // 依存配列を空にして安定化
+
   // ゲームループの統一管理
   useEffect(() => {
     // ゲーム開始時のみゲームループを開始
     if (gameStarted && canvasRef.current) {
+      console.log('🎮 Starting game loop...');
       // エンジンが初期化されていない場合、まず初期化
       if (!engineRef.current) {
         initializeEngine();
@@ -725,8 +896,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
       // 少し遅延してからゲームループを開始（エンジン初期化を待つ）
       const timer = setTimeout(() => {
+        console.log('🚀 Game loop start timer triggered');
         startGameLoop(
-          handleScore, // onScore
+          stableHandleScore, // onScore
           gameStarted, // gameStarted
           keysRef, // keysRef
           getPaddleAndBallColor(), // paddleAndBallColor
@@ -742,14 +914,14 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         stopGameLoop();
       };
     }
-  }, [gameStarted, initializeEngine, startGameLoop, stopGameLoop, handleScore, keysRef, survivors]);
+  }, [gameStarted, initializeEngine, startGameLoop, stopGameLoop]);
 
   // キャンバスマウント時の初期化
   useEffect(() => {
     if (canvasRef.current) {
       initializeEngine();
     }
-  }, [canvasRef.current, initializeEngine]);
+  }, [initializeEngine]);
 
   // Show alert when survivors count reaches milestone
   useEffect(() => {
@@ -779,10 +951,26 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     };
   }, [initializeEngine]);
 
+  // ゲーム終了時の処理（一度だけ実行）
+  const gameOverProcessedRef = useRef(false);
+
   useEffect(() => {
-    if (gameOver && winner) {
+    console.log('🔍 useEffect triggered - gameOver:', gameOver, 'winner:', winner, 'gameOverProcessed:', gameOverProcessedRef.current);
+
+    if (gameOver && winner && !gameOverProcessedRef.current) {
+      gameOverProcessedRef.current = true; // 一度だけ実行するためのフラグ
+
+      console.log('🔔🔔🔔 SELF GAMEOVER DETECTED - Game over detected, winner:', winner, 'navigating to GameResult in 1.2 seconds');
+      console.log('💀💀💀 I AM ELIMINATED! 💀💀💀');
+      console.log('🔄 useEffect execution count marker');
+
+      // ゲーム終了をsfu42に通知
+      console.log('📡 Sending game over notification to sfu42...');
+      sfu.sendGameOver(winner);
+
       // ゲーム終了時にすべてのミニゲームを停止
-      miniGames.forEach(async (game) => {
+      const currentMiniGames = miniGames;
+      currentMiniGames.forEach(async (game) => {
         if (game.gameId && game.active) {
           try {
             await sfu.stopNPCGame(game.gameId);
@@ -792,16 +980,25 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         }
       });
 
-      const t = setTimeout(() => navigate("GameResult"), 1200);
-      return () => clearTimeout(t);
+      const t = setTimeout(() => {
+        console.log('🚀 Navigating to GameResult now');
+        navigate("GameResult");
+      }, 1200);
+
+      // クリーンアップ関数は必要ない（一度だけ実行なので）
     }
-  }, [gameOver, winner, navigate, miniGames, sfu]);
+  }, [gameOver, winner, navigate, sfu, miniGames]);
 
   const handleTargetSelect = (index: number) => {
     if (miniGames[index]?.active) {
       setSelectedTarget(index);
     }
   };
+
+  // デバッグ用: gameOverとwinnerの状態変化を監視
+  useEffect(() => {
+    console.log('🎮 Game state changed - gameOver:', gameOver, 'winner:', winner);
+  }, [gameOver, winner]);
 
   // Calculate target position for ray animation
   const getTargetPosition = (targetIndex: number) => {
@@ -852,8 +1049,57 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
               const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
               const hasNPCGame = game?.active;
 
-              // NPCゲームか他のプレイヤーゲームどちらかが表示可能な場合のみ表示
-              if (!hasNPCGame && !hasPlayerGame) return null;
+              // デバッグ: プレイヤーゲーム状態をログ出力（1秒ごと）
+              if (i === 0 && Date.now() % 1000 < 100) {
+                console.log('🔍 Canvas 0 status:', {
+                  hasPlayerGame,
+                  hasNPCGame,
+                  otherPlayerGamesCount: getOtherPlayerGames().length,
+                  otherPlayerGame: otherPlayerGame ? {
+                    id: otherPlayerGame.playerId,
+                    name: otherPlayerGame.playerName,
+                    isActive: otherPlayerGame.isActive
+                  } : null,
+                  npcGame: game ? { id: game.id, active: game.active } : null
+                });
+              }
+
+              // 💀 非表示条件の強化: NPCゲームもプレイヤーゲームもない場合は非表示
+              if (!hasNPCGame && !hasPlayerGame) {
+                if (i < 3 && Date.now() % 2000 < 100) {
+                  console.log(`💀💀💀 Canvas ${i} COMPLETELY HIDDEN: no active game (hasNPC: ${hasNPCGame}, hasPlayer: ${hasPlayerGame})`);
+                }
+                return null;
+              }
+
+              // 💀 プレイヤーゲームが非アクティブな場合の追加チェック
+              if (otherPlayerGame && !otherPlayerGame.isActive) {
+                if (i < 3 && Date.now() % 2000 < 100) {
+                  console.log(`💀💀💀 Canvas ${i} COMPLETELY HIDDEN: player ${otherPlayerGame.playerId} is INACTIVE (eliminated)`);
+                }
+                return null;
+              }
+
+              // ⏰ 1秒以上更新されていないキャンバスは非表示
+              const playerCanvasId = `player-${otherPlayerGame?.playerId}`;
+              const npcCanvasId = `npc-${i}`;
+              const isPlayerStale = hasPlayerGame && isCanvasStale(playerCanvasId);
+              const isNPCStale = hasNPCGame && isCanvasStale(npcCanvasId);
+
+              if (isPlayerStale || isNPCStale) {
+                if (i < 3 && Date.now() % 2000 < 100) {
+                  console.log(`⏰💀 Canvas ${i} HIDDEN: stale updates (playerStale: ${isPlayerStale}, npcStale: ${isNPCStale})`);
+                }
+                return null;
+              }
+
+              // 💀 最終安全チェック: プレイヤーゲームがあるがisActiveがfalseの場合
+              if (hasPlayerGame && otherPlayerGame && otherPlayerGame.isActive === false) {
+                if (i < 3 && Date.now() % 2000 < 100) {
+                  console.log(`💀💀💀 Canvas ${i} FINAL SAFETY CHECK: eliminating inactive player ${otherPlayerGame.playerId}`);
+                }
+                return null;
+              }
 
               // NPCゲームか他のプレイヤーゲームかを判定
               const gameState = hasPlayerGame ? otherPlayerGame.gameState : game?.gameState?.gameState;
@@ -959,7 +1205,44 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
             {Array.from({ length: Math.min(20, Math.max(0, miniGames.length - 21)) }).map((_, i) => {
               const gameIndex = 21 + i;
               const game = miniGames[gameIndex];
-              if (!game?.active) return null;
+
+              // デバッグ: 右側の最初のキャンバス（index 21）の状態をログ出力
+              if (gameIndex === 21 && Date.now() % 5000 < 100) {
+                console.log('🔍 Canvas 21 (right side) status:', {
+                  hasGame: !!game,
+                  active: game?.active,
+                  gameState: !!game?.gameState
+                });
+              }
+
+              if (!game?.active) {
+                if (gameIndex === 21) {
+                  console.log('⚠️ Canvas 21 hidden: no active NPC game');
+                }
+                return null;
+              }
+
+              // ⏰ 1秒以上更新されていないNPCキャンバスは非表示
+              const rightNpcCanvasId = `npc-${gameIndex}`;
+              const isRightNPCStale = isCanvasStale(rightNpcCanvasId);
+
+              if (isRightNPCStale) {
+                if (gameIndex === 21 && Date.now() % 2000 < 100) {
+                  console.log(`⏰💀 Canvas ${gameIndex} (right) HIDDEN: stale NPC updates`);
+                }
+                return null;
+              }
+
+              // ⏰ 1秒以上更新されていないNPCキャンバスは非表示
+              const npcCanvasId = `npc-${gameIndex}`;
+              const isNPCStale = isCanvasStale(npcCanvasId);
+
+              if (isNPCStale) {
+                if (gameIndex === 21 && Date.now() % 2000 < 100) {
+                  console.log(`⏰💀 Canvas ${gameIndex} (right side) HIDDEN: stale NPC updates`);
+                }
+                return null;
+              }
 
               const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要

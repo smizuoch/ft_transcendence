@@ -207,6 +207,8 @@ export const useGameEngine = (
 
         const result = engineRef.current.update();
         if (result !== 'none') {
+          console.log('🎯🎯🎯 GamePong42Hooks: Score detected! About to call onScore with result:', result);
+          console.log('🚨 This should trigger sendGameOver if result === "player1"');
           onScore(result);
         }
       }

@@ -342,12 +342,16 @@ io.on('connection', (socket) => {
   socket.on('player-game-over', (data) => {
     const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);
     if (roomNumber) {
-      console.log(`Relaying game over from ${socket.id} in room ${roomNumber}`);
+      console.log(`🔔 Received player-game-over from ${socket.id} in room ${roomNumber}:`, data);
+      console.log(`📡 Relaying game over to other clients in room ${roomNumber}`);
       socket.to(roomNumber).emit('player-game-over', {
         ...data,
         from: socket.id,
         timestamp: Date.now()
       });
+      console.log(`✅ player-game-over relayed successfully`);
+    } else {
+      console.log(`⚠️ Cannot relay player-game-over: socket ${socket.id} not in any room`);
     }
   });
 
