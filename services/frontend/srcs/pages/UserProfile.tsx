@@ -36,6 +36,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+
   // JWTトークンから現在のユーザー名を取得
   useEffect(() => {
     const getCurrentUser = () => {
@@ -43,7 +44,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
         const token = localStorage.getItem('authToken');
         if (token) {
           const payload = JSON.parse(atob(token.split('.')[1]));
-          console.log('JWT payload username:', payload.username);
           setCurrentUsername(payload.username);
         }
       } catch (error) {
@@ -101,28 +101,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             }          } else {
             // 自分のプロフィールの場合は、そのままオンライン状態を使用
             setAvatarBorderColor(result.data.isOnline ? 'green' : 'gray');
-          }          // フォローボタンの表示判定: userIdが存在する場合（他のユーザーのプロフィール）のみ表示
-          // ただし、自分自身のプロフィールの場合は非表示
-          if (userId) {
-            // 文字列を正規化して比較（日本語文字などに対応）
-            const normalizeString = (str: string | null | undefined) => 
-              str ? str.trim().normalize('NFC') : '';
-            const isNotSelf = normalizeString(result.data?.username) !== normalizeString(currentUsername);
-            console.log('Follow button visibility check:', {
-              userId,
-              resultUsername: result.data?.username,
-              currentUsername: currentUsername,
-              normalizedResult: normalizeString(result.data?.username),
-              normalizedCurrent: normalizeString(currentUsername),
-              isNotSelf,
-              willShowButton: isNotSelf
-            });
-            setShowFollowButton(isNotSelf);
-          } else {
-            // userIdがない場合（自分のプロフィール）は確実に非表示
-            console.log('No userId provided - hiding follow button (own profile)');
-            setShowFollowButton(false);
           }
+          
+          // フォローボタンの表示判定: 他のユーザーかつ自分自身でない場合のみ表示
+          const isOtherUser = !!userId && result.data?.username;
+          const isNotSelf = result.data?.username !== currentUsername;
+          setShowFollowButton(isOtherUser && isNotSelf);
         } else {
           setError('Failed to fetch user data');
         }
