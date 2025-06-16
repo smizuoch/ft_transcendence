@@ -109,12 +109,26 @@ export class PIDNPC implements NPCAlgorithm {
     // PID制御による位置計算
     const controlOutput = this.pidController.update(target, paddleCenter, deltaTime);
 
-    // 速度制限の適用
-    const maxSpeed = this.config.maxSpeed * 400; // ピクセル/秒
-    const limitedSpeed = Math.max(-maxSpeed, Math.min(maxSpeed, controlOutput));
+    // 固定速度でのパドル移動（プレイヤーと統一）
+    const fixedSpeed = 240; // pixels per second (プレイヤーと統一)
+
+    // 目標位置への方向を計算
+    const distance = target - paddleCenter;
+    const direction = distance > 0 ? 1 : -1;
+
+    // 目標に近い場合は減速（微調整のため）
+    const absDistance = Math.abs(distance);
+    const speedMultiplier = Math.min(1.0, absDistance / 10); // 10px以内では減速
+
+    // 実際の移動量を固定速度で計算
+    const moveDistance = fixedSpeed * speedMultiplier * deltaTime * direction;
+
+    // 目標を超えないように制限
+    const clampedMoveDistance = Math.abs(moveDistance) > absDistance ?
+      distance : moveDistance;
 
     // 新しい位置の計算
-    let newPaddleX = currentPaddleX + (limitedSpeed * deltaTime);
+    let newPaddleX = currentPaddleX + clampedMoveDistance;
 
     // 画面境界の制限
     newPaddleX = Math.max(0, Math.min(gameState.canvasWidth - gameState.paddle1.width, newPaddleX));

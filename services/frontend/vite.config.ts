@@ -5,6 +5,8 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  root: '.', // プロジェクトルートディレクトリを明示的に指定
+  publicDir: 'public', // publicディレクトリの場所を明示的に指定
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './srcs'),

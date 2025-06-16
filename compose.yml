@@ -49,6 +49,22 @@ services:
       - transcendence_net
     restart: unless-stopped
 
+  sfu42:
+    build:
+      context: .
+      dockerfile: ./services/sfu42/Dockerfile
+    container_name: sfu42
+    ports:
+      - "3042:3042"
+      - "10101-10201:10101-10201/udp" # RTC用ポート範囲
+    environment:
+      - PORT=3042
+      - DOCKER_ENV=true
+      - HOST_IP=${HOST_IP:-192.168.1.100}  # ホストマシンのローカルIPアドレス
+    networks:
+      - transcendence_net
+    restart: unless-stopped
+
   npc_manager:
     build:
       context: ./services/api/npc_manager

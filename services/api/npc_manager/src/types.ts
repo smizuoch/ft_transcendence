@@ -67,22 +67,22 @@ export interface GameConfig {
 
 export const DIFFICULTY_SETTINGS = {
   Nightmare: {
-    returnRate: 0.99, reactionDelayMs: 50, maxSpeed: 1.2, trackingNoise: 2, trackingTimeout: 10000,
+    returnRate: 0.99, reactionDelayMs: 50, maxSpeed: 288, trackingNoise: 2, trackingTimeout: 10000, // 240 * 1.2
     pid: { kp: 1.50, ki: 0.04, kd: 0.15, maxIntegral: 120, derivativeFilter: 0.6, maxControlSpeed: 900 },
     technician: { predictionAccuracy: 0.95, courseAccuracy: 0.9 }
   },
   Hard: {
-    returnRate: 0.92, reactionDelayMs: 80, maxSpeed: 1.1, trackingNoise: 3, trackingTimeout: 8000,
+    returnRate: 0.92, reactionDelayMs: 80, maxSpeed: 264, trackingNoise: 3, trackingTimeout: 8000, // 240 * 1.1
     pid: { kp: 1.35, ki: 0.05, kd: 0.13, maxIntegral: 110, derivativeFilter: 0.55, maxControlSpeed: 800 },
     technician: { predictionAccuracy: 0.88, courseAccuracy: 0.82 }
   },
   Normal: {
-    returnRate: 0.80, reactionDelayMs: 200, maxSpeed: 0.8, trackingNoise: 10, trackingTimeout: 6000,
+    returnRate: 0.80, reactionDelayMs: 200, maxSpeed: 192, trackingNoise: 10, trackingTimeout: 6000, // 240 * 0.8
     pid: { kp: 1.00, ki: 0.10, kd: 0.08, maxIntegral: 80, derivativeFilter: 0.4, maxControlSpeed: 600 },
     technician: { predictionAccuracy: 0.8, courseAccuracy: 0.7 }
   },
   Easy: {
-    returnRate: 0.65, reactionDelayMs: 350, maxSpeed: 0.55, trackingNoise: 15, trackingTimeout: 4000,
+    returnRate: 0.65, reactionDelayMs: 350, maxSpeed: 132, trackingNoise: 15, trackingTimeout: 4000, // 240 * 0.55
     pid: { kp: 0.70, ki: 0.08, kd: 0.03, maxIntegral: 60, derivativeFilter: 0.25, maxControlSpeed: 450 },
     technician: { predictionAccuracy: 0.65, courseAccuracy: 0.55 }
   },
@@ -97,7 +97,7 @@ export const DEFAULT_NPC_CONFIG: NPCConfig = {
   followGain: 0.8,
   returnRate: 0.8,
   reactionDelayMs: 200,
-  maxSpeed: 0.8,
+  maxSpeed: 240, // プレイヤーと統一した240 pixels/second
   trackingNoise: 10,
   trackingTimeout: 6000,
   difficulty: 'Normal',
@@ -117,12 +117,12 @@ export const DEFAULT_NPC_CONFIG: NPCConfig = {
 
 export const DEFAULT_CONFIG: GameConfig = {
   winningScore: 11,
-  maxBallSpeed: 6, // ボール最大速度を大幅に制限
-  paddleSpeed: 8,
+  maxBallSpeed: 4, // ボール最大速度をさらに制限（遅くしました）
+  paddleSpeed: 4, // プレイヤーと同じ速度に統一
   ballRadius: 2, // フロントエンドに合わせて変更
   paddleWidth: 8, // フロントエンドに合わせて変更
   paddleHeight: 1.5, // より小さなパドル高さ
-  initialBallSpeed: 1.0, // 初期ボール速度をさらに低く
+  initialBallSpeed: 0.6, // 初期ボール速度をさらに低く（遅くしました）
   npc: DEFAULT_NPC_CONFIG,
 };
 
