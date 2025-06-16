@@ -425,7 +425,7 @@ io.on('connection', (socket) => {
         ...data,
         roomNumber,
         requesterId: socket.id,
-        sfuServerUrl: `http://sfu:3001` // SFU自身のURL
+        sfuServerUrl: `http://sfu42:3042` // SFU自身のURL
       }, {
         timeout: 10000,
         headers: {
