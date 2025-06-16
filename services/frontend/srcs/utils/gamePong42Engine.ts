@@ -33,12 +33,12 @@ export interface GameConfig {
 
 export const DEFAULT_CONFIG: GameConfig = {
   winningScore: 11,
-  maxBallSpeed: 12,
+  maxBallSpeed: 8, // ボール最大速度を遅く
   paddleSpeed: 8,
   ballRadius: 8,
   paddleWidth: 80,
   paddleHeight: 12,
-  initialBallSpeed: 4,
+  initialBallSpeed: 2.4, // 初期ボール速度を遅く
   npc: DEFAULT_NPC_CONFIG,
 };
 
@@ -70,6 +70,10 @@ export class GameEngine {
     speedBoost: 1.0, // ボール速度倍率
     isActive: false, // 攻撃効果が有効かどうか
   };
+
+  // 時間ベース計算用
+  private lastFrameTime: number = 0;
+  private deltaTime: number = 0;
 
   constructor(canvasWidth: number, canvasHeight: number, config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -120,6 +124,12 @@ export class GameEngine {
     };
 
     this.resetBall();
+
+    // NPC設定が有効な場合は初期化
+    if (config.npc.enabled) {
+      console.log('🤖 Initializing NPC during GameEngine construction:', config.npc);
+      this.updateNPCConfig(config.npc);
+    }
   }
 
   public getState(): GameState {
@@ -182,17 +192,34 @@ export class GameEngine {
   }
 
   public update(): 'none' | 'player1' | 'player2' {
+    // 時間ベース計算のためのデルタタイム更新
+    const currentTime = performance.now();
+    if (this.lastFrameTime === 0) {
+      this.lastFrameTime = currentTime;
+      this.deltaTime = 1000 / 60; // 初回は60fps相当として仮定
+    } else {
+      this.deltaTime = currentTime - this.lastFrameTime;
+      this.lastFrameTime = currentTime;
+    }
+
+    // デルタタイムを秒単位に変換（ミリ秒 → 秒）
+    const deltaTimeSeconds = this.deltaTime / 1000;
+
     // パドル速度を更新
     this.updatePaddleVelocities();
 
     // NPC更新（Player1用）
     if (this.npcEngine) {
-      this.npcEngine.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+      this.npcEngine.updatePaddle(this.getGameState(), 240 * deltaTimeSeconds); // 固定速度240 pixels/second（プレイヤーと統一）
+    } else if (this.config.npc.enabled && this.config.npc.player === 1) {
+      console.warn('⚠️ NPC for Player1 should be enabled but npcEngine is null');
     }
 
     // NPC更新（Player2用）
     if (this.npcEngine2) {
-      this.npcEngine2.updatePaddle(this.getGameState(), this.config.paddleSpeed);
+      this.npcEngine2.updatePaddle(this.getGameState(), 240 * deltaTimeSeconds); // 固定速度240 pixels/second（プレイヤーと統一）
+    } else if (this.config.npc.enabled && this.config.npc.player === 2) {
+      console.warn('⚠️ NPC for Player2 should be enabled but npcEngine2 is null');
     }
 
     this.updatePaddles();
@@ -250,10 +277,11 @@ export class GameEngine {
       speedBoost: this.attackEffect.isActive ? this.attackEffect.speedBoost : 1.0,
       isActive: this.attackEffect.isActive,
     };
-  }
-
-  private updateBall(): void {
+  }  private updateBall(): void {
     const { ball, canvasWidth } = this.state;
+
+    // 時間ベース計算用のデルタタイム（秒単位）
+    const deltaTimeSeconds = this.deltaTime / 1000;
 
     // 攻撃効果を適用
     const attackEffect = this.getAttackEffect();
@@ -268,8 +296,11 @@ export class GameEngine {
     ball.vx = ball.dx;
     ball.vy = ball.dy;
 
-    ball.x += ball.dx;
-    ball.y += ball.dy;
+    // 時間ベースでボールの位置を更新（speedMultiplierを反映）
+    const baseSpeed = 100; // pixels/second
+    const actualSpeed = baseSpeed * effectiveSpeedMultiplier;
+    ball.x += ball.dx * deltaTimeSeconds * actualSpeed;
+    ball.y += ball.dy * deltaTimeSeconds * actualSpeed;
 
     if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvasWidth) {
       ball.dx *= -1;
@@ -335,11 +366,25 @@ export class GameEngine {
 
     // 【速度増加システム】
     this.state.paddleHits += 1;
-    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.15, 6); // 最大6倍まで加速
+    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.08, 4); // 最大4倍まで加速、加速度を小さく
   }
 
   private checkGoals(): 'none' | 'player1' | 'player2' {
     const { ball } = this.state;
+
+    // デバッグ: ボール位置を定期的にログ出力
+    if (Date.now() % 5000 < 100) { // 5秒ごと
+      console.log('🏐 Ball position debug:', {
+        x: ball.x.toFixed(2),
+        y: ball.y.toFixed(2),
+        radius: ball.radius,
+        canvasHeight: this.state.canvasHeight,
+        topBoundary: (ball.y - ball.radius).toFixed(2),
+        bottomBoundary: (ball.y + ball.radius).toFixed(2),
+        isNearTop: ball.y - ball.radius < 10,
+        isNearBottom: ball.y + ball.radius > this.state.canvasHeight - 10
+      });
+    }
 
     if (ball.y - ball.radius < 0) {
       // Player2が得点
@@ -350,7 +395,8 @@ export class GameEngine {
       // スコア更新
       this.score.player2++;
       this.state.score.player2++;
-      console.log('Player2 scored! New score:', this.score);
+      console.log('🎯🎯🎯 Player2 scored! PidNPC DEFEATED! New score:', this.score);
+      console.log('⚽ Ball went past top boundary (y - radius < 0)');
 
       this.resetBall('player2');
 
@@ -364,7 +410,8 @@ export class GameEngine {
       // Player1が得点
       this.score.player1++;
       this.state.score.player1++;
-      console.log('Player1 scored! New score:', this.score);
+      console.log('💀💀💀 Player1 (pidNPC) scored! PLAYER ELIMINATED! New score:', this.score);
+      console.log('⚽ Ball went past bottom boundary (y + radius > canvasHeight)');
 
       this.resetBall('player1');
 

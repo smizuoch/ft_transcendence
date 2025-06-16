@@ -49,6 +49,22 @@ services:
       - transcendence_net
     restart: unless-stopped
 
+  sfu42:
+    build:
+      context: .
+      dockerfile: ./services/sfu42/Dockerfile
+    container_name: sfu42
+    ports:
+      - "3042:3042"
+      - "20000-20100:20000-20100/udp" # RTC用ポート範囲
+    environment:
+      - PORT=3042
+      - DOCKER_ENV=true
+      - HOST_IP=${HOST_IP:-192.168.1.100}  # ホストマシンのローカルIPアドレス
+    networks:
+      - transcendence_net
+    restart: unless-stopped
+
   npc_manager:
     build:
       context: ./services/api/npc_manager
@@ -86,6 +102,17 @@ services:
       - transcendence_net
     volumes:
       - user_search_data:/app/data
+    env_file:
+      - ./secrets/.env
+
+  friend_search:
+    build: ./services/api/friend_search
+    container_name: friend_search
+    restart: unless-stopped
+    networks:
+      - transcendence_net
+    volumes:
+      - friend_search_data:/app/data
     env_file:
       - ./secrets/.env
 
@@ -242,6 +269,7 @@ volumes:
   kibana_data: # Kibanaデータ用ボリューム
   auth_data: # authサービス用SQLiteデータ
   user_search_data: # user_searchサービス用SQLiteデータ
+  friend_search_data: # friend_searchサービス用SQLiteデータ
   result_search_data: # result_searchサービス用SQLiteデータ
 
 networks:

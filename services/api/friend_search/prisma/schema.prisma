@@ -1,0 +1,22 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("FRIEND_SEARCH_DATABASE_URL")
+}
+
+model Friendship {
+  id          Int      @id @default(autoincrement())
+  follower    String   // フォローする側のユーザー名
+  following   String   // フォローされる側のユーザー名
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  @@unique([follower, following])
+  @@map("friendships")
+}

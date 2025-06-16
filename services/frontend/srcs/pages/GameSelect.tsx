@@ -67,8 +67,8 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
     navigate('GamePong42');
   };
 
-  // Pong8（トーナメント）ゲームへの遷移
-  const navigateToPong8 = () => {
+  // Pong4（トーナメント）ゲームへの遷移
+  const navigateToPong4 = () => {
     navigate('GamePong4');
   };
 
@@ -78,33 +78,18 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4 relative">
-      {/* X下線 - 画面中央に大きく配置 */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div
-          className="absolute top-0 left-0 w-[200%] h-[1px]"
-          style={{
-            backgroundColor: iconColor,
-            transformOrigin: 'center',
-            transform: 'rotate(45deg) translateY(-50%)',
-            top: '50%',
-            left: '25%',
-            width: '50%',
-            height: '1px'
-          }}
-        ></div>
-        <div
-          className="absolute top-0 left-0 w-[200%] h-[1px]"
-          style={{
-            backgroundColor: iconColor,
-            transformOrigin: 'center',
-            transform: 'rotate(-45deg) translateY(-50%)',
-            top: '50%',
-            left: '25%',
-            width: '50%',
-            height: '1px'
-          }}
-        ></div>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4 relative">      {/* X下線 - 画面中央に固定サイズで配置 */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
+        <div className="relative w-[800px] h-[800px]">
+          <div
+            className="absolute w-full h-[1px] top-1/2 left-0 transform -translate-y-1/2 rotate-45"
+            style={{ backgroundColor: iconColor }}
+          ></div>
+          <div
+            className="absolute w-full h-[1px] top-1/2 left-0 transform -translate-y-1/2 -rotate-45"
+            style={{ backgroundColor: iconColor }}
+          ></div>
+        </div>
       </div>
 
       {/* MyPage ボタン - 右下に配置 */}
@@ -114,25 +99,32 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
         aria-label="Back to My Page"
       >
         <img src="/images/icons/mypage.svg" alt="MyPage" className="w-16 h-16" />
-      </button>
+      </button>      <div className="flex flex-col items-center justify-center h-full">
+        {/* ゲームボタンコンテナ - 十字配置（バツの装飾に合わせた配置） */}
+        <div className="relative w-[800px] h-[800px]">
+          {/* Pong42ボタン - 上 */}
+          <button
+            onClick={navigateToPong42}
+            className="absolute top-0 left-1/2 transform -translate-x-1/2 hover:opacity-80 transition-opacity"
+            aria-label="Play Pong 42"
+          >
+            <img src="/images/icons/pong42.svg" alt="Pong 42" className="w-80 h-80" />
+          </button>
 
-      <div className="flex flex-col items-center justify-center h-full">
-        {/* ゲームボタンコンテナ */}
-        <div className="flex justify-center items-center space-x-24 relative">
-          {/* Pong2ボタンと、その子要素としての部屋番号入力フィールド */}
+          {/* Pong2ボタンと、その子要素としての部屋番号入力フィールド - 左 */}
           <button
             onClick={() => navigateToPong2()}
-            className="relative hover:opacity-80 transition-opacity"
+            className="absolute left-0 top-1/2 transform -translate-y-1/2 hover:opacity-80 transition-opacity"
             aria-label="Play Pong 2"
           >
             <img src="/images/icons/pong2.svg" alt="Pong 2" className="w-64 h-64" />
             {/* 部屋番号入力フィールド */}
             <div
-              className="absolute w-48" // mt-[-32px] は不要
+              className="absolute w-48"
               style={{
-                top: '100%', // ボタンの下端
-                left: '50%', // ボタンの水平中央
-                transform: 'translateX(-50%) translateY(-32px)', // 上に32pxオフセット
+                top: '100%',
+                left: '50%',
+                transform: 'translateX(-50%) translateY(-32px)',
               }}
             >
               <div className="flex justify-between items-center">
@@ -142,7 +134,8 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
                       src="/images/icons/room_number_input_field.svg"
                       alt="Input field"
                       className="absolute inset-0 w-full h-full"
-                    />                    <input
+                    />
+                    <input
                       ref={(el) => {
                         if (el) inputRefs.current[index] = el;
                         return undefined;
@@ -163,25 +156,13 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
             </div>
           </button>
 
-          {/* Pong42ボタン */}
+          {/* Pong4ボタン - 右 */}
           <button
-            onClick={navigateToPong42}
-            className="hover:opacity-80 transition-opacity"
-            aria-label="Play Pong 42"
+            onClick={navigateToPong4}
+            className="absolute right-0 top-1/2 transform -translate-y-1/2 hover:opacity-80 transition-opacity"
+            aria-label="Play Pong 4"
           >
-            <img src="/images/icons/pong42.svg" alt="Pong 42" className="w-64 h-64" />
-          </button>
-
-          {/* Pong8（Tournament）ボタン */}
-          <button
-            onClick={navigateToPong8}
-            className="hover:opacity-80 transition-opacity"
-            aria-label="Play Pong Tournament"
-          >
-            <img src="/images/icons/pong.svg" alt="Pong Tournament" className="w-64 h-64" />
-            <div className="text-center mt-2 text-sm font-bold" style={{ color: '#6D6F8C' }}>
-              Tournament
-            </div>
+            <img src="/images/icons/pong4.svg" alt="Pong 4" className="w-64 h-64" />
           </button>
         </div>
       </div>

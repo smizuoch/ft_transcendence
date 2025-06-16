@@ -13,49 +13,18 @@ interface UserData {
   rank?: number;
 }
 
-// result_searchサービスのAPIレスポンス型
-interface Pong2Result {
-  id: number;
-  username: string;
-  opponentUsername: string;
-  result: 'win' | 'lose';
-  gameDate: string;
+interface FriendshipStatus {
+  isFollowing: boolean;
+  isFollowedBy: boolean;
+  isMutual: boolean;
 }
 
-interface Pong42Result {
-  id: number;
-  username: string;
+interface MockData {
+  name: string;
+  avatar: string;
   rank: number;
-  gameDate: string;
-}
-
-interface Pong2Stats {
-  totalGames: number;
-  wins: number;
-  losses: number;
-  winRate: number;
-  recentGames: Pong2Result[];
-}
-
-interface Pong42Stats {
-  totalGames: number;
-  bestRank: number;
-  averageRank: number;
-  recentGames: Pong42Result[];
-}
-
-interface UserStats {
-  username: string;
-  pong2Stats: Pong2Stats;
-  pong42Stats: Pong42Stats;
-}
-
-interface APIResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-  error?: string;
-  timestamp: string;
+  pong42RankHistory: { date: string; rank: number; }[];
+  pong2History: { date: string; isWin: boolean; opponentAvatar: string; }[];
 }
 
 const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
@@ -64,107 +33,174 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [avatarBorderColor, setAvatarBorderColor] = useState<'green' | 'gray'>('green');
   const [showFollowButton, setShowFollowButton] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
-  const [userStats, setUserStats] = useState<UserStats | null>(null);
-  const [pong42History, setPong42History] = useState<Pong42Result[]>([]);
+  const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+
+  // JWTトークンから現在のユーザー名を取得
+  useEffect(() => {
+    const getCurrentUser = () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          setCurrentUsername(payload.username);
+        }
+      } catch (error) {
+        console.error('Failed to decode JWT token:', error);
+      }
+    };
+    getCurrentUser();
+  }, []);
+
   // JWT経由でユーザー情報を取得
   useEffect(() => {
     const fetchUserData = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
+      try {          const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
+        
         if (!token) {
-          setError('Authentication token not found');
+          setError('認証が必要です');
+          setLoading(false);
           return;
         }
 
-        // ユーザー基本情報を取得
-        const userEndpoint = userId 
-          ? `/api/user-search/profile/${userId}`
-          : '/api/user-search/me';
+        // ユーザー情報を取得
+        const endpoint = userId 
+          ? `/api/user-search/profile/${userId}` // プロキシ経由に変更
+          : '/api/user-search/me'; // プロキシ経由に変更
         
-        const userResponse = await fetch(userEndpoint, {
+        const response = await fetch(endpoint, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         });
         
-        if (!userResponse.ok) {
+        if (response.ok) {
+          const result = await response.json();
+          setUserData(result.data);
+          
+          // 他のユーザーのプロフィールを見ている場合、フレンド状態をチェック
+          if (userId && result.data?.username) {
+            const friendStatusResponse = await fetch(`/api/friend-search/status/${result.data.username}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });            if (friendStatusResponse.ok) {
+              const friendResult = await friendStatusResponse.json();
+              setFriendshipStatus(friendResult.data);
+              setIsFollowing(friendResult.data.isFollowing);
+              
+              // オンライン状態の判定：画面を見ている かつ 相互フォロー状態
+              const isActuallyOnline = result.data.isOnline && friendResult.data.isMutual;
+              setAvatarBorderColor(isActuallyOnline ? 'green' : 'gray');
+            } else {
+              // フレンド状態が取得できない場合は、デフォルトでオフライン扱い
+              setAvatarBorderColor('gray');
+            }          } else {
+            // 自分のプロフィールの場合は、そのままオンライン状態を使用
+            setAvatarBorderColor(result.data.isOnline ? 'green' : 'gray');
+          }
+          
+          // フォローボタンの表示判定: 他のユーザーかつ自分自身でない場合のみ表示
+          const isOtherUser = !!userId && result.data?.username;
+          const isNotSelf = result.data?.username !== currentUsername;
+          setShowFollowButton(isOtherUser && isNotSelf);
+        } else {
           setError('Failed to fetch user data');
-          return;
         }
-
-        const userResult = await userResponse.json();
-        setUserData(userResult.data);
-        setAvatarBorderColor(userResult.data.isOnline ? 'green' : 'gray');
-        setShowFollowButton(!!userId);
-
-        // 対戦統計情報を取得
-        const targetUsername = userId || userResult.data.username;
-        const statsResponse = await fetch(`/api/results/stats/${targetUsername}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (statsResponse.ok) {
-          const statsResult = await statsResponse.json();
-          setUserStats(statsResult.data);
-        }
-
-        // PONG42の履歴データを取得（グラフ用）
-        const pong42Response = await fetch(`/api/results/pong42/${targetUsername}?limit=20`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (pong42Response.ok) {
-          const pong42Result = await pong42Response.json();
-          setPong42History(pong42Result.data);
-        }
-
       } catch (error) {
         console.error('Failed to fetch user data:', error);
         setError('Failed to fetch user data');
       } finally {
         setLoading(false);
       }
-    };
+    };    fetchUserData();
+  }, [userId, currentUsername]);
 
-    fetchUserData();
-  }, [userId]);
-  // PONG42のランキング推移グラフを生成する関数
-  const generateRankingGraph = () => {
-    if (!pong42History || pong42History.length === 0) {
-      return "0,50 100,50 200,50 300,50 400,50 500,50"; // デフォルトライン
+  // モックデータ（フォールバック用）
+  const mockData = {
+    name: userId || "NAME",
+    avatar: "/images/avatar/default_avatar.png",
+    rank: 42.00,
+    // PONG42のランキング履歴（グラフ用）
+    pong42RankHistory: [
+      { date: "2024/05/01", rank: 45 },
+      { date: "2024/05/08", rank: 38 },
+      { date: "2024/05/15", rank: 50 },
+      { date: "2024/05/22", rank: 35 },
+      { date: "2024/05/29", rank: 42 },
+      { date: "2024/06/05", rank: 48 },
+    ],
+    // PONG2の対戦履歴
+    pong2History: [
+      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
+      { date: "yyyy / mm / dd / hh:mm", isWin: false, opponentAvatar: "/images/avatar/default_avatar1.png" },
+      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
+      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
+    ],
+  };  // フォロー状態の切り替え
+  const toggleFollow = async () => {
+    if (!userData || !friendshipStatus) return;
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setError('認証が必要です');
+        return;
+      }
+
+      if (isFollowing) {
+        // アンフォロー実行
+        const response = await fetch(`/api/friend-search/unfollow/${userData.username}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });        if (response.ok) {
+          setIsFollowing(false);
+          setFriendshipStatus(prev => prev ? {
+            ...prev,
+            isFollowing: false,
+            isMutual: prev.isFollowedBy && false
+          } : null);
+          
+          // 双方向フォローでなくなったため、オンライン状態に関係なくグレーに変更
+          setAvatarBorderColor('gray');
+        } else {
+          throw new Error('アンフォローに失敗しました');
+        }
+      } else {
+        // フォロー実行
+        const response = await fetch('/api/friend-search/follow', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username: userData.username })
+        });        if (response.ok) {
+          setIsFollowing(true);
+          setFriendshipStatus(prev => prev ? {
+            ...prev,
+            isFollowing: true,
+            isMutual: prev.isFollowedBy && true
+          } : null);
+          
+          // 双方向フォローになった場合 かつ オンライン状態の場合のみ緑色に変更
+          const newIsMutual = friendshipStatus?.isFollowedBy && true;
+          const isActuallyOnline = userData.isOnline && newIsMutual;
+          setAvatarBorderColor(isActuallyOnline ? 'green' : 'gray');
+        } else {
+          throw new Error('フォローに失敗しました');
+        }
+      }
+    } catch (error) {
+      console.error('フォロー状態の変更に失敗:', error);
+      setError('フォロー状態の変更に失敗しました');
     }
-
-    // 日付でソートして最新20件を使用
-    const sortedHistory = [...pong42History]
-      .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
-      .slice(-6); // 最新6件を使用
-
-    if (sortedHistory.length < 2) {
-      return "0,50 100,50 200,50 300,50 400,50 500,50";
-    }
-
-    // ランクを0-100の範囲にマッピング（1位=100、42位=0）
-    const points = sortedHistory.map((result, index) => {
-      const x = (index / (sortedHistory.length - 1)) * 600;
-      const y = 100 - ((result.rank - 1) / 41) * 100; // 1-42を100-0にマッピング
-      return `${x},${y}`;
-    });
-
-    return points.join(' ');
-  };
-
-  // フォロー状態の切り替え
-  const toggleFollow = () => {
-    setIsFollowing(!isFollowing);
   };
 
   // ローディング状態の表示
@@ -182,36 +218,25 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       <div className="bg-[#FFFFFF] min-h-screen flex items-center justify-center">
         <p className="text-2xl text-red-500">{error}</p>
       </div>
-    );  }
+    );
+  }
+  // ユーザーデータの表示（JWTデータを優先、フォールバックはモックデータ）
+  const displayData = userData || mockData;
   
   // 型安全なプロパティアクセス用のヘルパー関数
   const getDisplayName = () => {
     if (userData) return userData.username;
-    return "Unknown User";
+    return mockData.name;
   };
   
   const getDisplayImage = () => {
     if (userData) return userData.profileImage;
-    return "/images/avatar/default_avatar.png";
+    return mockData.avatar;
   };
   
   const getDisplayRank = () => {
-    if (userStats && userStats.pong42Stats.bestRank > 0) {
-      return userStats.pong42Stats.bestRank;
-    }
-    return 0;
-  };
-
-  // 日付フォーマット関数
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).replace(/\//g, ' / ');
+    if (userData) return userData.rank || 0;
+    return mockData.rank;
   };return (
     <div className="bg-[#FFFFFF] min-h-screen p-4 relative font-sans text-[#5C5E7A]">
       <main className="max-w-7xl mx-auto flex justify-center items-start gap-12 pt-8">        {/* 左側: アバターと名前 */}
@@ -242,31 +267,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             {getDisplayName()}
           </h1>
         </section>        {/* 中央: ランキング、グラフ、戦績 */}
-        <section className="flex-1 max-w-2xl flex flex-col space-y-8 pt-4">          {/* PONG42ランキング */}
-          <div className="flex justify-center items-center space-x-4">
+        <section className="flex-1 max-w-2xl flex flex-col space-y-8 pt-4">
+          {/* PONG42ランキング */}          <div className="flex justify-center items-center space-x-4">
              <p className="text-8xl font-light text-gray-500 text-center">
-               #{getDisplayRank() || "N/A"}
+               #{getDisplayRank().toFixed(2)}
              </p>
           </div>
-
-          {/* 統計情報 */}
-          {userStats && (
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-medium text-gray-700 mb-2">PONG2 統計</h3>
-                <p className="text-sm text-gray-600">総試合数: {userStats.pong2Stats.totalGames}</p>
-                <p className="text-sm text-gray-600">勝利: {userStats.pong2Stats.wins}</p>
-                <p className="text-sm text-gray-600">敗北: {userStats.pong2Stats.losses}</p>
-                <p className="text-sm text-gray-600">勝率: {userStats.pong2Stats.winRate.toFixed(1)}%</p>
-              </div>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-medium text-gray-700 mb-2">PONG42 統計</h3>
-                <p className="text-sm text-gray-600">総試合数: {userStats.pong42Stats.totalGames}</p>
-                <p className="text-sm text-gray-600">最高順位: #{userStats.pong42Stats.bestRank}</p>
-                <p className="text-sm text-gray-600">平均順位: #{userStats.pong42Stats.averageRank.toFixed(1)}</p>
-              </div>
-            </div>
-          )}
 
           {/* PONG42ランキング推移グラフ */}
           <div className="w-full h-48">
@@ -275,18 +281,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
                 fill="none"
                 stroke="#9496A6"
                 strokeWidth="2.5"
-                points={generateRankingGraph()}
+                points="0,55 120,62 240,40 360,65 480,58 600,52"
               />
             </svg>
           </div>
 
           {/* PONG2戦績リスト */}
           <div className="space-y-4">
-            {userStats?.pong2Stats.recentGames?.map((match, index) => (
+            {mockData.pong2History.map((match, index) => (
               <div key={index} className="flex items-center justify-between py-2">
                 <div className="flex items-center space-x-6">
                   {/* 勝利時のみ表示される勝利アイコン */}
-                  {match.result === 'win' && (
+                  {match.isWin && (
                     <div className="w-10 h-10 flex items-center justify-center">
                       <img
                         src="/images/icons/win.svg"
@@ -295,31 +301,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
                       />
                     </div>
                   )}
-                  {match.result === 'lose' && (
+                  {!match.isWin && (
                     <div className="w-10 h-10"></div>
                   )}
-                  <span className="text-lg text-[#9496A6] tracking-wide text-center">
-                    {formatDate(match.gameDate)}
-                  </span>
+                  <span className="text-lg text-[#9496A6] tracking-wide text-center">{match.date}</span>
                 </div>
-                {/* 対戦相手の情報 */}
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-500">{match.opponentUsername}</span>
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200">
-                    <img
-                      src="/images/avatar/default_avatar1.png"
-                      alt="Opponent Avatar"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+                {/* 対戦相手のアバター */}
+                <div className="w-12 h-12 rounded-full overflow-hidden">
+                  <img
+                    src={match.opponentAvatar}
+                    alt="Opponent Avatar"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               </div>
             ))}
-            {(!userStats?.pong2Stats.recentGames || userStats.pong2Stats.recentGames.length === 0) && (
-              <div className="text-center text-gray-500 py-8">
-                対戦履歴がありません
-              </div>
-            )}
           </div>
         </section>
 

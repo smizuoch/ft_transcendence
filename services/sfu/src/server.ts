@@ -98,9 +98,24 @@ const getSSLOptions = () => {
 };
 
 const sslOptions = getSSLOptions();
+
+console.log('=== SFU Server Configuration ===');
+console.log('SSL Options available:', !!sslOptions);
+
+// SSL証明書が必須なのでHTTPS/WSSを強制
+if (!sslOptions) {
+  console.error('❌ SSL certificates are required for HTTPS/WSS operation');
+  console.error('Cannot start server without valid SSL certificates');
+  console.error('SFU servers must use HTTPS/WSS for WebRTC functionality');
+  process.exit(1);
+}
+
+console.log('✅ SSL certificates loaded successfully');
+console.log('🔒 Server will run with HTTPS/WSS (required for WebRTC)');
+
 const app = fastify({ 
-  logger: true,
-  ...(sslOptions && { https: sslOptions })
+  logger: true, // シンプルなロガー
+  https: sslOptions // HTTPS強制
 });
 
 // CORSの設定 - 全世界からのアクセスを許可
@@ -112,13 +127,18 @@ app.register(require('@fastify/cors'), {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 });
 
-// Socket.IOサーバーの設定
+// Socket.IOサーバーの設定（HTTPS/WSS強制）
 const io = new SocketIOServer({
   cors: {
     origin: true, // 全てのオリジンを許可
     methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  transports: ['websocket'], // WebSocketのみ使用（polling無効化）
+  allowEIO3: false, // 最新のEngine.IOのみ使用
+  serveClient: false, // クライアントファイル配信無効
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // MediasoupとRoomManagerとTournamentManagerのインスタンス
@@ -133,15 +153,89 @@ async function startServer() {
     console.log('Mediasoup service initialized');
     console.log('Starting Socket.IO event handlers...');
 
-    // Socket.IOイベントハンドラー
+    // Socket.IOイベントハンドラー（シグナリングのみ）
     io.on('connection', (socket) => {
-      console.log(`Client connected: ${socket.id}`);
+      console.log(`Client connected for signaling: ${socket.id}`);
       console.log(`Total connected clients: ${io.sockets.sockets.size}`);
 
-      // 接続時にクライアントに確認メッセージを送信
+      // 接続時にルーターのRTPCapabilitiesを送信
       socket.emit('connection-confirmed', {
-        message: 'Successfully connected to SFU server',
-        serverId: socket.id
+        message: 'Successfully connected to SFU server for signaling',
+        serverId: socket.id,
+        routerRtpCapabilities: mediasoupService.getRouterCapabilities()
+      });
+
+      // WebRTCトランスポート作成要求
+      socket.on('createWebRtcTransport', async () => {
+        try {
+          console.log(`Creating WebRTC transport for ${socket.id}`);
+          const transport = await mediasoupService.createWebRtcTransport(socket.id);
+          socket.emit('webRtcTransportCreated', transport);
+        } catch (error) {
+          console.error(`Failed to create WebRTC transport for ${socket.id}:`, error);
+          socket.emit('error', { message: 'Failed to create WebRTC transport' });
+        }
+      });
+
+      // WebRTCトランスポート接続
+      socket.on('connectWebRtcTransport', async (data: { dtlsParameters: any }) => {
+        try {
+          console.log(`Connecting WebRTC transport for ${socket.id}`);
+          await mediasoupService.connectTransport(socket.id, data.dtlsParameters);
+          socket.emit('webRtcTransportConnected');
+        } catch (error) {
+          console.error(`Failed to connect WebRTC transport for ${socket.id}:`, error);
+          socket.emit('error', { message: 'Failed to connect WebRTC transport' });
+        }
+      });
+
+      // データプロデューサー作成（ゲームデータ送信用）
+      socket.on('createDataProducer', async (data: { 
+        sctpStreamParameters: any; 
+        label?: string; 
+        protocol?: string; 
+        appData?: any 
+      }) => {
+        try {
+          console.log(`[DATA-PRODUCER] Creating data producer for ${socket.id}`, data);
+          const result = await mediasoupService.createDataProducer(
+            socket.id, 
+            data.sctpStreamParameters,
+            data.label || 'gameData',
+            data.protocol || 'gameProtocol',
+            data.appData || {}
+          );
+          console.log(`[DATA-PRODUCER] ✅ Data producer created for ${socket.id}:`, result);
+          socket.emit('dataProducerCreated', result);
+        } catch (error) {
+          console.error(`[DATA-PRODUCER] ❌ Failed to create data producer for ${socket.id}:`, error);
+          socket.emit('dataProducerCreationFailed', { 
+            message: error instanceof Error ? error.message : 'Failed to create data producer' 
+          });
+        }
+      });
+
+      // データコンシューマー作成（ゲームデータ受信用）
+      socket.on('createDataConsumer', async (data: {
+        dataProducerId: string;
+        sctpCapabilities: any;
+      }) => {
+        try {
+          console.log(`Creating data consumer for ${socket.id}`);
+          const result = await mediasoupService.createDataConsumer(
+            socket.id,
+            data.dataProducerId,
+            data.sctpCapabilities
+          );
+          if (result) {
+            socket.emit('dataConsumerCreated', result);
+          } else {
+            socket.emit('error', { message: 'Cannot create data consumer' });
+          }
+        } catch (error) {
+          console.error(`Failed to create data consumer for ${socket.id}:`, error);
+          socket.emit('error', { message: 'Failed to create data consumer' });
+        }
       });
 
       // クライアントからのpingに応答
@@ -157,8 +251,12 @@ async function startServer() {
 
       // 接続の確認
       socket.on('client-ready', (data) => {
-        console.log(`Client ${socket.id} is ready:`, data);
-        socket.emit('server-ready', { serverId: socket.id });
+        console.log(`Client ${socket.id} is ready for WebRTC:`, data);
+        socket.emit('server-ready', { 
+          serverId: socket.id,
+          requiresWebRTC: true,
+          routerRtpCapabilities: mediasoupService.getRouterCapabilities()
+        });
       });
 
       // 部屋への参加
@@ -629,11 +727,105 @@ async function startServer() {
           console.error('Error leaving tournament:', error);
         }
       });
+
+      // ルーターRTPCapabilities要求への応答
+      socket.on('get-router-capabilities', () => {
+        console.log(`[${socket.id}] Router capabilities requested`);
+        try {
+          const capabilities = mediasoupService.getRouterCapabilities();
+          socket.emit('router-capabilities', capabilities);
+          console.log(`[${socket.id}] Router capabilities sent`);
+        } catch (error) {
+          console.error(`[${socket.id}] Failed to get router capabilities:`, error);
+          socket.emit('error', { message: 'Failed to get router capabilities' });
+        }
+      });
     });
 
     // ヘルスチェックエンドポイント
     app.get('/health', async (request, reply) => {
       return { status: 'ok', timestamp: new Date().toISOString() };
+    });
+
+    // Mediasoup Router RTP capabilities エンドポイント
+    app.get('/api/router-rtp-capabilities', async (request: any, reply: any) => {
+      try {
+        const rtpCapabilities = mediasoupService.getRouterCapabilities();
+        return { rtpCapabilities };
+      } catch (error) {
+        console.error('Failed to get router RTP capabilities:', error);
+        return reply.status(500).send({
+          error: 'Failed to get router RTP capabilities',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // WebRTC Transport作成エンドポイント
+    app.post('/api/create-transport', async (request: any, reply: any) => {
+      try {
+        const { socketId } = request.body;
+        if (!socketId) {
+          return reply.status(400).send({ error: 'socketId is required' });
+        }
+        
+        const transport = await mediasoupService.createWebRtcTransport(socketId);
+        return transport;
+      } catch (error) {
+        console.error('Failed to create transport:', error);
+        return reply.status(500).send({
+          error: 'Failed to create transport',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // Transport接続エンドポイント
+    app.post('/api/connect-transport', async (request: any, reply: any) => {
+      try {
+        const { socketId, dtlsParameters } = request.body;
+        if (!socketId || !dtlsParameters) {
+          return reply.status(400).send({ 
+            error: 'socketId and dtlsParameters are required' 
+          });
+        }
+        
+        await mediasoupService.connectTransport(socketId, dtlsParameters);
+        return { success: true };
+      } catch (error) {
+        console.error('Failed to connect transport:', error);
+        return reply.status(500).send({
+          error: 'Failed to connect transport',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // Data Producer作成エンドポイント
+    app.post('/api/create-data-producer', async (request: any, reply: any) => {
+      try {
+        const { socketId, sctpStreamParameters, label, protocol, appData } = request.body;
+        if (!socketId || !sctpStreamParameters) {
+          return reply.status(400).send({ 
+            error: 'socketId and sctpStreamParameters are required' 
+          });
+        }
+        
+        const dataProducer = await mediasoupService.createDataProducer(
+          socketId, 
+          sctpStreamParameters, 
+          label || 'gameData',
+          protocol || 'gameProtocol',
+          appData || {}
+        );
+        return { id: dataProducer.id };
+      } catch (error) {
+        console.error('Failed to create data producer:', error);
+        return reply.status(500).send({
+          error: 'Failed to create data producer',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     });
 
     // サーバー情報エンドポイント
@@ -662,8 +854,78 @@ async function startServer() {
       };
     });
 
+    // DTLS接続統計エンドポイント
+    app.get('/dtls-stats', async (request, reply) => {
+      const stats = {
+        totalTransports: 0,
+        activeTransports: 0,
+        connectedTransports: 0,
+        dtlsStates: {} as Record<string, number>,
+        iceStates: {} as Record<string, number>,
+        dataProducers: 0,
+        dataConsumers: 0,
+        transports: [] as any[]
+      };
+
+      // トランスポート統計を収集
+      try {
+        // MediasoupServiceから統計を取得（メソッドを追加する必要がある）
+        const transportStats = await mediasoupService.getTransportStats();
+        
+        stats.totalTransports = transportStats.total;
+        stats.activeTransports = transportStats.active;
+        stats.connectedTransports = transportStats.connected;
+        stats.dtlsStates = transportStats.dtlsStates;
+        stats.iceStates = transportStats.iceStates;
+        stats.dataProducers = transportStats.dataProducers;
+        stats.dataConsumers = transportStats.dataConsumers;
+        stats.transports = transportStats.details;
+
+      } catch (error) {
+        console.error('Failed to get transport stats:', error);
+      }
+
+      return {
+        timestamp: new Date().toISOString(),
+        stats,
+        message: 'DTLS/WebRTC transport statistics'
+      };
+    });
+
+    // 特定のクライアントのDTLS状態を取得
+    app.get('/dtls-stats/:socketId', async (request, reply) => {
+      const { socketId } = request.params as { socketId: string };
+      
+      try {
+        const clientStats = await mediasoupService.getClientTransportStats(socketId);
+        
+        if (!clientStats) {
+          return reply.status(404).send({ 
+            error: 'Client not found',
+            socketId 
+          });
+        }
+
+        return {
+          socketId,
+          timestamp: new Date().toISOString(),
+          stats: clientStats,
+          message: `DTLS stats for client ${socketId}`
+        };
+      } catch (error) {
+        console.error(`Failed to get stats for client ${socketId}:`, error);
+        return reply.status(500).send({ 
+          error: 'Internal server error',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
     const PORT = process.env.PORT || 3001;
     const protocol = sslOptions ? 'HTTPS' : 'HTTP';
+
+    // Socket.IOをFastifyサーバーに接続（サーバー起動前）
+    io.attach(app.server);
 
     // Fastifyサーバーを起動
     await app.listen({ port: Number(PORT), host: '0.0.0.0' });
@@ -674,9 +936,6 @@ async function startServer() {
     } else {
       console.log('WS (WebSocket) connections enabled');
     }
-
-    // Socket.IOをFastifyサーバーに接続
-    io.attach(app.server);
 
   } catch (error) {
     console.error('Failed to start server:', error);
