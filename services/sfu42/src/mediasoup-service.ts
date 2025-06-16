@@ -24,8 +24,8 @@ export class MediasoupService {
           'srtp',
           'rtcp',
         ],
-        rtcMinPort: 10000,
-        rtcMaxPort: 10100,
+        rtcMinPort: 20000,
+        rtcMaxPort: 20100,
       });
 
       console.log('Mediasoup worker created successfully');
