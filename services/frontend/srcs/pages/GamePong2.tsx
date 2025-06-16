@@ -5,6 +5,7 @@ import type { NPCConfig } from "@/utils/npcTypes";
 // import { NPCSettingsPanel } from "@/utils/NPCSettingsPanel";
 // import { NPCDebugPanel } from "@/utils/NPCDebugPanel";
 import { SpectatorPanel } from "@/utils/SpectatorPanel";
+import { DTLSDebugPanel } from "@/utils/DTLSDebugPanel";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
 // NPCアルゴリズムの登録を確実に行うためにインポート
 import "@/utils/npcAlgorithmRegistry";
@@ -644,9 +645,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         npcEnabled={npcEnabled}
         npcSettings={npcSettings}
         npcDebugInfo={npcDebugInfo}
-      /> */}
-
-      {/* ============= 観戦者パネル ============= */}
+      /> */}      {/* ============= 観戦者パネル ============= */}
       {isSpectator && (
         <SpectatorPanel
           roomPlayers={roomPlayers}
@@ -654,6 +653,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           currentUserId={multiplayerService.getPlayerId() || undefined}
           score={score}
           gameStarted={gameStarted}
+        />
+      )}
+
+      {/* ============= DTLS デバッグパネル ============= */}
+      {isMultiplayer && (
+        <DTLSDebugPanel 
+          multiplayerService={multiplayerService}
+          visible={true}
         />
       )}
     </div>
