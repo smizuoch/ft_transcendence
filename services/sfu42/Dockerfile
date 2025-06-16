@@ -43,7 +43,7 @@ RUN chown -R sfu:nodejs /app
 USER sfu
 
 # ポートを公開
-EXPOSE 3001
+EXPOSE 3042
 
 # サーバーを起動
 CMD ["npm", "start"]
