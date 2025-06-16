@@ -81,10 +81,45 @@ export class AuthController {
       // ユーザー情報を取得
       const userInfo = await this.googleOAuthService.getUserInfo(tokens.access_token);
       
+      // ユーザー名の生成とバリデーション
+      const proposedUsername = `${userInfo.given_name}_${userInfo.family_name}`;
+      
+      // 英数字以外の文字をチェック（日本語、特殊文字など）
+      const alphanumericRegex = /^[a-zA-Z0-9_]+$/;
+      // 日本語文字の存在をチェック
+      const japaneseRegex = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF]/;
+      
+      if (!alphanumericRegex.test(proposedUsername) || japaneseRegex.test(proposedUsername)) {
+        console.error('Google authentication failed: Username contains non-alphanumeric or Japanese characters:', proposedUsername);
+        return res.redirect('https://localhost:8443/?error=invalid_username&message=Username must contain only alphanumeric characters', 302);
+      }
+      
+      // ユーザー名の長さをチェック（16文字まで）
+      if (proposedUsername.length > 16) {
+        console.error('Google authentication failed: Username too long:', proposedUsername);
+        return res.redirect('https://localhost:8443/?error=username_too_long&message=Username must be 16 characters or less', 302);
+      }
+      
+      // 既存ユーザーをメールアドレスでチェック（優先）
+      let existingUser = await this.userService.findByEmail(userInfo.email);
+      console.log('Google auth - checking existing user by email:', userInfo.email, 'found:', !!existingUser);
+      
+      // メールアドレスで見つからない場合、ユーザー名でもチェック
+      if (!existingUser) {
+        existingUser = await this.userService.findByUsername(proposedUsername);
+        console.log('Google auth - checking existing user by username:', proposedUsername, 'found:', !!existingUser);
+        
+        // 既存ユーザーが見つかった場合（メールが異なるが同じユーザー名）
+        if (existingUser) {
+          console.error('Google authentication failed: Username already exists for different email:', proposedUsername);
+          return res.redirect('https://localhost:8443/?error=username_taken&message=This username is already taken', 302);
+        }
+      }
+      
       // ユーザーをログインまたは作成
       const user = {
         email: userInfo.email,
-        username: `${userInfo.given_name}_${userInfo.family_name}`,
+        username: proposedUsername,
         firstName: userInfo.given_name,
         lastName: userInfo.family_name,
       };
