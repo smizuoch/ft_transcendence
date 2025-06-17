@@ -28,18 +28,8 @@ export const useGameEngine = (
       getBoundingClientRect: canvas.getBoundingClientRect()
     });
 
-    // Use the actual container size instead of calculating from window dimensions
-    // This ensures consistency with the CSS container sizing (90vmin)
-    const containerWidth = canvas.clientWidth || canvas.offsetWidth;
-    const containerHeight = canvas.clientHeight || canvas.offsetHeight;
-    const size = Math.min(containerWidth, containerHeight);
-    
-    console.log('Canvas size calculated from container:', { 
-      containerWidth, 
-      containerHeight, 
-      finalSize: size 
-    });
-    
+    const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
+    console.log('Canvas size calculated:', size);
     canvas.width = size;
     canvas.height = size;
 
