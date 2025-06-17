@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { isUserAuthenticated, getAuthToken } from '@/utils/authUtils';
 
 // DTLS接続情報の型定義
 export interface DTLSConnectionInfo {
@@ -119,6 +120,9 @@ export class MultiplayerService {
     const sfuUrl = getSFUServerUrl();
     console.log('[SFU-CONNECT] Connecting to SFU server:', sfuUrl);
 
+    // JWTトークンを取得
+    const token = getAuthToken();
+    
     // SFUサーバーにHTTPS/WSS接続
     this.socket = io(sfuUrl, {
       transports: ['websocket'], // WebSocketのみ使用（pollingを無効化）
@@ -137,7 +141,11 @@ export class MultiplayerService {
       // CORS設定
       withCredentials: true,
       // 追加のSSL設定（自己署名証明書対応）
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
+      // JWT認証設定
+      auth: {
+        token: token
+      }
     });
 
     this.socket.on('connect', async () => {
@@ -320,6 +328,12 @@ export class MultiplayerService {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // JWT認証チェック
+      if (!isUserAuthenticated()) {
+        reject(new Error('Authentication required: Invalid or missing JWT token'));
+        return;
+      }
+
       if (!this.socket) {
         reject(new Error('Socket not initialized'));
         return;
@@ -346,12 +360,20 @@ export class MultiplayerService {
       }
 
       this.isConnecting = true;
+      
+      // JWTトークンを取得してSocket.IOの認証ヘッダーに追加
+      const token = getAuthToken();
+      if (token) {
+        (this.socket as any).auth = { token };
+      }
+      
       this.socket.connect();
 
       const onConnect = () => {
         this.isConnecting = false;
         this.socket!.off('connect', onConnect);
         this.socket!.off('connect_error', onError);
+        console.log('✅ Authenticated connection established to multiplayer service');
         resolve();
       };
 
@@ -359,6 +381,7 @@ export class MultiplayerService {
         this.isConnecting = false;
         this.socket!.off('connect', onConnect);
         this.socket!.off('connect_error', onError);
+        console.error('❌ Failed to connect to multiplayer service:', error);
         reject(error);
       };
 

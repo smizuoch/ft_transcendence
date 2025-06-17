@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
+import { isUserAuthenticated } from "@/utils/authUtils";
 import type { NPCConfig } from "@/utils/npcTypes";
 // import { NPCSettingsPanel } from "@/utils/NPCSettingsPanel";
 // import { NPCDebugPanel } from "@/utils/NPCDebugPanel";
@@ -32,6 +33,15 @@ const defaultPlayers = {
 };
 
 const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNumber, players = defaultPlayers }) => {
+  // JWT認証チェック
+  useEffect(() => {
+    if (!isUserAuthenticated()) {
+      console.log('❌ GamePong2: User not authenticated, redirecting to Home');
+      navigate('Home');
+      return;
+    }
+  }, [navigate]);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [score, setScore] = useState({ player1: 0, player2: 0 });
@@ -213,6 +223,12 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       } catch (error) {
         console.error('Failed to setup multiplayer:', error);
         setMultiplayerConnected(false);
+        
+        // 認証エラーの場合はHomeページにリダイレクト
+        if (error instanceof Error && error.message.includes('Authentication required')) {
+          console.log('❌ GamePong2: Authentication error, redirecting to Home');
+          navigate('Home');
+        }
       }
     };
 
@@ -490,8 +506,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             console.log(`Auto-joining room: ${propRoomNumber}`);
           } catch (error) {
             console.error('Auto join room failed:', error);
-            alert('部屋への参加に失敗しました');
             setMultiplayerConnected(false);
+            
+            // 認証エラーの場合はHomeページにリダイレクト
+            if (error instanceof Error && error.message.includes('Authentication required')) {
+              console.log('❌ GamePong2: Authentication error, redirecting to Home');
+              navigate('Home');
+            } else {
+              alert('部屋への参加に失敗しました');
+            }
           }
         };
 
@@ -535,8 +558,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       setIsMultiplayer(true);
     } catch (error) {
       console.error('Failed to join room:', error);
-      alert('部屋への参加に失敗しました');
       setMultiplayerConnected(false);
+      
+      // 認証エラーの場合はHomeページにリダイレクト
+      if (error instanceof Error && error.message.includes('Authentication required')) {
+        console.log('❌ GamePong2: Authentication error, redirecting to Home');
+        navigate('Home');
+      } else {
+        alert('部屋への参加に失敗しました');
+      }
     }
   };
 
