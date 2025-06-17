@@ -19,12 +19,44 @@ interface FriendshipStatus {
   isMutual: boolean;
 }
 
+interface Pong2Result {
+  id: number;
+  player1Username: string;
+  player2Username: string;
+  player1Score: number;
+  player2Score: number;
+  winner: string;
+  playedAt: string;
+}
+
+interface Pong42Result {
+  id: number;
+  username: string;
+  rank: number;
+  score: number;
+  recordedAt: string;
+}
+
+interface UserStats {
+  pong2: {
+    totalGames: number;
+    wins: number;
+    losses: number;
+    winRate: number;
+  };
+  pong42: {
+    currentRank: number;
+    bestRank: number;
+    totalGames: number;
+  };
+}
+
 interface MockData {
   name: string;
   avatar: string;
   rank: number;
   pong42RankHistory: { date: string; rank: number; }[];
-  pong2History: { date: string; isWin: boolean; opponentAvatar: string; }[];
+  pong2History: { date: string; isWin: boolean; opponentAvatar: string; opponentUsername?: string; }[];
 }
 
 const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
@@ -38,6 +70,87 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [error, setError] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  
+  // 戦績データ用のstate
+  const [pong2Results, setPong2Results] = useState<Pong2Result[]>([]);
+  const [pong42Results, setPong42Results] = useState<Pong42Result[]>([]);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [resultsLoading, setResultsLoading] = useState(false);
+
+  // 戦績データを取得する関数
+  const fetchResultsData = useCallback(async (targetUsername: string) => {
+    if (!targetUsername) return;
+    
+    try {
+      setResultsLoading(true);
+      const token = localStorage.getItem('authToken');
+      
+      if (!token) {
+        console.error('認証トークンが見つかりません');
+        return;
+      }
+
+      // 並列でデータを取得
+      const [pong2Response, pong42Response, statsResponse] = await Promise.allSettled([
+        fetch(`/api/result-search/results/pong2/${targetUsername}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }),
+        fetch(`/api/result-search/results/pong42/${targetUsername}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }),
+        fetch(`/api/result-search/results/stats/${targetUsername}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+      ]);
+
+      // Pong2結果の処理
+      if (pong2Response.status === 'fulfilled' && pong2Response.value.ok) {
+        const pong2Data = await pong2Response.value.json();
+        if (pong2Data.success) {
+          setPong2Results(pong2Data.data || []);
+        }
+      } else {
+        console.warn('Pong2結果の取得に失敗しました');
+        setPong2Results([]);
+      }
+
+      // Pong42結果の処理
+      if (pong42Response.status === 'fulfilled' && pong42Response.value.ok) {
+        const pong42Data = await pong42Response.value.json();
+        if (pong42Data.success) {
+          setPong42Results(pong42Data.data || []);
+        }
+      } else {
+        console.warn('Pong42結果の取得に失敗しました');
+        setPong42Results([]);
+      }
+
+      // 統計情報の処理
+      if (statsResponse.status === 'fulfilled' && statsResponse.value.ok) {
+        const statsData = await statsResponse.value.json();
+        if (statsData.success) {
+          setUserStats(statsData.data);
+        }
+      } else {
+        console.warn('統計情報の取得に失敗しました');
+        setUserStats(null);
+      }
+
+    } catch (error) {
+      console.error('戦績データの取得中にエラーが発生しました:', error);
+    } finally {
+      setResultsLoading(false);
+    }
+  }, []);
 
   // JWTトークンから現在のユーザー名を取得（初期化時のみ）
   useEffect(() => {
@@ -121,8 +234,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
               setIsFollowing(false);
               setAvatarBorderColor('gray');
             }
-            
-            // フォローボタンの表示判定: 他のユーザーかつ自分自身でない場合のみ表示
+              // フォローボタンの表示判定: 他のユーザーかつ自分自身でない場合のみ表示
             const isNotSelf = result.data?.username !== currentUsername;
             setShowFollowButton(isNotSelf);
           } else {
@@ -132,6 +244,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             setShowFollowButton(false);
             setAvatarBorderColor(result.data.isOnline ? 'green' : 'gray');
           }
+
+          // 戦績データを取得
+          await fetchResultsData(result.data.username);
         } else {
           setError('Failed to fetch user data');
         }
@@ -141,10 +256,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       } finally {
         setLoading(false);
       }
-    };
-
-    fetchUserData();
-  }, [userId, currentUsername, initialized]);
+    };    fetchUserData();
+  }, [userId, currentUsername, initialized, fetchResultsData]);
 
   // モックデータ（フォールバック用）
   const mockData = {
@@ -159,13 +272,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       { date: "2024/05/22", rank: 35 },
       { date: "2024/05/29", rank: 42 },
       { date: "2024/06/05", rank: 48 },
-    ],
-    // PONG2の対戦履歴
+    ],    // PONG2の対戦履歴
     pong2History: [
-      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
-      { date: "yyyy / mm / dd / hh:mm", isWin: false, opponentAvatar: "/images/avatar/default_avatar1.png" },
-      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
-      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
+      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent1" },
+      { date: "yyyy / mm / dd / hh:mm", isWin: false, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent2" },
+      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent3" },
+      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent4" },
     ],
   };  // フォロー状態の切り替え（useCallbackでメモ化）
   const toggleFollow = useCallback(async () => {
@@ -255,8 +367,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   }
   // ユーザーデータの表示（JWTデータを優先、フォールバックはモックデータ）
   const displayData = userData || mockData;
-  
-  // 型安全なプロパティアクセス用のヘルパー関数
+    // 表示用データの処理
   const getDisplayName = () => {
     if (userData) return userData.username;
     return mockData.name;
@@ -268,8 +379,43 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   };
   
   const getDisplayRank = () => {
-    if (userData) return userData.rank || 0;
+    // 統計情報から現在のランクを取得、なければユーザーデータのランク、最後にモックデータ
+    if (userStats?.pong42?.currentRank) return userStats.pong42.currentRank;
+    if (userData?.rank) return userData.rank;
     return mockData.rank;
+  };
+
+  // Pong42ランキング履歴の処理（API結果から生成）
+  const getPong42RankHistory = () => {
+    if (pong42Results.length > 0) {
+      // 最新の10件を日付順にソート
+      return pong42Results
+        .slice(-10)
+        .map(result => ({
+          date: new Date(result.recordedAt).toLocaleDateString('ja-JP'),
+          rank: result.rank
+        }));
+    }
+    return mockData.pong42RankHistory;
+  };
+
+  // Pong2戦績履歴の処理（API結果から生成）
+  const getPong2History = () => {
+    if (pong2Results.length > 0) {
+      return pong2Results.slice(-10).map(result => {
+        const isCurrentUserPlayer1 = result.player1Username === (userData?.username || currentUsername);
+        const opponentUsername = isCurrentUserPlayer1 ? result.player2Username : result.player1Username;
+        const isWin = result.winner === (userData?.username || currentUsername);
+        
+        return {
+          date: new Date(result.playedAt).toLocaleDateString('ja-JP'),
+          isWin,
+          opponentAvatar: "/images/avatar/default_avatar1.png", // 対戦相手のアバターは別途取得が必要
+          opponentUsername
+        };
+      });
+    }
+    return mockData.pong2History;
   };return (
     <div className="bg-[#FFFFFF] min-h-screen p-4 relative font-sans text-[#5C5E7A]">
       <main className="max-w-7xl mx-auto flex justify-center items-start gap-12 pt-8">        {/* 左側: アバターと名前 */}
@@ -305,23 +451,49 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
              <p className="text-8xl font-light text-gray-500 text-center">
                #{getDisplayRank().toFixed(2)}
              </p>
-          </div>
-
-          {/* PONG42ランキング推移グラフ */}
+          </div>          {/* PONG42ランキング推移グラフ */}
           <div className="w-full h-48">
-             <svg className="w-full h-full" viewBox="0 0 600 100" preserveAspectRatio="none">
-              <polyline
-                fill="none"
-                stroke="#9496A6"
-                strokeWidth="2.5"
-                points="0,55 120,62 240,40 360,65 480,58 600,52"
-              />
+            <svg className="w-full h-full" viewBox="0 0 600 100" preserveAspectRatio="none">
+              {(() => {
+                const rankHistory = getPong42RankHistory();
+                if (rankHistory.length > 1) {
+                  // ランクの最大値と最小値を取得してスケーリング
+                  const ranks = rankHistory.map(item => item.rank);
+                  const minRank = Math.min(...ranks);
+                  const maxRank = Math.max(...ranks);
+                  const rankRange = maxRank - minRank || 1;
+                  
+                  // SVGポイントを生成（Y軸は上下反転）
+                  const points = rankHistory.map((item, index) => {
+                    const x = (index / (rankHistory.length - 1)) * 600;
+                    const y = 100 - ((item.rank - minRank) / rankRange) * 80 - 10; // 10px上下マージン
+                    return `${x},${y}`;
+                  }).join(' ');
+                  
+                  return (
+                    <polyline
+                      fill="none"
+                      stroke="#9496A6"
+                      strokeWidth="2.5"
+                      points={points}
+                    />
+                  );
+                } else {
+                  // デフォルトのグラフ（データがない場合）
+                  return (
+                    <polyline
+                      fill="none"
+                      stroke="#9496A6"
+                      strokeWidth="2.5"
+                      points="0,55 120,62 240,40 360,65 480,58 600,52"
+                    />
+                  );
+                }
+              })()}
             </svg>
-          </div>
-
-          {/* PONG2戦績リスト */}
+          </div>          {/* PONG2戦績リスト */}
           <div className="space-y-4">
-            {mockData.pong2History.map((match, index) => (
+            {getPong2History().map((match, index) => (
               <div key={index} className="flex items-center justify-between py-2">
                 <div className="flex items-center space-x-6">
                   {/* 勝利時のみ表示される勝利アイコン */}
@@ -337,7 +509,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
                   {!match.isWin && (
                     <div className="w-10 h-10"></div>
                   )}
-                  <span className="text-lg text-[#9496A6] tracking-wide text-center">{match.date}</span>
+                  <div className="flex flex-col">
+                    <span className="text-lg text-[#9496A6] tracking-wide text-center">{match.date}</span>
+                    {match.opponentUsername && (
+                      <span className="text-sm text-[#9496A6] opacity-75">vs {match.opponentUsername}</span>
+                    )}
+                  </div>
                 </div>
                 {/* 対戦相手のアバター */}
                 <div className="w-12 h-12 rounded-full overflow-hidden">
@@ -349,6 +526,20 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
                 </div>
               </div>
             ))}
+            
+            {/* データ読み込み中の表示 */}
+            {resultsLoading && (
+              <div className="text-center py-4">
+                <span className="text-[#9496A6]">戦績を読み込み中...</span>
+              </div>
+            )}
+            
+            {/* データがない場合の表示 */}
+            {!resultsLoading && pong2Results.length === 0 && (
+              <div className="text-center py-4">
+                <span className="text-[#9496A6]">戦績データがありません</span>
+              </div>
+            )}
           </div>
         </section>
 
