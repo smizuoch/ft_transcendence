@@ -1,8 +1,11 @@
-# Use Node.js 18 Alpine as base image
-FROM node:18-alpine
+# Use Node.js 22 Bookworm as base image
+FROM node:22-bookworm
 
-# Install bash and sqlite3 for debugging and database operations
-RUN apk add --no-cache bash sqlite
+# Install sqlite3 and other required packages
+RUN apt-get update && apt-get install -y \
+    sqlite3 \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
