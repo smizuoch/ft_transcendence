@@ -18,7 +18,7 @@ const GAMEPONG42_CONFIG = {
 };
 
 interface GamePong42Props {
-  navigate: (page: string) => void;
+  navigate: (page: string, userId?: string, roomNumber?: string, ranking?: number) => void;
 }
 
 // ミニゲーム用のインターフェイス（npc_managerサービス対応）
@@ -1012,6 +1012,18 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       console.log('💀💀💀 I AM ELIMINATED! 💀💀💀');
       console.log('🔄 useEffect execution count marker');
 
+      // 現在のアクティブプレイヤー数を取得してランキングを計算
+      const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
+      const activePlayersCount = allPlayerGames.filter(playerGame => playerGame.isActive).length;
+      const myRanking = activePlayersCount; // 脱落時の生存者数が順位
+
+      console.log('📊 Ranking calculation:', {
+        totalPlayers: allPlayerGames.length,
+        activePlayersCount,
+        myRanking,
+        myPlayerId: sfu.playerId
+      });
+
       // ゲーム終了をsfu42に通知
       console.log('📡 Sending game over notification to sfu42...');
       sfu.sendGameOver(winner);
@@ -1029,8 +1041,8 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       });
 
       const t = setTimeout(() => {
-        console.log('🚀 Navigating to GameResult now');
-        navigate("GameResult");
+        console.log('🚀 Navigating to GameResult with ranking:', myRanking);
+        navigate("GameResult", undefined, undefined, myRanking);
       }, 1200);
 
       // クリーンアップ関数は必要ない（一度だけ実行なので）
