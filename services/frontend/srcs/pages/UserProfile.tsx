@@ -453,9 +453,20 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
     if (userData) return userData.profileImage;
     return mockData.avatar;
   };
-  
-  const getDisplayRank = () => {
-    // 統計情報から現在のランクを取得、なければユーザーデータのランク、最後にモックデータ
+    const getDisplayRank = () => {
+    // PONG42の最新10回の平均順位を計算
+    if (pong42Results.length > 0) {
+      const latest10Results = pong42Results
+        .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
+        .slice(0, 10);
+      
+      if (latest10Results.length > 0) {
+        const averageRank = latest10Results.reduce((sum, result) => sum + result.rank, 0) / latest10Results.length;
+        return averageRank;
+      }
+    }
+    
+    // フォールバック: 統計情報から現在のランクを取得、なければユーザーデータのランク、最後にモックデータ
     if (userStats?.pong42?.currentRank) return userStats.pong42.currentRank;
     if (userData?.rank) return userData.rank;
     return mockData.rank;
@@ -527,7 +538,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
           </h1>
         </section>        {/* 中央: ランキング、グラフ、戦績 */}
         <section className="flex-1 max-w-2xl flex flex-col space-y-8 pt-4">
-          {/* PONG42ランキング */}          <div className="flex justify-center items-center space-x-4">
+          {/* PONG42平均ランキング（最新10回） */}          <div className="flex justify-center items-center space-x-4">
              <p className="text-8xl font-light text-gray-500 text-center">
                #{getDisplayRank().toFixed(2)}
              </p>
