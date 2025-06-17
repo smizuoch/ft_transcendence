@@ -34,10 +34,12 @@ export const useGameEngine = (
     canvas.height = size;
 
     if (!engineRef.current) {
+      // エンジンが存在しない場合のみ新規作成（初期化時のみ）
       engineRef.current = new GameEngine(size, size, config);
       console.log('Created new GameEngine with size:', size);
     } else {
-      // エンジンが既に存在する場合はキャンバスサイズを更新
+      // エンジンが既に存在する場合はボールとパドルの位置を保持してキャンバスサイズのみ更新
+      // この更新はupdateCanvasSize内で既に相対位置を保持するよう修正済み
       engineRef.current.updateCanvasSize(size, size);
       console.log('Updated existing GameEngine canvas size to:', size);
     }

@@ -982,8 +982,14 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   // リサイズ処理
   useEffect(() => {
     const handleResize = () => {
-      if (canvasRef.current) {
-        initializeEngine();
+      // リサイズ時はキャンバスのみリサイズし、ボールやパドルの位置は相対的に維持
+      if (canvasRef.current && engineRef.current) {
+        const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
+        canvasRef.current.width = size;
+        canvasRef.current.height = size;
+
+        // 既存のエンジンを使用してキャンバスサイズのみ更新
+        engineRef.current.updateCanvasSize(size, size);
       }
     };
 
