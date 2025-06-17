@@ -76,7 +76,7 @@ export class MultiplayerService {
   private dataProducer: any = null;
   private dataConsumer: any = null;
   private routerRtpCapabilities: any = null;
-  private dtlsMonitoringInterval: number | null = null;
+  private dtlsMonitoringInterval: ReturnType<typeof setInterval> | null = null;
   private webrtcDataChannelReady = false;
   private webrtcInitialized = false;
   private webrtcInitializing = false;
