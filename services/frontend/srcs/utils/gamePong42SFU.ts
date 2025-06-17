@@ -216,17 +216,30 @@ export const useGamePong42SFU = () => {
     });
 
     // Room join confirmation (from SFU server)
-    socket.on('room-join-confirmed', (data: { roomNumber: string; isRoomLeader: boolean; participantCount: number; timestamp: number }) => {
+    socket.on('room-join-confirmed', (data: { roomNumber: string; isRoomLeader: boolean; participantCount: number; countdown?: number; gameStarted?: boolean; timestamp: number }) => {
       console.log('🏠 Room join confirmed:', data);
+
+      // サーバーから割り当てられた部屋番号を設定
+      roomNumberRef.current = data.roomNumber;
 
       setLocalGameState(prev => ({
         ...prev,
         participantCount: data.participantCount,
         isRoomLeader: data.isRoomLeader,
-        roomLeaderId: data.isRoomLeader ? playerIdRef.current : prev.roomLeaderId
+        roomLeaderId: data.isRoomLeader ? playerIdRef.current : prev.roomLeaderId,
+        countdown: data.countdown !== undefined ? data.countdown : prev.countdown,
+        gameStarted: data.gameStarted !== undefined ? data.gameStarted : prev.gameStarted
       }));
 
-      console.log(`👑 Room Leader status confirmed: isLeader=${data.isRoomLeader}, playerCount=${data.participantCount}`);
+      console.log(`👑 Room Leader status confirmed: isLeader=${data.isRoomLeader}, playerCount=${data.participantCount}, room=${data.roomNumber}`);
+
+      if (data.countdown !== undefined) {
+        console.log(`⏰ Room countdown: ${data.countdown}s`);
+      }
+
+      if (data.gameStarted) {
+        console.log(`🎮 Room game already started`);
+      }
     });
 
     // Player joined (from SFU relay) - only for other players
@@ -488,6 +501,12 @@ export const useGamePong42SFU = () => {
       setState(prev => ({ ...prev, error: data.message }));
     });
 
+    // Room join error handling
+    socket.on('room-join-error', (data: { error: string; message: string }) => {
+      console.error('❌ Room join error:', data);
+      setState(prev => ({ ...prev, error: `Room join failed: ${data.message}` }));
+    });
+
     // NPC response (SFU → client)
     socket.on('npc-response', (data: { success: boolean; data?: any; error?: string; timestamp: number }) => {
       console.log('🤖 NPC response:', data);
@@ -577,8 +596,7 @@ export const useGamePong42SFU = () => {
       return;
     }
 
-    console.log('🏠 Joining GamePong42 room:', roomNumber);
-    roomNumberRef.current = roomNumber;
+    console.log('🏠 Joining GamePong42 room with smart room selection');
 
     // Reset state - will be set by server response
     setLocalGameState(prev => ({
@@ -589,12 +607,13 @@ export const useGamePong42SFU = () => {
       participantCount: 0
     }));
 
-    socketRef.current.emit('join-room', {
-      roomNumber,
-      userId: playerInfo.name
+    // GamePong42専用のルーム参加イベントを送信（サーバーが適切な部屋を選択）
+    socketRef.current.emit('join-gamepong42-room', {
+      roomNumber, // 参考値（サーバーが適切な部屋を選択）
+      playerInfo
     });
 
-    console.log('🏠 Join room request sent, waiting for server confirmation...');
+    console.log('🏠 GamePong42 room join request sent, waiting for server room assignment...');
   }, []);
 
   // 切断

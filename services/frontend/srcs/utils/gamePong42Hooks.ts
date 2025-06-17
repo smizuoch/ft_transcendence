@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { GameEngine, GameConfig } from './gamePong42Engine';
-import { PlayerInput } from './multiplayerService';
+import { PlayerInput } from './multiplayerServiceForGamePong42';
 
 export const useGameEngine = (
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
