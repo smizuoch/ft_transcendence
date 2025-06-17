@@ -14,6 +14,7 @@ import "@/utils/npcAlgorithmRegistry";
 interface PlayerInfo {
   id: number | string;
   avatar: string;
+  name?: string;
 }
 
 interface GamePong2Props {
@@ -28,8 +29,8 @@ interface GamePong2Props {
 const ICON_PATH = "/images/icons/";
 
 const defaultPlayers = {
-  player1: { id: 1, avatar: "/images/avatar/default_avatar.png" },
-  player2: { id: 2, avatar: "/images/avatar/default_avatar1.png" },
+  player1: { id: 1, avatar: "/images/avatar/default_avatar.png", name: "Player 1" },
+  player2: { id: 2, avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
 };
 
 const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNumber, players = defaultPlayers }) => {
@@ -41,6 +42,62 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       return;
     }
   }, [navigate]);
+
+  // ============= ユーザー情報取得関連の状態 =============
+  const [realPlayers, setRealPlayers] = useState<{
+    player1: PlayerInfo;
+    player2: PlayerInfo;
+  }>({
+    player1: { id: 1, avatar: "/images/avatar/default_avatar.png", name: "Player 1" },
+    player2: { id: 2, avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
+  });
+  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
+
+  // ============= APIからユーザー情報を取得 =============
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          console.log('No auth token found, using default players');
+          setIsLoadingUserData(false);
+          return;
+        }
+
+        const response = await fetch('/api/user-search/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const userData = result.data;
+          
+          // 自分の情報をplayer1として設定
+          setRealPlayers(prev => ({
+            ...prev,
+            player1: {
+              id: userData.userId,
+              avatar: userData.profileImage || "/images/avatar/default_avatar.png",
+              name: userData.username || "Player 1"
+            }
+          }));
+          
+          console.log('User data loaded:', userData);
+        } else {
+          console.error('Failed to fetch user data');
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setIsLoadingUserData(false);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameStarted, setGameStarted] = useState(false);
@@ -419,20 +476,42 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     }, 100);
 
     return () => clearInterval(interval);
-  }, [gameStarted, npcEnabled]);
-
-  const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
+  }, [gameStarted, npcEnabled]);  const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
     let displayedScore;
     let avatarPlayerKey: "player1" | "player2";
     
     if (isMultiplayer && playerNumber) {
-      const isMyScore = (side === "left");
-      if (isMyScore) {
-        displayedScore = playerNumber === 1 ? score.player1 : score.player2;
-        avatarPlayerKey = playerNumber === 1 ? "player1" : "player2";
+      // プレイヤー1の場合は画面が回転するため、アイコン位置も調整
+      if (playerNumber === 1) {
+        // Player1の場合: 左=自分、右=相手（画面回転を考慮した修正）
+        const isMyScore = (side === "left");
+        if (isMyScore) {
+          displayedScore = score.player1;
+          avatarPlayerKey = "player1";
+        } else {
+          displayedScore = score.player2;
+          avatarPlayerKey = "player2";
+        }
       } else {
-        displayedScore = playerNumber === 1 ? score.player2 : score.player1;
-        avatarPlayerKey = playerNumber === 1 ? "player2" : "player1";
+        // Player2の場合: 左=相手、右=自分
+        const isMyScore = (side === "right");
+        if (isMyScore) {
+          displayedScore = score.player2;
+          avatarPlayerKey = "player2";
+        } else {
+          displayedScore = score.player1;
+          avatarPlayerKey = "player1";
+        }
+      }
+    } else if (npcEnabled) {
+      // NPC対戦時: スコアは通常通り、アイコンは左=自分、右=NPCに固定
+      displayedScore = idx === 1 ? score.player1 : score.player2;
+      if (side === "left") {
+        // 左側は常にPlayer 1（自分）
+        avatarPlayerKey = "player1";
+      } else {
+        // 右側は常にPlayer 2（NPC）
+        avatarPlayerKey = "player2";
       }
     } else {
       displayedScore = idx === 1 ? score.player1 : score.player2;
@@ -448,6 +527,8 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       : "right-0 top-16";
     const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
 
+    const playerInfo = realPlayers[avatarPlayerKey];
+
     return (
       <div
         className={`absolute flex items-center gap-3 select-none pointer-events-none transition-all duration-700 ease-out ${
@@ -460,11 +541,18 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
         )}
 
-        <img
-          src={players[avatarPlayerKey].avatar}
-          alt="avatar"
-          className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
-        />
+        <div className="flex flex-col items-center gap-1">
+          <img
+            src={playerInfo.avatar}
+            alt="avatar"
+            className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
+          />
+          {playerInfo.name && (
+            <span className="text-white text-xs lg:text-sm font-medium">
+              {playerInfo.name}
+            </span>
+          )}
+        </div>
       </div>
     );
   };
@@ -489,12 +577,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             if (!multiplayerService.isConnectedToServer()) {
               await multiplayerService.connect();
               setMultiplayerConnected(true);
-            }
-
-            const playerInfo = {
+            }            const playerInfo = {
               id: '',
-              avatar: players.player2.avatar,
-              name: 'Player'
+              avatar: realPlayers.player2.avatar,
+              name: realPlayers.player2.name || 'Player'
             };
 
             await multiplayerService.joinRoom(propRoomNumber, playerInfo);
@@ -541,12 +627,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       if (!multiplayerService.isConnectedToServer()) {
         await multiplayerService.connect();
         setMultiplayerConnected(true);
-      }
-
-      const playerInfo = {
+      }      const playerInfo = {
         id: '',
-        avatar: players.player2.avatar,
-        name: 'Player'
+        avatar: realPlayers.player2.avatar,
+        name: realPlayers.player2.name || 'Player'
       };
 
       await multiplayerService.joinRoom(roomNumber, playerInfo);
@@ -571,7 +655,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         src="/images/background/noon.png"
         alt="bg"
         className="absolute inset-0 w-full h-full object-cover"
-      />      <div className="relative z-10 w-full h-full flex items-center justify-center">
+      />      {/* ローディング表示 */}
+      {/* {isLoadingUserData && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="text-white text-3xl">ユーザー情報を読み込み中...</div>
+        </div>
+      )} */}
+
+      <div className="relative z-10 w-full h-full flex items-center justify-center">
         <div className="relative w-[840px] h-[840px]">          <canvas 
             ref={canvasRef} 
             className={`border border-white ${playerNumber === 1 && !npcEnabled ? 'rotate-180' : ''}`}
