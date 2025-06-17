@@ -73,21 +73,19 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [pong42Results, setPong42Results] = useState<Pong42Result[]>([]);
   const [userStats, setUserStats] = useState<UserStats | null>(null);  const [resultsLoading, setResultsLoading] = useState(false);
   // 対戦相手のアバター情報を管理
-  const [opponentAvatars, setOpponentAvatars] = useState<{[username: string]: string}>({});
-  // 開発・検証用: ダミーデータを追加する関数
+  const [opponentAvatars, setOpponentAvatars] = useState<{[username: string]: string}>({});  // 開発・検証用: ダミーデータを追加する関数
   const addDummyPong2Result = () => {
     const dummyResult: Pong2Result = {
       id: Date.now(), // 一意のIDとして現在時刻を使用
       username: "aaa",
       opponentUsername: "jia_c",
       result: "win",
-      gameDate: "2025-06-17T12:00:00Z"
+      gameDate: new Date().toISOString() // 現在時刻を使用して最新データとして表示
     };
     
     setPong2Results(prevResults => [dummyResult, ...prevResults]);
     console.log('ダミーのPong2結果を追加しました:', dummyResult);
   };
-
   // 開発・検証用: Pong42ダミーデータを追加する関数
   const addDummyPong42Result = () => {
     const randomRank = Math.floor(Math.random() * 42) + 1; // 1-42のランダム
@@ -96,7 +94,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       username: "aaa",
       rank: randomRank,
       score: Math.floor(Math.random() * 1000) + 500, // 500-1500のランダムスコア
-      recordedAt: "2025-06-17T12:00:00Z"
+      recordedAt: new Date().toISOString() // 現在時刻を使用して最新データとして表示
     };
       setPong42Results(prevResults => [dummyResult, ...prevResults]);
     console.log('ダミーのPong42結果を追加しました:', dummyResult);
@@ -174,13 +172,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             'Content-Type': 'application/json'
           }
         })
-      ]);
-
-      // Pong2結果の処理
+      ]);      // Pong2結果の処理
       if (pong2Response.status === 'fulfilled' && pong2Response.value.ok) {
         const pong2Data = await pong2Response.value.json();
         if (pong2Data.success) {
           setPong2Results(pong2Data.data || []);
+          
+          // 対戦相手のアバターを非同期で取得
+          if (pong2Data.data && pong2Data.data.length > 0) {
+            const uniqueOpponents = [...new Set(pong2Data.data.map((result: Pong2Result) => result.opponentUsername))];
+            uniqueOpponents.forEach(async (opponentUsername: string) => {
+              if (opponentUsername && !opponentAvatars[opponentUsername]) {
+                await fetchOpponentAvatar(opponentUsername);
+              }
+            });
+          }
         }
       } else {
         console.warn('Pong2結果の取得に失敗しました');
@@ -323,6 +329,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
     };    fetchUserData();
   }, [userId, currentUsername, initialized, fetchResultsData]);
 
+  // 対戦相手のアバターが更新された際に再レンダリングを促す
+  useEffect(() => {
+    // opponentAvatarsが変更された場合、自動的に再レンダリングされます
+    console.log('対戦相手のアバターが更新されました:', Object.keys(opponentAvatars).length, '件');
+  }, [opponentAvatars]);
+
   // モックデータ（フォールバック用）
   const mockData = {
     name: userId || "NAME",
@@ -448,12 +460,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
     if (userData?.rank) return userData.rank;
     return mockData.rank;
   };
-
   // Pong42ランキング履歴の処理（API結果から生成）
   const getPong42RankHistory = () => {
     if (pong42Results.length > 0) {
-      // 最新の10件を日付順にソート
+      // 最新の10件を日付順にソート（最新が最後になるように）
       return pong42Results
+        .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
         .slice(-10)
         .map(result => ({
           date: new Date(result.recordedAt).toLocaleDateString('ja-JP'),
@@ -461,24 +473,27 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
         }));
     }
     return mockData.pong42RankHistory;
-  };
-
-  // Pong2戦績履歴の処理（API結果から生成）
+  };  // Pong2戦績履歴の処理（API結果から生成）
   const getPong2History = () => {
     if (pong2Results.length > 0) {
-      return pong2Results.slice(-10).map(result => {
-        // result.result is 'win' or 'lose' for the current user (result.username)
-        // Display as win if result.result === 'win' and result.username matches the profile user
-        const isCurrentUser = (userData?.username || currentUsername) === result.username;
-        const isWin = isCurrentUser && result.result === 'win';
-        // opponentUsername is provided by backend
-        return {
-          date: new Date(result.gameDate).toLocaleDateString('ja-JP'),
-          isWin,
-          opponentAvatar: "/images/avatar/default_avatar1.png", // 対戦相手のアバターは別途取得が必要
-          opponentUsername: result.opponentUsername
-        };
-      });
+      return pong2Results
+        .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
+        .slice(-10)
+        .map(result => {
+          // result.result is 'win' or 'lose' for the current user (result.username)
+          // Display as win if result.result === 'win' and result.username matches the profile user
+          const isCurrentUser = (userData?.username || currentUsername) === result.username;
+          const isWin = isCurrentUser && result.result === 'win';
+          // 対戦相手のアバターを取得（キャッシュされていればそれを使用、なければデフォルト）
+          const opponentAvatar = opponentAvatars[result.opponentUsername] || "/images/avatar/default_avatar.png";
+          
+          return {
+            date: new Date(result.gameDate).toLocaleDateString('ja-JP'),
+            isWin,
+            opponentAvatar,
+            opponentUsername: result.opponentUsername
+          };
+        });
     }
     return mockData.pong2History;
   };return (
@@ -558,8 +573,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             </svg>
           </div>          {/* PONG2戦績リスト */}
           <div className="space-y-4">
-            {getPong2History().map((match, index) => (
-              <div key={index} className="flex items-center justify-between py-2">
+            {getPong2History().reverse().map((match, index) => (
+              <div key={`${match.date}-${match.opponentUsername}-${index}`} className="flex items-center justify-between py-2">
                 <div className="flex items-center space-x-6">
                   {/* 勝利時のみ表示される勝利アイコン */}
                   {match.isWin && (
@@ -587,6 +602,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
                     src={match.opponentAvatar}
                     alt="Opponent Avatar"
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/images/avatar/default_avatar.png';
+                    }}
                   />
                 </div>
               </div>
@@ -620,6 +638,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
         />
       </button>      {/* デバッグ用のコントロールパネル（開発時のみ表示） */}
       <div className="absolute top-2 right-2 space-y-2 text-sm">
+        <div className="block px-3 py-1 bg-gray-500 text-white rounded">
+          Pong2: {pong2Results.length}件 | Pong42: {pong42Results.length}件
+        </div>
+        <div className="block px-3 py-1 bg-gray-500 text-white rounded">
+          アバター: {Object.keys(opponentAvatars).length}件
+        </div>
         <button
           onClick={() => setAvatarBorderColor(avatarBorderColor === 'green' ? 'gray' : 'green')}
           className="block px-3 py-1 bg-blue-500 text-white rounded"
