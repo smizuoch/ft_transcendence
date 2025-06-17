@@ -3,6 +3,15 @@ import { Server } from 'socket.io';
 import { createServer } from 'http';
 import cors from '@fastify/cors';
 import axios from 'axios';
+import { GamePong42Manager } from './game-pong42-manager';
+
+// GamePong42マネージャーのインスタンスを作成
+const gamePong42Manager = new GamePong42Manager();
+
+// 定期的なクリーンアップ処理（30秒間隔）
+setInterval(() => {
+  gamePong42Manager.periodicCleanup();
+}, 30000);
 
 // Types for data relay only - no state management
 interface GameCanvasData {
@@ -46,6 +55,26 @@ setInterval(() => {
 
 // NPC Manager URL for proxy requests
 const NPC_MANAGER_URL = process.env.NPC_MANAGER_URL || 'http://npc_manager:3003';
+
+// npc_managerのエミュレーションを停止する関数
+async function stopNPCManagerEmulation(roomId: string): Promise<void> {
+  try {
+    console.log(`🛑 Sending stop request to NPC Manager for room ${roomId}`);
+    const response = await axios.post(`${NPC_MANAGER_URL}/api/stop-room`, {
+      roomId: roomId
+    }, {
+      timeout: 5000
+    });
+
+    if (response.status === 200) {
+      console.log(`✅ Successfully stopped NPC Manager emulation for room ${roomId}`);
+    } else {
+      console.log(`⚠️ NPC Manager returned status ${response.status} for room ${roomId}`);
+    }
+  } catch (error) {
+    console.error(`❌ Failed to stop NPC Manager emulation for room ${roomId}:`, (error as Error).message || 'Unknown error');
+  }
+}
 
 // FastifyとSocket.IOサーバーを作成
 const fastify = Fastify({
@@ -200,90 +229,137 @@ io.on('connection', (socket) => {
     if (eventName !== 'ping' && eventName !== 'pong') {
       console.log(`🔍 SFU received event: ${eventName} from ${socket.id}`, args.length > 0 ? args[0] : '');
     }
-  });
-
-  // クライアント接続時のルーム参加確認
+  });  // クライアント接続時のルーム参加確認
   socket.on('join-gamepong42-room', (data) => {
     const { roomNumber, playerInfo } = data;
-    console.log(`👥 Client ${socket.id} joining room ${roomNumber} as ${playerInfo?.name || 'unknown'}`);
+    console.log(`👥 Client ${socket.id} requesting to join GamePong42 room, playerInfo:`, playerInfo);
 
-    // 既存のjoin-room処理と同じ処理を実行
-    // Leave any existing rooms
-    socket.rooms.forEach(room => {
-      if (room !== socket.id) {
-        socket.leave(room);
-        // Remove from room tracking
-        const roomSet = roomConnections.get(room);
-        if (roomSet) {
-          roomSet.delete(socket.id);
-          if (roomSet.size === 0) {
-            roomConnections.delete(room);
-            roomLeaders.delete(room); // Remove leader when room is empty
-            roomGameStates.delete(room); // Clean up game state
-            console.log(`🧹 Cleaned up room state for ${room}`);
-          } else if (roomLeaders.get(room) === socket.id) {
-            // If leaving player is leader, assign new leader
-            const newLeader = Array.from(roomSet)[0];
-            roomLeaders.set(room, newLeader);
-            console.log(`New leader assigned in room ${room}: ${newLeader}`);
-          }
-        }
+    // npc_managerからの接続の場合は特別に処理
+    if (playerInfo?.isNPCManager) {
+      console.log(`🤖 NPC Manager ${socket.id} joining room ${roomNumber}`);
+
+      // npc_managerを直接指定されたルームに参加させる
+      socket.join(roomNumber);
+
+      // Add to room tracking
+      if (!roomConnections.has(roomNumber)) {
+        roomConnections.set(roomNumber, new Set());
       }
-    });
+      roomConnections.get(roomNumber)!.add(socket.id);
 
-    // Join the new room
-    socket.join(roomNumber);
+      console.log(`🤖 NPC Manager ${socket.id} joined room ${roomNumber}`);
 
-    // Add to room tracking
-    if (!roomConnections.has(roomNumber)) {
-      roomConnections.set(roomNumber, new Set());
-    }
-
-    const roomSet = roomConnections.get(roomNumber)!;
-    const wasEmpty = roomSet.size === 0;
-    roomSet.add(socket.id);
-
-    // Set room leader if this is the first player
-    if (wasEmpty) {
-      roomLeaders.set(roomNumber, socket.id);
-      console.log(`Room leader assigned: ${socket.id} for room ${roomNumber}`);
-    }
-
-    const currentPlayerCount = roomSet.size;
-    const isRoomLeader = roomLeaders.get(roomNumber) === socket.id;
-
-    console.log(`Room ${roomNumber} now has ${currentPlayerCount} connections, leader: ${roomLeaders.get(roomNumber)}`);
-
-    // Send join confirmation to the joining player with leader status
-    socket.emit('room-join-confirmed', {
-      roomNumber,
-      isRoomLeader,
-      participantCount: currentPlayerCount,
-      timestamp: Date.now()
-    });
-
-    // Notify all OTHER clients in the room about the new player
-    socket.to(roomNumber).emit('player-joined', {
-      socketId: socket.id,
-      userId: playerInfo?.name || 'unknown',
-      participantCount: currentPlayerCount,
-      timestamp: Date.now()
-    });
-
-    // 新規参加者に既存の参加者リストを送信
-    const existingClients = Array.from(roomSet).filter(id => id !== socket.id);
-    if (existingClients.length > 0) {
-      console.log(`📤 Sending existing clients list to new participant ${socket.id}:`, existingClients);
-      socket.emit('existing-players-list', {
+      // Confirm join to NPC Manager
+      socket.emit('gamepong42-room-joined', {
         roomNumber,
-        existingClients,
         timestamp: Date.now()
       });
+
+      return; // npc_managerの場合はここで処理終了
     }
 
-    // ルーム内のクライアント一覧を確認（デバッグ用）
-    const clientsInRoom = io.sockets.adapter.rooms.get(roomNumber);
-    console.log(`📋 Clients in room ${roomNumber}:`, Array.from(clientsInRoom || []));
+    // GamePong42マネージャーを使用して適切な部屋を取得
+    try {
+      const room = gamePong42Manager.getAvailableRoom();
+      const actualRoomNumber = room.id;
+
+      console.log(`🏠 Assigned room ${actualRoomNumber} to client ${socket.id}`);
+
+      // 部屋に参加者を追加
+      room.addParticipant(socket.id, playerInfo);
+
+      // 部屋のゲーム状態更新コールバックを設定
+      room.onGameStateUpdate = (update) => {
+        socket.to(actualRoomNumber).emit('gamepong42-update', update);
+      };
+
+      // npc_manager停止コールバックを設定
+      room.onStopNPCManager = (roomId) => {
+        stopNPCManagerEmulation(roomId);
+      };
+
+      // 既存のjoin-room処理と同じ処理を実行
+      // Leave any existing rooms
+      socket.rooms.forEach(room => {
+        if (room !== socket.id) {
+          socket.leave(room);
+          // Remove from room tracking
+          const roomSet = roomConnections.get(room);
+          if (roomSet) {
+            roomSet.delete(socket.id);
+            if (roomSet.size === 0) {
+              roomConnections.delete(room);
+              roomLeaders.delete(room);
+              roomGameStates.delete(room);
+              console.log(`🧹 Cleaned up room state for ${room}`);
+            } else if (roomLeaders.get(room) === socket.id) {
+              const newLeader = Array.from(roomSet)[0];
+              roomLeaders.set(room, newLeader);
+              console.log(`New leader assigned in room ${room}: ${newLeader}`);
+            }
+          }
+        }
+      });
+
+      // Join the new room
+      socket.join(actualRoomNumber);
+
+      // Add to room tracking
+      if (!roomConnections.has(actualRoomNumber)) {
+        roomConnections.set(actualRoomNumber, new Set());
+      }
+
+      const roomSet = roomConnections.get(actualRoomNumber)!;
+      const wasEmpty = roomSet.size === 0;
+      roomSet.add(socket.id);
+
+      // Set room leader if this is the first player
+      if (wasEmpty) {
+        roomLeaders.set(actualRoomNumber, socket.id);
+        console.log(`Room leader assigned: ${socket.id} for room ${actualRoomNumber}`);
+      }
+
+      const currentPlayerCount = roomSet.size;
+      const isRoomLeader = roomLeaders.get(actualRoomNumber) === socket.id;
+
+      console.log(`Room ${actualRoomNumber} now has ${currentPlayerCount} connections, leader: ${roomLeaders.get(actualRoomNumber)}`);
+
+      // Send join confirmation to the joining player with leader status
+      socket.emit('room-join-confirmed', {
+        roomNumber: actualRoomNumber,
+        isRoomLeader,
+        participantCount: currentPlayerCount,
+        countdown: room.countdown,
+        gameStarted: room.gameStarted,
+        timestamp: Date.now()
+      });
+
+      // Notify all OTHER clients in the room about the new player
+      socket.to(actualRoomNumber).emit('player-joined', {
+        socketId: socket.id,
+        userId: playerInfo?.name || 'unknown',
+        participantCount: currentPlayerCount,
+        timestamp: Date.now()
+      });
+
+      // 新規参加者に既存の参加者リストを送信
+      const existingClients = Array.from(roomSet).filter(id => id !== socket.id);
+      if (existingClients.length > 0) {
+        console.log(`📤 Sending existing clients list to new participant ${socket.id}:`, existingClients);
+        socket.emit('existing-players-list', {
+          roomNumber: actualRoomNumber,
+          existingClients,
+          timestamp: Date.now()
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ Error joining GamePong42 room:', error);
+      socket.emit('room-join-error', {
+        error: 'Failed to join room',
+        message: (error as Error).message || 'Unknown error'
+      });
+    }
   });
 
   socket.on('player-game-state', (data) => {
@@ -382,8 +458,12 @@ io.on('connection', (socket) => {
   // Pure data relay - GamePong42 data (including NPC states)
   socket.on('gamepong42-data', (data) => {
     const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);
+    console.log(`📨 Received gamepong42-data from ${socket.id}:`, JSON.stringify(data).substring(0, 200) + '...');
+    console.log(`🔍 Socket rooms:`, Array.from(socket.rooms));
+    console.log(`🏠 Target room: ${roomNumber}`);
+
     if (roomNumber) {
-      console.log(`Relaying GamePong42 data from ${socket.id} in room ${roomNumber}`);
+      console.log(`🔄 Relaying GamePong42 data from ${socket.id} in room ${roomNumber}`);
 
       // Relay to all clients in the room (including sender for verification)
       io.to(roomNumber).emit('gamepong42-data', {
@@ -391,26 +471,11 @@ io.on('connection', (socket) => {
         from: socket.id,
         relayTimestamp: Date.now()
       });
+
+      console.log(`✅ Data relayed to room ${roomNumber}`);
+    } else {
+      console.warn(`❌ No valid room found for socket ${socket.id}`);
     }
-  });
-
-  // NPC Manager specific room joining (different from regular players)
-  socket.on('join-gamepong42-room', (data) => {
-    const { roomNumber, playerInfo } = data;
-    console.log(`NPC Manager joining GamePong42 room ${roomNumber} as ${playerInfo?.name || 'unknown'}`);
-
-    socket.join(roomNumber);
-
-    // Track NPC Manager connections separately if needed
-    if (playerInfo?.isNPCManager) {
-      console.log(`NPC Manager connected to room ${roomNumber}`);
-    }
-
-    // Confirm join to NPC Manager
-    socket.emit('gamepong42-room-joined', {
-      roomNumber,
-      timestamp: Date.now()
-    });
   });
 
   // NPC Request relay - クライアント→SFU→npc_manager
@@ -470,6 +535,14 @@ io.on('connection', (socket) => {
   // Disconnect handler - Only cleanup routing
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
+
+    // GamePong42の部屋から参加者を削除
+    gamePong42Manager.getAllRooms().forEach(room => {
+      if (room.hasParticipant(socket.id)) {
+        room.removeParticipant(socket.id);
+        console.log(`🚪 Removed ${socket.id} from GamePong42 room ${room.id}`);
+      }
+    });
 
     // Clean up room connections
     for (const [roomNumber, connectionSet] of roomConnections.entries()) {

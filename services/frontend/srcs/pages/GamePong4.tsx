@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
+import { isUserAuthenticated } from "@/utils/authUtils";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
 
 interface PlayerInfo {
@@ -53,6 +54,15 @@ const defaultPlayers = {
 };
 
 const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayers }) => {
+  // JWT認証チェック
+  useEffect(() => {
+    if (!isUserAuthenticated()) {
+      console.log('❌ GamePong4: User not authenticated, redirecting to Home');
+      navigate('Home');
+      return;
+    }
+  }, [navigate]);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   // ゲーム状態
@@ -91,7 +101,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
   // 重複防止フラグ
   const [tournamentResultSent, setTournamentResultSent] = useState(false);
 
-  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
 
   // canvas refコールバックで確実に初期化
@@ -482,6 +492,12 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
 
       } catch (error) {
         console.error('Failed to setup tournament connection:', error);
+        
+        // 認証エラーの場合はHomeページにリダイレクト
+        if (error instanceof Error && error.message.includes('Authentication required')) {
+          console.log('❌ GamePong4: Authentication error, redirecting to Home');
+          navigate('Home');
+        }
       }
     };
 
@@ -593,17 +609,14 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
     // トーナメントロビーが表示されている間やプレイヤーが敗退した場合はエンジンを初期化しない
     if (showTournamentLobby || isEliminated) return;
     
-    const handleResize = () => {
-      console.log('Initializing engine, canvas ref:', canvasRef.current);
-      initializeEngine();
-    };
-
-    window.addEventListener("resize", handleResize);
+    // Initialize engine once, no resize handling for fixed size game
+    console.log('Initializing engine, canvas ref:', canvasRef.current);
     // 遅延して初期化を実行（canvasがDOMに確実に存在するように）
-    const timeoutId = setTimeout(handleResize, 100);
+    const timeoutId = setTimeout(() => {
+      initializeEngine();
+    }, 100);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
       clearTimeout(timeoutId);
       stopGameLoop();
     };
@@ -1171,10 +1184,11 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
 
         {/* Game Canvas */}
         {!showTournamentLobby && !isEliminated && !tournamentCompleted && (
-          <div className="relative w-[90vmin] h-[90vmin]">
+          <div className="relative w-[840px] h-[840px]">
             <canvas 
               ref={canvasRefCallback}
-              className={`w-full h-full border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
+              className={`border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
+              style={{ width: '840px', height: '840px' }}
             />
 
             {/* Winner Display */}

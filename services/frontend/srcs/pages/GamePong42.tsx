@@ -18,7 +18,7 @@ const GAMEPONG42_CONFIG = {
 };
 
 interface GamePong42Props {
-  navigate: (page: string) => void;
+  navigate: (page: string, userId?: string, roomNumber?: string, ranking?: number) => void;
 }
 
 // ミニゲーム用のインターフェイス（npc_managerサービス対応）
@@ -727,14 +727,14 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       console.log('✅ Connected to SFU server, preparing to join GamePong42 room...');
 
       const playerInfo = playerInfoRef.current; // 固定のプレイヤー情報を使用
-      const roomNumber = 'gamepong42-room-1'; // 固定の部屋番号
-      console.log('🏠 Attempting to join room:', roomNumber, 'with player info:', playerInfo);
+      const roomNumber = 'gamepong42-auto'; // プレースホルダー（サーバーが適切な部屋を選択）
+      console.log('🏠 Requesting GamePong42 room assignment with player info:', playerInfo);
 
       try {
         sfu.joinRoom(roomNumber, playerInfo);
-        console.log('🏠 Joined room:', roomNumber);
+        console.log('🏠 GamePong42 room assignment requested');
       } catch (error) {
-        console.error('❌ Error joining room:', error);
+        console.error('❌ Error requesting room assignment:', error);
       }
     } else {
       console.log('⏳ Waiting for SFU connection to be established...');
@@ -1012,6 +1012,18 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       console.log('💀💀💀 I AM ELIMINATED! 💀💀💀');
       console.log('🔄 useEffect execution count marker');
 
+      // 現在のアクティブプレイヤー数を取得してランキングを計算
+      const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
+      const activePlayersCount = allPlayerGames.filter(playerGame => playerGame.isActive).length;
+      const myRanking = activePlayersCount; // 脱落時の生存者数が順位
+
+      console.log('📊 Ranking calculation:', {
+        totalPlayers: allPlayerGames.length,
+        activePlayersCount,
+        myRanking,
+        myPlayerId: sfu.playerId
+      });
+
       // ゲーム終了をsfu42に通知
       console.log('📡 Sending game over notification to sfu42...');
       sfu.sendGameOver(winner);
@@ -1028,9 +1040,57 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         }
       });
 
-      const t = setTimeout(() => {
-        console.log('🚀 Navigating to GameResult now');
-        navigate("GameResult");
+      // JWTを取得し、ゲーム結果をAPIに送信してから画面遷移
+      const t = setTimeout(async () => {
+        try {
+          // JWTを取得
+          const token = apiClient.getStoredToken();
+          if (!token) {
+            console.error('JWT token not found');
+            navigate("MyPage");
+            return;
+          }
+
+          // JWTからユーザー名を取得
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const username = payload.username;
+
+          // 生存者数（順位）は画面右下に表示されている値（survivors）を使用
+          // survivorsは既存の状態変数で、画面右下に表示されている値
+
+          // 現在の日付を取得（ISO文字列形式YYYY-MM-DD）
+          // サーバー側で new Date(gameDate) に変換されます
+          const today = new Date();
+          const gameDate = today.toISOString().split('T')[0]; // YYYY-MM-DD形式
+
+          console.log('🏆 Saving game result:', { username, rank: survivors, gameDate });
+
+          // ゲーム結果をresult_searchサービスに送信
+          const response = await fetch('/api/results/pong42', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              username,
+              rank: survivors,
+              gameDate
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to save game result: ${response.status}`);
+          }
+
+          console.log('✅ Game result saved successfully');
+        } catch (error) {
+          console.error('Error while saving game result:', error);
+        } finally {
+          // 処理が完了したら画面遷移
+          console.log('🚀 Navigating to MyPage');
+          navigate("MyPage");
+        }
       }, 1200);
 
       // クリーンアップ関数は必要ない（一度だけ実行なので）

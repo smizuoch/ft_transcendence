@@ -1,5 +1,4 @@
 import { io, Socket } from 'socket.io-client';
-import { isUserAuthenticated, getAuthToken } from '@/utils/authUtils';
 
 // DTLS接続情報の型定義
 export interface DTLSConnectionInfo {
@@ -95,7 +94,7 @@ export class MultiplayerService {
       // 動的にmediasoup-clientを読み込み
       const mediasoupClient = await import('mediasoup-client');
       console.log('[MEDIASOUP-LOAD] ✅ Mediasoup client module loaded');
-      
+
       this.device = new mediasoupClient.Device();
       console.log('[MEDIASOUP-LOAD] ✅ Mediasoup device created successfully');
       console.log('[MEDIASOUP-LOAD] Device handler name:', this.device.handlerName);
@@ -112,7 +111,7 @@ export class MultiplayerService {
     const getSFUServerUrl = () => {
       const hostname = window.location.hostname;
       // WebRTCにはHTTPS/WSSが必要なので、必ずhttpsを使用
-      const sfuUrl = `https://${hostname}:3001`;
+      const sfuUrl = `https://${hostname}:3042`;
       console.log('[SFU-URL] Forcing HTTPS/WSS connection to:', sfuUrl);
       return sfuUrl;
     };
@@ -120,9 +119,6 @@ export class MultiplayerService {
     const sfuUrl = getSFUServerUrl();
     console.log('[SFU-CONNECT] Connecting to SFU server:', sfuUrl);
 
-    // JWTトークンを取得
-    const token = getAuthToken();
-    
     // SFUサーバーにHTTPS/WSS接続
     this.socket = io(sfuUrl, {
       transports: ['websocket'], // WebSocketのみ使用（pollingを無効化）
@@ -141,11 +137,7 @@ export class MultiplayerService {
       // CORS設定
       withCredentials: true,
       // 追加のSSL設定（自己署名証明書対応）
-      rejectUnauthorized: false,
-      // JWT認証設定
-      auth: {
-        token: token
-      }
+      rejectUnauthorized: false
     });
 
     this.socket.on('connect', async () => {
@@ -153,10 +145,10 @@ export class MultiplayerService {
       this.playerId = this.socket!.id || null;
       console.log('🟢 [SFU-SUCCESS] Connected to SFU server:', this.playerId);
       console.log('🟢 [SFU-SUCCESS] SFU URL:', sfuUrl);
-      
+
       // WebRTC/mediasoupの初期化を開始
       await this.initializeWebRTC();
-      
+
       this.emit('connected', { playerId: this.playerId });
     });
 
@@ -175,11 +167,11 @@ export class MultiplayerService {
     // サーバーからルーターRTPCapabilitiesを受信
     this.socket.on('connection-confirmed', async (data: { routerRtpCapabilities?: any }) => {
       console.log('Connection confirmed from server:', data);
-      
+
       if (data.routerRtpCapabilities) {
         this.routerRtpCapabilities = data.routerRtpCapabilities;
         console.log('Router RTP capabilities received, initializing WebRTC...');
-        
+
         // WebRTC/DTLSを初期化
         const webRtcInitialized = await this.initializeWebRTC();
         if (webRtcInitialized) {
@@ -194,7 +186,7 @@ export class MultiplayerService {
     this.socket.on('router-capabilities', async (capabilities: any) => {
       console.log('[SOCKET] Router capabilities received:', !!capabilities);
       this.routerRtpCapabilities = capabilities;
-      
+
       // 自動的にWebRTC初期化を試行
       if (capabilities && this.device) {
         console.log('[SOCKET] Auto-initializing WebRTC with received capabilities...');
@@ -204,7 +196,7 @@ export class MultiplayerService {
         }
       }
     });
-    
+
     this.setupSocketEvents();
   }
 
@@ -328,12 +320,6 @@ export class MultiplayerService {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      // JWT認証チェック
-      if (!isUserAuthenticated()) {
-        reject(new Error('Authentication required: Invalid or missing JWT token'));
-        return;
-      }
-
       if (!this.socket) {
         reject(new Error('Socket not initialized'));
         return;
@@ -360,20 +346,12 @@ export class MultiplayerService {
       }
 
       this.isConnecting = true;
-      
-      // JWTトークンを取得してSocket.IOの認証ヘッダーに追加
-      const token = getAuthToken();
-      if (token) {
-        (this.socket as any).auth = { token };
-      }
-      
       this.socket.connect();
 
       const onConnect = () => {
         this.isConnecting = false;
         this.socket!.off('connect', onConnect);
         this.socket!.off('connect_error', onError);
-        console.log('✅ Authenticated connection established to multiplayer service');
         resolve();
       };
 
@@ -381,7 +359,6 @@ export class MultiplayerService {
         this.isConnecting = false;
         this.socket!.off('connect', onConnect);
         this.socket!.off('connect_error', onError);
-        console.error('❌ Failed to connect to multiplayer service:', error);
         reject(error);
       };
 
@@ -589,27 +566,27 @@ export class MultiplayerService {
     }
 
     this.webrtcInitializing = true;
-    
+
     if (!this.device) {
       console.error('[WebRTC-INIT] Mediasoup device not available');
       this.webrtcInitializing = false;
       return false;
     }
-    
+
     // RTPケイパビリティがまだない場合はSFUから取得
     if (!this.routerRtpCapabilities) {
       try {
         console.log('[WebRTC-INIT] Fetching RTP capabilities from SFU...');
-        const sfuUrl = `https://${window.location.hostname}:3001`;
+        const sfuUrl = `https://${window.location.hostname}:3042`;
         const response = await fetch(`${sfuUrl}/api/router-rtp-capabilities`);
-        
+
         if (!response.ok) {
           throw new Error(`Failed to fetch RTP capabilities: ${response.status}`);
         }
-        
+
         const data = await response.json();
         this.routerRtpCapabilities = data.rtpCapabilities;
-        
+
         console.log('[WebRTC-INIT] ✅ Got RTP capabilities from SFU');
       } catch (error) {
         console.error('[WebRTC-INIT] ❌ Failed to fetch RTP capabilities:', error);
@@ -619,7 +596,7 @@ export class MultiplayerService {
 
     try {
       console.log('[WebRTC-INIT] Loading device with RTP capabilities...');
-      
+
       // 重複読み込みを防ぐ
       if (!this.device.loaded) {
         // SCTPサポートを含むルーターキャパビリティでデバイスをロード
@@ -629,7 +606,7 @@ export class MultiplayerService {
             numStreams: { OS: 1024, MIS: 1024 }
           }
         };
-        
+
         await this.device.load({ routerRtpCapabilities: routerCapabilities });
         console.log('[WebRTC-INIT] ✅ Device loaded with RTP capabilities and SCTP support');
         console.log('[WebRTC-INIT] SCTP capabilities:', this.device.sctpCapabilities);
@@ -640,7 +617,7 @@ export class MultiplayerService {
       console.log('[WebRTC-INIT] Creating send transport...');
       await this.createSendTransport();
       console.log('[WebRTC-INIT] ✅ Send transport created');
-      
+
       console.log('[WebRTC-INIT] Creating receive transport...');
       await this.createRecvTransport();
       console.log('[WebRTC-INIT] ✅ Receive transport created');
@@ -663,11 +640,11 @@ export class MultiplayerService {
   private async createSendTransport() {
     return new Promise<void>((resolve, reject) => {
       this.socket!.emit('createWebRtcTransport');
-      
+
       this.socket!.once('webRtcTransportCreated', async (data: { params: any }) => {
         try {
           this.sendTransport = this.device.createSendTransport(data.params);
-          
+
           this.sendTransport.on('connect', async ({ dtlsParameters }: any, callback: any, errback: any) => {
             try {
               this.socket!.emit('connectWebRtcTransport', { dtlsParameters });
@@ -697,11 +674,11 @@ export class MultiplayerService {
   private async createRecvTransport() {
     return new Promise<void>((resolve, reject) => {
       this.socket!.emit('createWebRtcTransport');
-      
+
       this.socket!.once('webRtcTransportCreated', async (data: { params: any }) => {
         try {
           this.recvTransport = this.device.createRecvTransport(data.params);
-          
+
           this.recvTransport.on('connect', async ({ dtlsParameters }: any, callback: any, errback: any) => {
             try {
               this.socket!.emit('connectWebRtcTransport', { dtlsParameters });
@@ -732,7 +709,7 @@ export class MultiplayerService {
 
     try {
       console.log('[DATA-PRODUCER] Creating data producer...');
-      
+
       // SCTPパラメータを準備
       const sctpStreamParameters = {
         streamId: 0,
@@ -793,7 +770,7 @@ export class MultiplayerService {
       });
 
       console.log('[DATA-PRODUCER] ✅ Data producer created successfully, ID:', this.dataProducer.id);
-      
+
     } catch (error) {
       console.error('[DATA-PRODUCER] ❌ Failed to create data producer:', error);
       this.webrtcDataChannelReady = false;
@@ -821,7 +798,7 @@ export class MultiplayerService {
   // 手動でWebRTC初期化をトリガーするメソッド
   async triggerWebRTCInitialization(): Promise<boolean> {
     console.log('[MANUAL-INIT] Manual WebRTC initialization triggered');
-    
+
     if (!this.isConnected) {
       console.error('[MANUAL-INIT] Not connected to server');
       return false;
@@ -830,9 +807,9 @@ export class MultiplayerService {
     if (!this.routerRtpCapabilities) {
       console.log('[MANUAL-INIT] Requesting router capabilities from server...');
       this.socket?.emit('get-router-capabilities');
-      
+
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       if (!this.routerRtpCapabilities) {
         console.error('[MANUAL-INIT] Still no router capabilities available');
         return false;
@@ -868,11 +845,11 @@ export class MultiplayerService {
       const pc = (this.sendTransport as any)._handler?._pc;
       if (pc) {
         console.log('[DTLS-VERIFY] Found RTCPeerConnection');
-        
+
         result.dtlsState = pc.connectionState || 'unknown';
         result.iceState = pc.iceConnectionState || 'unknown';
-        
-        result.isConnected = pc.connectionState === 'connected' && 
+
+        result.isConnected = pc.connectionState === 'connected' &&
                            pc.iceConnectionState === 'connected';
 
         try {
@@ -883,7 +860,7 @@ export class MultiplayerService {
                 console.log(`[DTLS-VERIFY] Certificate found: ${(stat as any).fingerprintAlgorithm} ${(stat as any).fingerprint}`);
               }
             }
-            
+
             if (stat.type === 'candidate-pair' && (stat as any).state === 'succeeded') {
               result.selectedCandidatePair = stat;
               console.log(`[DTLS-VERIFY] Selected candidate pair: ${(stat as any).localCandidateId || 'unknown'} -> ${(stat as any).remoteCandidateId || 'unknown'}`);
@@ -916,7 +893,7 @@ export class MultiplayerService {
 
     this.dtlsMonitoringInterval = setInterval(async () => {
       const verification = await this.verifyDTLSConnection();
-      
+
       if (verification.isConnected) {
         console.log('[DTLS-MONITOR] ✅ DTLS connection is healthy');
       } else {
@@ -998,12 +975,12 @@ export class MultiplayerService {
   // トーナメント関連メソッド
   createTournament(maxPlayers: number, playerInfo: PlayerInfo) {
     console.log('createTournament called with:', { maxPlayers, playerInfo });
-    console.log('Socket status:', { 
-      hasSocket: !!this.socket, 
+    console.log('Socket status:', {
+      hasSocket: !!this.socket,
       isConnected: this.isConnected,
-      socketConnected: this.socket?.connected 
+      socketConnected: this.socket?.connected
     });
-    
+
     if (this.socket && this.isConnected) {
       console.log('Emitting create-tournament event');
       this.socket.emit('create-tournament', {
@@ -1036,7 +1013,7 @@ export class MultiplayerService {
   reportTournamentResult(tournamentId: string, matchId: string, winnerId: string) {
     console.log('reportTournamentResult called:', { tournamentId, matchId, winnerId });
     console.log('Socket connected:', this.isConnected);
-    
+
     if (this.socket && this.isConnected) {
       console.log('Emitting tournament-match-result to server');
       this.socket.emit('tournament-match-result', {

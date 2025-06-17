@@ -515,6 +515,44 @@ fastify.delete('/games/:gameId', async (request: any, reply: any) => {
   }
 });
 
+// 部屋のNPCを停止するエンドポイント
+fastify.post('/api/stop-room', async (request: any, reply: any) => {
+  try {
+    const { roomId } = request.body;
+
+    if (!roomId) {
+      reply.status(400).send({
+        success: false,
+        error: 'roomId is required'
+      });
+      return;
+    }
+
+    console.log(`🛑 Received stop request for room ${roomId}`);
+
+    const result = stopRoomNPCs(roomId);
+
+    if (result.success) {
+      reply.send({
+        success: true,
+        message: result.message
+      });
+    } else {
+      reply.status(404).send({
+        success: false,
+        error: result.message
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error stopping room NPCs:', error);
+    request.log.error(error);
+    reply.status(500).send({
+      success: false,
+      error: 'Failed to stop room NPCs'
+    });
+  }
+});
+
 // 統計情報を取得
 fastify.get('/api/npc/stats', async () => {
   return {

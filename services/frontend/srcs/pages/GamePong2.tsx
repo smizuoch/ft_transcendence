@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
+import { isUserAuthenticated } from "@/utils/authUtils";
 import type { NPCConfig } from "@/utils/npcTypes";
 // import { NPCSettingsPanel } from "@/utils/NPCSettingsPanel";
 // import { NPCDebugPanel } from "@/utils/NPCDebugPanel";
@@ -32,6 +33,15 @@ const defaultPlayers = {
 };
 
 const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNumber, players = defaultPlayers }) => {
+  // JWT認証チェック
+  useEffect(() => {
+    if (!isUserAuthenticated()) {
+      console.log('❌ GamePong2: User not authenticated, redirecting to Home');
+      navigate('Home');
+      return;
+    }
+  }, [navigate]);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [score, setScore] = useState({ player1: 0, player2: 0 });
@@ -98,7 +108,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     pid?: { error: number; p: number; i: number; d: number; output: number };
   } | null>(null);
 
-  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
   // engineRefの未使用警告を抑制
   void engineRef;
@@ -213,6 +223,12 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       } catch (error) {
         console.error('Failed to setup multiplayer:', error);
         setMultiplayerConnected(false);
+        
+        // 認証エラーの場合はHomeページにリダイレクト
+        if (error instanceof Error && error.message.includes('Authentication required')) {
+          console.log('❌ GamePong2: Authentication error, redirecting to Home');
+          navigate('Home');
+        }
       }
     };
 
@@ -236,15 +252,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   }, []);
 
   useEffect(() => {
-    const handleResize = () => {
-      initializeEngine();
-    };
-
-    window.addEventListener("resize", handleResize);
-    handleResize();
+    // Initialize engine once, no resize handling for fixed size game
+    initializeEngine();
 
     return () => {
-      window.removeEventListener("resize", handleResize);
       stopGameLoop();
     };
   }, [initializeEngine, stopGameLoop]);
@@ -490,8 +501,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             console.log(`Auto-joining room: ${propRoomNumber}`);
           } catch (error) {
             console.error('Auto join room failed:', error);
-            alert('部屋への参加に失敗しました');
             setMultiplayerConnected(false);
+            
+            // 認証エラーの場合はHomeページにリダイレクト
+            if (error instanceof Error && error.message.includes('Authentication required')) {
+              console.log('❌ GamePong2: Authentication error, redirecting to Home');
+              navigate('Home');
+            } else {
+              alert('部屋への参加に失敗しました');
+            }
           }
         };
 
@@ -535,8 +553,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       setIsMultiplayer(true);
     } catch (error) {
       console.error('Failed to join room:', error);
-      alert('部屋への参加に失敗しました');
       setMultiplayerConnected(false);
+      
+      // 認証エラーの場合はHomeページにリダイレクト
+      if (error instanceof Error && error.message.includes('Authentication required')) {
+        console.log('❌ GamePong2: Authentication error, redirecting to Home');
+        navigate('Home');
+      } else {
+        alert('部屋への参加に失敗しました');
+      }
     }
   };
 
@@ -546,12 +571,11 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         src="/images/background/noon.png"
         alt="bg"
         className="absolute inset-0 w-full h-full object-cover"
-      />
-
-      <div className="relative z-10 w-full h-full flex items-center justify-center">
-        <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>          <canvas 
+      />      <div className="relative z-10 w-full h-full flex items-center justify-center">
+        <div className="relative w-[840px] h-[840px]">          <canvas 
             ref={canvasRef} 
-            className={`w-full h-full border border-white ${playerNumber === 1 && !npcEnabled ? 'rotate-180' : ''}`}
+            className={`border border-white ${playerNumber === 1 && !npcEnabled ? 'rotate-180' : ''}`}
+            style={{ width: '840px', height: '840px' }}
           />
 
           {gameStarted && !gameOver && (
