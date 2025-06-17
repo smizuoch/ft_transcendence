@@ -48,7 +48,7 @@ export const useGameEngine = (
     onScore: (scorer: 'player1' | 'player2') => void,
     gameStarted: boolean,
     keysRef: React.RefObject<{ [key: string]: boolean }>,
-    paddleAndBallColor?: string, // 色パラメータ
+    paddleAndBallColor?: string | (() => string), // 色パラメータ（文字列または関数）
     isPVEMode?: boolean, // PVEモード（npcEnabledに対応）
     remotePlayerInput?: PlayerInput | boolean | any, // リモートプレイヤー入力
     playerNumber?: number | 'spectator' | boolean, // プレイヤー番号
@@ -214,7 +214,8 @@ export const useGameEngine = (
       }
 
       if (engineRef.current) {
-        engineRef.current.draw(ctx, paddleAndBallColor || '#212121');
+        const color = typeof paddleAndBallColor === 'function' ? paddleAndBallColor() : (paddleAndBallColor || '#212121');
+        engineRef.current.draw(ctx, color);
       }
 
       // ゲーム状態を60fpsで送信（GamePong42の場合は常に送信、観戦者モードは除く）

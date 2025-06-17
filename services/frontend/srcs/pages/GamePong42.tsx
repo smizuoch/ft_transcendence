@@ -949,7 +949,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
           stableHandleScore, // onScore
           gameStarted, // gameStarted
           keysRef, // keysRef
-          getPaddleAndBallColor(), // paddleAndBallColor
+          () => getPaddleAndBallColor(), // パドルとボールの色を関数として渡して動的に更新できるようにする
           true, // isPVEMode
           null, // remotePlayerInput
           2, // playerNumber（Player2）
@@ -962,7 +962,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         stopGameLoop();
       };
     }
-  }, [gameStarted, initializeEngine, startGameLoop, stopGameLoop]);
+  }, [gameStarted, initializeEngine, startGameLoop, stopGameLoop, survivors]);
 
   // キャンバスマウント時の初期化
   useEffect(() => {
@@ -1195,7 +1195,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
               const isNPCStale = hasNPCGame && isCanvasStale(npcCanvasId);
 
               if (isPlayerStale || isNPCStale) {
-                if (i < 3 && Date.now() % 2000 < 100) {
+                if (i < 3 && Date.now() % 3000 < 100) {
                   console.log(`⏰💀 Canvas ${i} HIDDEN: stale updates (playerStale: ${isPlayerStale}, npcStale: ${isNPCStale})`);
                 }
                 return null;
