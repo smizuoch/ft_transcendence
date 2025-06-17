@@ -1040,9 +1040,57 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         }
       });
 
-      const t = setTimeout(() => {
-        console.log('🚀 Navigating to GameResult with ranking:', myRanking);
-        navigate("GameResult", undefined, undefined, myRanking);
+      // JWTを取得し、ゲーム結果をAPIに送信してから画面遷移
+      const t = setTimeout(async () => {
+        try {
+          // JWTを取得
+          const token = apiClient.getStoredToken();
+          if (!token) {
+            console.error('JWT token not found');
+            navigate("MyPage");
+            return;
+          }
+
+          // JWTからユーザー名を取得
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const username = payload.username;
+
+          // 生存者数（順位）は画面右下に表示されている値（survivors）を使用
+          // survivorsは既存の状態変数で、画面右下に表示されている値
+
+          // 現在の日付を取得（ISO文字列形式YYYY-MM-DD）
+          // サーバー側で new Date(gameDate) に変換されます
+          const today = new Date();
+          const gameDate = today.toISOString().split('T')[0]; // YYYY-MM-DD形式
+
+          console.log('🏆 Saving game result:', { username, rank: survivors, gameDate });
+
+          // ゲーム結果をresult_searchサービスに送信
+          const response = await fetch('/api/results/pong42', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              username,
+              rank: survivors,
+              gameDate
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to save game result: ${response.status}`);
+          }
+
+          console.log('✅ Game result saved successfully');
+        } catch (error) {
+          console.error('Error while saving game result:', error);
+        } finally {
+          // 処理が完了したら画面遷移
+          console.log('🚀 Navigating to MyPage');
+          navigate("MyPage");
+        }
       }, 1200);
 
       // クリーンアップ関数は必要ない（一度だけ実行なので）
