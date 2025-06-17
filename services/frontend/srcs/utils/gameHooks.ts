@@ -1,8 +1,8 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, RefObject } from 'react';
 import { GameEngine, GameConfig } from './gameEngine';
 
 export const useGameEngine = (
-  canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  canvasRef: RefObject<HTMLCanvasElement | null>,
   config?: GameConfig
 ) => {
   const engineRef = useRef<GameEngine | null>(null);
@@ -25,14 +25,62 @@ export const useGameEngine = (
       getBoundingClientRect: canvas.getBoundingClientRect()
     });
 
-    const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
-    console.log('Canvas size calculated:', size);
+    // Fixed canvas size - completely static, no responsive behavior
+    const size = 840;
+    
+    // Fixed game element sizes to prevent responsive scaling
+    const fixedConfig: GameConfig = {
+      winningScore: 11,
+      maxBallSpeed: 12,
+      paddleSpeed: 8,
+      ballRadius: 8,           // 固定値：ボールの半径
+      paddleWidth: 80,         // 固定値：パドルの幅
+      paddleHeight: 12,        // 固定値：パドルの高さ
+      initialBallSpeed: 4,
+      npc: config?.npc || {
+        player: 1,
+        mode: 'technician',
+        enabled: false,
+        reactionDelay: 0.05,
+        positionNoise: 2,
+        followGain: 0.9,
+        difficulty: 'Nightmare',
+        returnRate: 0.99,
+        reactionDelayMs: 50,
+        maxSpeed: 1.2,
+        trackingNoise: 2,
+        trackingTimeout: 10000,
+        pid: {
+          kp: 1.50,
+          ki: 0.04,
+          kd: 0.15,
+          maxIntegral: 120,
+          derivativeFilter: 0.6,
+          maxControlSpeed: 900,
+        },
+        technician: {
+          predictionAccuracy: 0.95,
+          courseAccuracy: 0.9
+        }
+      }
+    };
+    
+    console.log('Canvas and game elements set to fixed values:', { 
+      canvasSize: size,
+      ballRadius: fixedConfig.ballRadius,
+      paddleWidth: fixedConfig.paddleWidth,
+      paddleHeight: fixedConfig.paddleHeight
+    });
+    
+    // Set both pixel size AND CSS size to prevent browser scaling
     canvas.width = size;
     canvas.height = size;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
 
     if (!engineRef.current) {
-      engineRef.current = new GameEngine(size, size, config);
-      console.log('Created new GameEngine with size:', size);
+      engineRef.current = new GameEngine(size, size, fixedConfig);
+      console.log('Created new GameEngine with fixed config:', fixedConfig);
     } else {
       // エンジンが既に存在する場合はキャンバスサイズを更新
       engineRef.current.updateCanvasSize(size, size);
@@ -44,7 +92,7 @@ export const useGameEngine = (
   const startGameLoop = useCallback((
     onScore: (scorer: 'player1' | 'player2') => void,
     gameStarted: boolean,
-    keysRef: React.RefObject<{ [key: string]: boolean }>,
+    keysRef: RefObject<{ [key: string]: boolean }>,
     paddleAndBallColor?: string, // 色パラメータ
     isPVEMode?: boolean, // PVEモードかどうか
     remotePlayerInput?: { up: boolean; down: boolean; timestamp: number } | null, // マルチプレイヤー入力

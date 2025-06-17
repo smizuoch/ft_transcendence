@@ -101,7 +101,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
   // 重複防止フラグ
   const [tournamentResultSent, setTournamentResultSent] = useState(false);
 
-  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
 
   // canvas refコールバックで確実に初期化
@@ -609,17 +609,14 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
     // トーナメントロビーが表示されている間やプレイヤーが敗退した場合はエンジンを初期化しない
     if (showTournamentLobby || isEliminated) return;
     
-    const handleResize = () => {
-      console.log('Initializing engine, canvas ref:', canvasRef.current);
-      initializeEngine();
-    };
-
-    window.addEventListener("resize", handleResize);
+    // Initialize engine once, no resize handling for fixed size game
+    console.log('Initializing engine, canvas ref:', canvasRef.current);
     // 遅延して初期化を実行（canvasがDOMに確実に存在するように）
-    const timeoutId = setTimeout(handleResize, 100);
+    const timeoutId = setTimeout(() => {
+      initializeEngine();
+    }, 100);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
       clearTimeout(timeoutId);
       stopGameLoop();
     };
@@ -1187,10 +1184,11 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
 
         {/* Game Canvas */}
         {!showTournamentLobby && !isEliminated && !tournamentCompleted && (
-          <div className="relative w-[90vmin] h-[90vmin]">
+          <div className="relative w-[840px] h-[840px]">
             <canvas 
               ref={canvasRefCallback}
-              className={`w-full h-full border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
+              className={`border border-white ${playerNumber === 1 ? 'rotate-180' : ''}`}
+              style={{ width: '840px', height: '840px' }}
             />
 
             {/* Winner Display */}

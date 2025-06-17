@@ -108,7 +108,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     pid?: { error: number; p: number; i: number; d: number; output: number };
   } | null>(null);
 
-  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef as React.RefObject<HTMLCanvasElement>, DEFAULT_CONFIG);
+  const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
   // engineRefの未使用警告を抑制
   void engineRef;
@@ -252,15 +252,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   }, []);
 
   useEffect(() => {
-    const handleResize = () => {
-      initializeEngine();
-    };
-
-    window.addEventListener("resize", handleResize);
-    handleResize();
+    // Initialize engine once, no resize handling for fixed size game
+    initializeEngine();
 
     return () => {
-      window.removeEventListener("resize", handleResize);
       stopGameLoop();
     };
   }, [initializeEngine, stopGameLoop]);
@@ -576,12 +571,11 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         src="/images/background/noon.png"
         alt="bg"
         className="absolute inset-0 w-full h-full object-cover"
-      />
-
-      <div className="relative z-10 w-full h-full flex items-center justify-center">
-        <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>          <canvas 
+      />      <div className="relative z-10 w-full h-full flex items-center justify-center">
+        <div className="relative w-[840px] h-[840px]">          <canvas 
             ref={canvasRef} 
-            className={`w-full h-full border border-white ${playerNumber === 1 && !npcEnabled ? 'rotate-180' : ''}`}
+            className={`border border-white ${playerNumber === 1 && !npcEnabled ? 'rotate-180' : ''}`}
+            style={{ width: '840px', height: '840px' }}
           />
 
           {gameStarted && !gameOver && (
