@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 interface UserProfileProps {
   navigate: (page: string) => void;
@@ -28,17 +28,21 @@ interface MockData {
 }
 
 const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
-  // 状態管理
+  // 状態管理 - すべてのhooksを最初に定義
   const [isFollowing, setIsFollowing] = useState(false);
   const [avatarBorderColor, setAvatarBorderColor] = useState<'green' | 'gray'>('green');
   const [showFollowButton, setShowFollowButton] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
-  // JWTトークンから現在のユーザー名を取得
+  // JWTトークンから現在のユーザー名を取得（初期化時のみ）
   useEffect(() => {
+    if (initialized) return;
+    
     const getCurrentUser = () => {
       try {
         const token = localStorage.getItem('authToken');
@@ -46,17 +50,24 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
           const payload = JSON.parse(atob(token.split('.')[1]));
           setCurrentUsername(payload.username);
         }
+        setInitialized(true);
       } catch (error) {
         console.error('Failed to decode JWT token:', error);
+        setInitialized(true);
       }
     };
     getCurrentUser();
-  }, []);
-
-  // JWT経由でユーザー情報を取得
+  }, [initialized]);
+  // JWT経由でユーザー情報を取得（初期化完了後のみ）
   useEffect(() => {
+    if (!initialized) return;
+    
     const fetchUserData = async () => {
-      try {          const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const token = localStorage.getItem('authToken'); // 'jwt_token' から 'authToken' に変更
         
         if (!token) {
           setError('認証が必要です');
@@ -80,33 +91,47 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
           const result = await response.json();
           setUserData(result.data);
           
-          // 他のユーザーのプロフィールを見ている場合、フレンド状態をチェック
+          // 他のユーザーのプロフィールを見ている場合のみフレンド状態をチェック
           if (userId && result.data?.username) {
-            const friendStatusResponse = await fetch(`/api/friend-search/status/${result.data.username}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            try {
+              const friendStatusResponse = await fetch(`/api/friend-search/status/${result.data.username}`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (friendStatusResponse.ok) {
+                const friendResult = await friendStatusResponse.json();
+                setFriendshipStatus(friendResult.data);
+                setIsFollowing(friendResult.data.isFollowing);
+                
+                // オンライン状態の判定：画面を見ている かつ 相互フォロー状態
+                const isActuallyOnline = result.data.isOnline && friendResult.data.isMutual;
+                setAvatarBorderColor(isActuallyOnline ? 'green' : 'gray');
+              } else {
+                // フレンド状態が取得できない場合は、デフォルトでオフライン扱い
+                setFriendshipStatus(null);
+                setIsFollowing(false);
+                setAvatarBorderColor('gray');
               }
-            });            if (friendStatusResponse.ok) {
-              const friendResult = await friendStatusResponse.json();
-              setFriendshipStatus(friendResult.data);
-              setIsFollowing(friendResult.data.isFollowing);
-              
-              // オンライン状態の判定：画面を見ている かつ 相互フォロー状態
-              const isActuallyOnline = result.data.isOnline && friendResult.data.isMutual;
-              setAvatarBorderColor(isActuallyOnline ? 'green' : 'gray');
-            } else {
-              // フレンド状態が取得できない場合は、デフォルトでオフライン扱い
+            } catch (friendError) {
+              console.error('Failed to fetch friend status:', friendError);
+              setFriendshipStatus(null);
+              setIsFollowing(false);
               setAvatarBorderColor('gray');
-            }          } else {
-            // 自分のプロフィールの場合は、そのままオンライン状態を使用
+            }
+            
+            // フォローボタンの表示判定: 他のユーザーかつ自分自身でない場合のみ表示
+            const isNotSelf = result.data?.username !== currentUsername;
+            setShowFollowButton(isNotSelf);
+          } else {
+            // 自分のプロフィールの場合
+            setFriendshipStatus(null);
+            setIsFollowing(false);
+            setShowFollowButton(false);
             setAvatarBorderColor(result.data.isOnline ? 'green' : 'gray');
           }
-          
-          // フォローボタンの表示判定: 他のユーザーかつ自分自身でない場合のみ表示
-          const isOtherUser = !!userId && result.data?.username;
-          const isNotSelf = result.data?.username !== currentUsername;
-          setShowFollowButton(isOtherUser && isNotSelf);
         } else {
           setError('Failed to fetch user data');
         }
@@ -116,8 +141,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       } finally {
         setLoading(false);
       }
-    };    fetchUserData();
-  }, [userId, currentUsername]);
+    };
+
+    fetchUserData();
+  }, [userId, currentUsername, initialized]);
 
   // モックデータ（フォールバック用）
   const mockData = {
@@ -140,8 +167,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
       { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png" },
     ],
-  };  // フォロー状態の切り替え
-  const toggleFollow = async () => {
+  };  // フォロー状態の切り替え（useCallbackでメモ化）
+  const toggleFollow = useCallback(async () => {
     if (!userData || !friendshipStatus) return;
     
     try {
@@ -159,13 +186,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
-        });        if (response.ok) {
+        });
+
+        if (response.ok) {
           setIsFollowing(false);
-          setFriendshipStatus(prev => prev ? {
-            ...prev,
+          const newFriendshipStatus = friendshipStatus ? {
+            ...friendshipStatus,
             isFollowing: false,
-            isMutual: prev.isFollowedBy && false
-          } : null);
+            isMutual: friendshipStatus.isFollowedBy && false
+          } : null;
+          setFriendshipStatus(newFriendshipStatus);
           
           // 双方向フォローでなくなったため、オンライン状態に関係なくグレーに変更
           setAvatarBorderColor('gray');
@@ -181,13 +211,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ username: userData.username })
-        });        if (response.ok) {
+        });
+
+        if (response.ok) {
           setIsFollowing(true);
-          setFriendshipStatus(prev => prev ? {
-            ...prev,
+          const newFriendshipStatus = friendshipStatus ? {
+            ...friendshipStatus,
             isFollowing: true,
-            isMutual: prev.isFollowedBy && true
-          } : null);
+            isMutual: friendshipStatus.isFollowedBy && true
+          } : null;
+          setFriendshipStatus(newFriendshipStatus);
           
           // 双方向フォローになった場合 かつ オンライン状態の場合のみ緑色に変更
           const newIsMutual = friendshipStatus?.isFollowedBy && true;
@@ -201,7 +234,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       console.error('フォロー状態の変更に失敗:', error);
       setError('フォロー状態の変更に失敗しました');
     }
-  };
+  }, [userData, friendshipStatus, isFollowing]);
 
   // ローディング状態の表示
   if (loading) {
