@@ -23,19 +23,19 @@ interface Pong2Result {
   id: number;
   username: string;
   opponentUsername: string;
-  result: string; // ← result か winner どちらかAPIに合わせて
-  gameDate: string;
+  result: string; // 'win' | 'lose'
+  gameDate: string; // ISO string format
 }
 
 interface Pong42Result {
   id: number;
   username: string;
   rank: number;
-  score: number;
-  recordedAt: string;
+  gameDate: string; // ISO string format
 }
 
 interface UserStats {
+  username: string;
   pong2: {
     totalGames: number;
     wins: number;
@@ -43,9 +43,10 @@ interface UserStats {
     winRate: number;
   };
   pong42: {
-    currentRank: number;
+    currentRank?: number;
     bestRank: number;
     totalGames: number;
+    averageRank: number;
   };
 }
 
@@ -85,16 +86,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
     
     setPong2Results(prevResults => [dummyResult, ...prevResults]);
     console.log('ダミーのPong2結果を追加しました:', dummyResult);
-  };
-  // 開発・検証用: Pong42ダミーデータを追加する関数
+  };  // 開発・検証用: Pong42ダミーデータを追加する関数
   const addDummyPong42Result = () => {
     const randomRank = Math.floor(Math.random() * 42) + 1; // 1-42のランダム
     const dummyResult: Pong42Result = {
       id: Date.now(), // 一意のIDとして現在時刻を使用
       username: "aaa",
       rank: randomRank,
-      score: Math.floor(Math.random() * 1000) + 500, // 500-1500のランダムスコア
-      recordedAt: new Date().toISOString() // 現在時刻を使用して最新データとして表示
+      gameDate: new Date().toISOString() // 現在時刻を使用して最新データとして表示
     };
       setPong42Results(prevResults => [dummyResult, ...prevResults]);
     console.log('ダミーのPong42結果を追加しました:', dummyResult);
@@ -138,7 +137,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
 
     return '/images/avatar/default_avatar.png';
   }, [opponentAvatars]);
-
   // 戦績データを取得する関数
   const fetchResultsData = useCallback(async (targetUsername: string) => {
     if (!targetUsername) return;
@@ -150,29 +148,27 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       if (!token) {
         console.error('認証トークンが見つかりません');
         return;
-      }
-
-      // 並列でデータを取得
+      }      // 並列でデータを取得 - 正しいエンドポイントパスを使用
       const [pong2Response, pong42Response, statsResponse] = await Promise.allSettled([
-        fetch(`/api/result-search/results/pong2/${targetUsername}`, {
+        fetch(`/api/results/pong2/${encodeURIComponent(targetUsername)}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }),
-        fetch(`/api/result-search/results/pong42/${targetUsername}`, {
+        fetch(`/api/results/pong42/${encodeURIComponent(targetUsername)}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }),
-        fetch(`/api/result-search/results/stats/${targetUsername}`, {
+        fetch(`/api/results/stats/${encodeURIComponent(targetUsername)}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         })
-      ]);      // Pong2結果の処理
+      ]);// Pong2結果の処理
       if (pong2Response.status === 'fulfilled' && pong2Response.value.ok) {
         const pong2Data = await pong2Response.value.json();
         if (pong2Data.success) {
@@ -202,13 +198,26 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       } else {
         console.warn('Pong42結果の取得に失敗しました');
         setPong42Results([]);
-      }
-
-      // 統計情報の処理
+      }      // 統計情報の処理
       if (statsResponse.status === 'fulfilled' && statsResponse.value.ok) {
         const statsData = await statsResponse.value.json();
-        if (statsData.success) {
-          setUserStats(statsData.data);
+        if (statsData.success && statsData.data) {
+          // API レスポンス構造に合わせて変換
+          const convertedStats: UserStats = {
+            username: statsData.data.username,
+            pong2: {
+              totalGames: statsData.data.pong2Stats?.totalGames || 0,
+              wins: statsData.data.pong2Stats?.wins || 0,
+              losses: statsData.data.pong2Stats?.losses || 0,
+              winRate: statsData.data.pong2Stats?.winRate || 0,
+            },
+            pong42: {
+              bestRank: statsData.data.pong42Stats?.bestRank || 42,
+              totalGames: statsData.data.pong42Stats?.totalGames || 0,
+              averageRank: statsData.data.pong42Stats?.averageRank || 42,
+            }
+          };
+          setUserStats(convertedStats);
         }
       } else {
         console.warn('統計情報の取得に失敗しました');
@@ -216,11 +225,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       }
 
     } catch (error) {
-      console.error('戦績データの取得中にエラーが発生しました:', error);
-    } finally {
+      console.error('戦績データの取得中にエラーが発生しました:', error);    } finally {
       setResultsLoading(false);
     }
-  }, []);
+  }, [fetchOpponentAvatar]);
 
   // JWTトークンから現在のユーザー名を取得（初期化時のみ）
   useEffect(() => {
@@ -452,12 +460,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const getDisplayImage = () => {
     if (userData) return userData.profileImage;
     return mockData.avatar;
-  };
-    const getDisplayRank = () => {
+  };    const getDisplayRank = () => {
     // PONG42の最新10回の平均順位を計算
     if (pong42Results.length > 0) {
       const latest10Results = pong42Results
-        .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
+        .sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime())
         .slice(0, 10);
       
       if (latest10Results.length > 0) {
@@ -466,20 +473,19 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       }
     }
     
-    // フォールバック: 統計情報から現在のランクを取得、なければユーザーデータのランク、最後にモックデータ
-    if (userStats?.pong42?.currentRank) return userStats.pong42.currentRank;
+    // フォールバック: 統計情報から平均ランクを取得、なければユーザーデータのランク、最後にモックデータ
+    if (userStats?.pong42?.averageRank) return userStats.pong42.averageRank;
     if (userData?.rank) return userData.rank;
     return mockData.rank;
-  };
-  // Pong42ランキング履歴の処理（API結果から生成）
+  };// Pong42ランキング履歴の処理（API結果から生成）
   const getPong42RankHistory = () => {
     if (pong42Results.length > 0) {
       // 最新の10件を日付順にソート（最新が最後になるように）
       return pong42Results
-        .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
+        .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
         .slice(-10)
         .map(result => ({
-          date: new Date(result.recordedAt).toLocaleDateString('ja-JP'),
+          date: new Date(result.gameDate).toLocaleDateString('ja-JP'),
           rank: result.rank
         }));
     }
@@ -488,13 +494,13 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const getPong2History = () => {
     if (pong2Results.length > 0) {
       return pong2Results
-        .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
-        .slice(-10)
+        .sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime()) // 最新順
+        .slice(0, 10) // 最新10件
         .map(result => {
           // result.result is 'win' or 'lose' for the current user (result.username)
           // Display as win if result.result === 'win' and result.username matches the profile user
-          const isCurrentUser = (userData?.username || currentUsername) === result.username;
-          const isWin = isCurrentUser && result.result === 'win';
+          const profileUsername = userData?.username || currentUsername;
+          const isWin = result.username === profileUsername && result.result === 'win';
           // 対戦相手のアバターを取得（キャッシュされていればそれを使用、なければデフォルト）
           const opponentAvatar = opponentAvatars[result.opponentUsername] || "/images/avatar/default_avatar.png";
           
@@ -552,12 +558,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
                   const ranks = rankHistory.map(item => item.rank);
                   const minRank = Math.min(...ranks);
                   const maxRank = Math.max(...ranks);
-                  const rankRange = maxRank - minRank || 1;
-                  
-                  // SVGポイントを生成（Y軸は上下反転）
+                  const rankRange = maxRank - minRank || 1;                  // SVGポイントを生成（1位が常に上、42位が常に下）
                   const points = rankHistory.map((item, index) => {
                     const x = (index / (rankHistory.length - 1)) * 600;
-                    const y = 100 - ((item.rank - minRank) / rankRange) * 80 - 10; // 10px上下マージン
+                    // 1位=10px(上), 42位=90px(下) の固定スケール
+                    const y = ((item.rank - 1) / 41) * 80 + 10;
                     return `${x},${y}`;
                   }).join(' ');
                   
@@ -584,7 +589,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
             </svg>
           </div>          {/* PONG2戦績リスト */}
           <div className="space-y-4">
-            {getPong2History().reverse().map((match, index) => (
+            {getPong2History().map((match, index) => (
               <div key={`${match.date}-${match.opponentUsername}-${index}`} className="flex items-center justify-between py-2">
                 <div className="flex items-center space-x-6">
                   {/* 勝利時のみ表示される勝利アイコン */}
