@@ -68,12 +68,78 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [error, setError] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
-  
-  // 戦績データ用のstate
+    // 戦績データ用のstate
   const [pong2Results, setPong2Results] = useState<Pong2Result[]>([]);
   const [pong42Results, setPong42Results] = useState<Pong42Result[]>([]);
-  const [userStats, setUserStats] = useState<UserStats | null>(null);
-  const [resultsLoading, setResultsLoading] = useState(false);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);  const [resultsLoading, setResultsLoading] = useState(false);
+  // 対戦相手のアバター情報を管理
+  const [opponentAvatars, setOpponentAvatars] = useState<{[username: string]: string}>({});
+  // 開発・検証用: ダミーデータを追加する関数
+  const addDummyPong2Result = () => {
+    const dummyResult: Pong2Result = {
+      id: Date.now(), // 一意のIDとして現在時刻を使用
+      username: "aaa",
+      opponentUsername: "jia_c",
+      result: "win",
+      gameDate: "2025-06-17T12:00:00Z"
+    };
+    
+    setPong2Results(prevResults => [dummyResult, ...prevResults]);
+    console.log('ダミーのPong2結果を追加しました:', dummyResult);
+  };
+
+  // 開発・検証用: Pong42ダミーデータを追加する関数
+  const addDummyPong42Result = () => {
+    const randomRank = Math.floor(Math.random() * 42) + 1; // 1-42のランダム
+    const dummyResult: Pong42Result = {
+      id: Date.now(), // 一意のIDとして現在時刻を使用
+      username: "aaa",
+      rank: randomRank,
+      score: Math.floor(Math.random() * 1000) + 500, // 500-1500のランダムスコア
+      recordedAt: "2025-06-17T12:00:00Z"
+    };
+      setPong42Results(prevResults => [dummyResult, ...prevResults]);
+    console.log('ダミーのPong42結果を追加しました:', dummyResult);
+  };
+
+  // 対戦相手のアバターを取得する関数
+  const fetchOpponentAvatar = useCallback(async (username: string): Promise<string> => {
+    // 既にキャッシュされている場合は返す
+    if (opponentAvatars[username]) {
+      return opponentAvatars[username];
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        return '/images/avatar/default_avatar.png';
+      }
+
+      const response = await fetch(`/api/user-search/profile/${encodeURIComponent(username)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const avatar = result.data?.profileImage || '/images/avatar/default_avatar.png';
+        
+        // キャッシュに保存
+        setOpponentAvatars(prev => ({
+          ...prev,
+          [username]: avatar
+        }));
+        
+        return avatar;
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch avatar for ${username}:`, error);
+    }
+
+    return '/images/avatar/default_avatar.png';
+  }, [opponentAvatars]);
 
   // 戦績データを取得する関数
   const fetchResultsData = useCallback(async (targetUsername: string) => {
@@ -565,6 +631,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
           className="block px-3 py-1 bg-purple-500 text-white rounded"
         >
           フォローボタン: {showFollowButton ? '表示' : '非表示'}
+        </button>
+        <button
+          onClick={addDummyPong2Result}
+          className="block px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+        >
+          ダミーPong2追加
+        </button>
+        <button
+          onClick={addDummyPong42Result}
+          className="block px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600"
+        >
+          ダミーPong42追加
         </button>
       </div>
 
