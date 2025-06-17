@@ -21,12 +21,10 @@ interface FriendshipStatus {
 
 interface Pong2Result {
   id: number;
-  player1Username: string;
-  player2Username: string;
-  player1Score: number;
-  player2Score: number;
-  winner: string;
-  playedAt: string;
+  username: string;
+  opponentUsername: string;
+  result: string; // ← result か winner どちらかAPIに合わせて
+  gameDate: string;
 }
 
 interface Pong42Result {
@@ -403,15 +401,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const getPong2History = () => {
     if (pong2Results.length > 0) {
       return pong2Results.slice(-10).map(result => {
-        const isCurrentUserPlayer1 = result.player1Username === (userData?.username || currentUsername);
-        const opponentUsername = isCurrentUserPlayer1 ? result.player2Username : result.player1Username;
-        const isWin = result.winner === (userData?.username || currentUsername);
-        
+        // result.result is 'win' or 'lose' for the current user (result.username)
+        // Display as win if result.result === 'win' and result.username matches the profile user
+        const isCurrentUser = (userData?.username || currentUsername) === result.username;
+        const isWin = isCurrentUser && result.result === 'win';
+        // opponentUsername is provided by backend
         return {
-          date: new Date(result.playedAt).toLocaleDateString('ja-JP'),
+          date: new Date(result.gameDate).toLocaleDateString('ja-JP'),
           isWin,
           opponentAvatar: "/images/avatar/default_avatar1.png", // 対戦相手のアバターは別途取得が必要
-          opponentUsername
+          opponentUsername: result.opponentUsername
         };
       });
     }
