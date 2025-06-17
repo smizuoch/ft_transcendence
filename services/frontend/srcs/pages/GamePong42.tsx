@@ -1041,8 +1041,8 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       });
 
       const t = setTimeout(() => {
-        console.log('🚀 Navigating to GameResult with ranking:', myRanking);
-        navigate("GameResult", undefined, undefined, myRanking);
+        console.log('🚀 Navigating to MyPage');
+        navigate("MyPage");
       }, 1200);
 
       // クリーンアップ関数は必要ない（一度だけ実行なので）
