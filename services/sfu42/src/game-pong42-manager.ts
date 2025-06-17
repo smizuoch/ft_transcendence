@@ -12,9 +12,9 @@ export class GamePong42Room {
 
   // ゲーム状態管理
   public gameState: GamePong42GameState;
-  public gameLoop: NodeJS.Timeout | null = null;
+  public gameLoop: any | null = null;
 
-  private countdownTimer: NodeJS.Timeout | null = null;
+  private countdownTimer: any | null = null;
   private countdownStarted: boolean = false;
 
   constructor(id: string) {
@@ -72,6 +72,9 @@ export class GamePong42Room {
   // 参加者にゲーム状態を送信するためのコールバック
   public onGameStateUpdate?: (update: GamePong42Update) => void;
 
+  // npc_managerを停止するためのコールバック
+  public onStopNPCManager?: (roomId: string) => void;
+
   addParticipant(playerId: string, playerInfo: PlayerInfo): void {
     this.lastActivity = new Date();
     if (!this.participants.has(playerId)) {
@@ -90,13 +93,9 @@ export class GamePong42Room {
     const removed = this.participants.delete(playerId);
     this.gameState.roomState.participantCount = this.participants.size;
 
-    // 全員いなくなったらカウントダウン停止
-    if (this.participants.size === 0 && this.countdownTimer) {
-      clearInterval(this.countdownTimer);
-      this.countdownTimer = null;
-      this.countdownStarted = false;
-      this.countdown = 30;
-      this.stopGameLoop();
+    // 全員いなくなったらカウントダウン停止と部屋の初期化
+    if (this.participants.size === 0) {
+      this.resetRoomToInitialState();
     }
 
     return removed;
@@ -144,7 +143,7 @@ export class GamePong42Room {
       if (this.shouldStartGame()) {
         this.startGame();
       }
-    }, 1000);
+    }, 1000) as any;
   }
 
   startGame(): void {
@@ -192,7 +191,7 @@ export class GamePong42Room {
         };
         this.onGameStateUpdate(update);
       }
-    }, 1000 / 60);
+    }, 1000 / 60) as any;
   }
 
   // ゲームループ停止
@@ -404,11 +403,89 @@ export class GamePong42Room {
       this.countdownTimer = null;
     }
     this.stopGameLoop();
+  }  // 部屋を試合前の状態に初期化
+  resetRoomToInitialState(): void {
+    console.log(`🔄 Resetting room ${this.id} to initial state`);
+
+    // npc_managerの停止処理を実行
+    if (this.onStopNPCManager) {
+      console.log(`🛑 Stopping NPC manager for room ${this.id}`);
+      this.onStopNPCManager(this.id);
+    }
+
+    // タイマーを停止
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer);
+      this.countdownTimer = null;
+    }
+    this.stopGameLoop();
+
+    // 状態をリセット
+    this.countdown = 30;
+    this.gameStarted = false;
+    this.gameOver = false;
+    this.npcCount = 0;
+    this.countdownStarted = false;
+    this.lastActivity = new Date();
+
+    // ゲーム状態を初期化
+    this.gameState = this.initializeGameState();
+
+    console.log(`✅ Room ${this.id} reset complete`);
+  }
+
+  // カウントダウンが0かつ生存クライアントが0の場合の初期化チェック
+  checkForRoomReset(): void {
+    if (this.countdown <= 0 && this.participants.size === 0 && this.gameStarted) {
+      console.log(`🔄 Room ${this.id} meets reset conditions (countdown: ${this.countdown}, participants: ${this.participants.size})`);
+      this.resetRoomToInitialState();
+    }
+  }
+
+  // 新しいクライアントが入室可能かチェック
+  canJoinRoom(): boolean {
+    // カウントダウンが0になった部屋には入室不可
+    if (this.countdown <= 0 && this.gameStarted) {
+      console.log(`❌ Room ${this.id} cannot be joined - game already started`);
+      return false;
+    }
+
+    // カウントダウン中なら入室可能
+    if (this.countdown > 0 && this.countdownStarted) {
+      console.log(`✅ Room ${this.id} can be joined - countdown in progress (${this.countdown}s remaining)`);
+      return true;
+    }
+
+    // まだカウントダウンが始まっていない場合も入室可能
+    if (!this.countdownStarted) {
+      console.log(`✅ Room ${this.id} can be joined - countdown not started yet`);
+      return true;
+    }
+
+    return true;
   }
 }
 
 export class GamePong42Manager {
   private rooms: Map<string, GamePong42Room> = new Map();
+
+  // カウントダウン中の入室可能な部屋を取得、なければ新しい部屋を作成
+  getAvailableRoom(): GamePong42Room {
+    // 既存の部屋の中でカウントダウン中の部屋を探す
+    for (const room of this.rooms.values()) {
+      if (room.canJoinRoom()) {
+        console.log(`🏠 Found available room: ${room.id}`);
+        return room;
+      }
+    }
+
+    // 入室可能な部屋がない場合、新しい部屋を作成
+    const roomId = `gamepong42-room-${Date.now()}`;
+    console.log(`🆕 Creating new room: ${roomId}`);
+    const newRoom = new GamePong42Room(roomId);
+    this.rooms.set(roomId, newRoom);
+    return newRoom;
+  }
 
   getOrCreateRoom(roomId: string): GamePong42Room {
     if (!this.rooms.has(roomId)) {
@@ -431,7 +508,7 @@ export class GamePong42Manager {
   }
 
   addParticipant(roomId: string, playerId: string, playerInfo: PlayerInfo): GamePong42Room {
-    const room = this.getOrCreateRoom(roomId);
+    const room = this.getAvailableRoom(); // 既存のロジックを使用
     room.addParticipant(playerId, playerInfo);
     return room;
   }
@@ -463,5 +540,20 @@ export class GamePong42Manager {
       room.cleanup();
     }
     this.rooms.clear();
+  }
+
+  // 定期的に空の部屋や初期化が必要な部屋をチェック
+  periodicCleanup(): void {
+    for (const [roomId, room] of this.rooms.entries()) {
+      // 部屋が空で、かつゲームが開始されている場合は初期化
+      room.checkForRoomReset();
+
+      // 参加者がいない部屋を削除
+      if (room.getParticipantCount() === 0) {
+        console.log(`🗑️ Removing empty room: ${roomId}`);
+        room.cleanup();
+        this.rooms.delete(roomId);
+      }
+    }
   }
 }

@@ -727,14 +727,14 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       console.log('✅ Connected to SFU server, preparing to join GamePong42 room...');
 
       const playerInfo = playerInfoRef.current; // 固定のプレイヤー情報を使用
-      const roomNumber = 'gamepong42-room-1'; // 固定の部屋番号
-      console.log('🏠 Attempting to join room:', roomNumber, 'with player info:', playerInfo);
+      const roomNumber = 'gamepong42-auto'; // プレースホルダー（サーバーが適切な部屋を選択）
+      console.log('🏠 Requesting GamePong42 room assignment with player info:', playerInfo);
 
       try {
         sfu.joinRoom(roomNumber, playerInfo);
-        console.log('🏠 Joined room:', roomNumber);
+        console.log('🏠 GamePong42 room assignment requested');
       } catch (error) {
-        console.error('❌ Error joining room:', error);
+        console.error('❌ Error requesting room assignment:', error);
       }
     } else {
       console.log('⏳ Waiting for SFU connection to be established...');
