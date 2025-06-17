@@ -20,7 +20,7 @@ export class GamePong42Room {
   constructor(id: string) {
     this.id = id;
     this.participants = new Map();
-    this.countdown = 30; // 30秒のカウントダウン
+    this.countdown = 15; // 15秒のカウントダウン
     this.gameStarted = false;
     this.gameOver = false;
     this.npcCount = 0;
@@ -63,7 +63,7 @@ export class GamePong42Room {
         survivors: 42,
         gameStarted: false,
         gameOver: false,
-        countdown: 30, // カウントダウンプロパティを追加
+        countdown: 15, // カウントダウンプロパティを追加
         timestamp: Date.now()
       }
     };
@@ -421,7 +421,7 @@ export class GamePong42Room {
     this.stopGameLoop();
 
     // 状態をリセット
-    this.countdown = 30;
+    this.countdown = 15;
     this.gameStarted = false;
     this.gameOver = false;
     this.npcCount = 0;

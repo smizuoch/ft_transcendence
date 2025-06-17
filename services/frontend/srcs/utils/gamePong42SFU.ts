@@ -66,7 +66,7 @@ export const useGamePong42SFU = () => {
 
   const [localGameState, setLocalGameState] = useState<GamePong42LocalState>({
     participantCount: 1,
-    countdown: 30,
+    countdown: 15,
     gameStarted: false,
     gameOver: false,
     playerInfos: new Map(),
@@ -98,7 +98,7 @@ export const useGamePong42SFU = () => {
       clearInterval(countdownTimerRef.current);
     }
 
-    let countdownValue = 30;
+    let countdownValue = 15;
     setLocalGameState(prev => ({ ...prev, countdown: countdownValue }));
 
     // Broadcast countdown start
@@ -647,7 +647,7 @@ export const useGamePong42SFU = () => {
     // Reset local game state
     setLocalGameState({
       participantCount: 1,
-      countdown: 30,
+      countdown: 15,
       gameStarted: false,
       gameOver: false,
       playerInfos: new Map(),
@@ -903,7 +903,7 @@ export const useGamePong42SFU = () => {
     // ローカル状態をリセット
     setLocalGameState(prev => ({
       ...prev,
-      countdown: 30,
+      countdown: 15,
       gameStarted: false,
       gameOver: false,
       isRoomLeader: false,

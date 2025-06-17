@@ -163,7 +163,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
         return cleaned;
       });
-    }, 30000); // 30秒ごとにクリーンアップ
+    }, 30000); // 30秒ごとに非アクティブなプレイヤーをクリーンアップ
 
     return () => clearInterval(cleanupInterval);
   }, []);
