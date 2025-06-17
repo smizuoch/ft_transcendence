@@ -1394,7 +1394,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       {/* central content */}
       <div className="relative z-10 w-full h-full flex items-center justify-center">
         {/* play square */}
-        <div className="relative w-[90vmin] h-[90vmin]">
+        <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
           <canvas ref={canvasRef} className="w-full h-full border border-white" />
         </div>
 
