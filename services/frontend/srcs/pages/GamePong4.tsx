@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
+import { isUserAuthenticated } from "@/utils/authUtils";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
 
 interface PlayerInfo {
@@ -53,6 +54,15 @@ const defaultPlayers = {
 };
 
 const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayers }) => {
+  // JWT認証チェック
+  useEffect(() => {
+    if (!isUserAuthenticated()) {
+      console.log('❌ GamePong4: User not authenticated, redirecting to Home');
+      navigate('Home');
+      return;
+    }
+  }, [navigate]);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   // ゲーム状態
@@ -482,6 +492,12 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
 
       } catch (error) {
         console.error('Failed to setup tournament connection:', error);
+        
+        // 認証エラーの場合はHomeページにリダイレクト
+        if (error instanceof Error && error.message.includes('Authentication required')) {
+          console.log('❌ GamePong4: Authentication error, redirecting to Home');
+          navigate('Home');
+        }
       }
     };
 
