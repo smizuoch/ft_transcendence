@@ -453,10 +453,14 @@ export const useGamePong42SFU = () => {
     socket.on('npc-response', (data: { success: boolean; data?: any; error?: string; timestamp: number }) => {
       console.log('🤖 NPC response:', data);
 
-      if (data.success) {
-        console.log('✅ NPC request successful:', data.data);
+      if (data.success && data.data) {
+        if (data.data.success) {
+          console.log('✅ NPC request successful:', data.data);
+        } else {
+          console.error('❌ NPC request failed:', data.data.error);
+        }
       } else {
-        console.error('❌ NPC request failed:', data.error);
+        console.error('❌ SFU request failed:', data.error);
       }
     });
 
@@ -746,10 +750,13 @@ export const useGamePong42SFU = () => {
         if (data.requestId === requestId) {
           clearTimeout(timeout);
           socketRef.current?.off('npc-response', responseHandler);
-          if (data.success) {
-            resolve(data);
+          // SFUが正常に応答し、かつNPC Managerからの実際の結果も成功の場合
+          if (data.success && data.data && data.data.success) {
+            resolve(data.data); // NPC Managerからの実際のレスポンスを返す
           } else {
-            reject(new Error(data.error || 'Failed to create NPC game'));
+            // エラー情報を適切に取得
+            const errorMsg = data.data?.error || data.error || 'Failed to create NPC game';
+            reject(new Error(errorMsg));
           }
         }
       };
@@ -782,10 +789,13 @@ export const useGamePong42SFU = () => {
         if (data.requestId === requestId) {
           clearTimeout(timeout);
           socketRef.current?.off('npc-response', responseHandler);
-          if (data.success) {
-            resolve(data);
+          // SFUが正常に応答し、かつNPC Managerからの実際の結果も成功の場合
+          if (data.success && data.data && data.data.success) {
+            resolve(data.data); // NPC Managerからの実際のレスポンスを返す
           } else {
-            reject(new Error(data.error || 'Failed to apply speed boost'));
+            // エラー情報を適切に取得
+            const errorMsg = data.data?.error || data.error || 'Failed to apply speed boost';
+            reject(new Error(errorMsg));
           }
         }
       };
@@ -818,10 +828,13 @@ export const useGamePong42SFU = () => {
         if (data.requestId === requestId) {
           clearTimeout(timeout);
           socketRef.current?.off('npc-response', responseHandler);
-          if (data.success) {
-            resolve(data);
+          // SFUが正常に応答し、かつNPC Managerからの実際の結果も成功の場合
+          if (data.success && data.data && data.data.success) {
+            resolve(data.data); // NPC Managerからの実際のレスポンスを返す
           } else {
-            reject(new Error(data.error || 'Failed to stop NPC game'));
+            // エラー情報を適切に取得
+            const errorMsg = data.data?.error || data.error || 'Failed to stop NPC game';
+            reject(new Error(errorMsg));
           }
         }
       };
