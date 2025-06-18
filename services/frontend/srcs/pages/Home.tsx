@@ -6,7 +6,7 @@ interface HomeProps {
 }
 
 const Home: React.FC<HomeProps> = ({ navigate }) => {
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -15,7 +15,7 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get('error');
     const message = urlParams.get('message');
-    
+
     if (error) {
       switch (error) {
         case 'invalid_username':
@@ -33,7 +33,7 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
         default:
           setErrorMessage(message || 'Google認証に失敗しました。');
       }
-      
+
       // URLからエラーパラメータを削除
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -111,7 +111,7 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
                 <p className="text-sm">{errorMessage}</p>
               </div>
               <div className="pl-2">
-                <button 
+                <button
                   onClick={() => setErrorMessage('')}
                   className="text-red-500 hover:text-red-700"
                 >

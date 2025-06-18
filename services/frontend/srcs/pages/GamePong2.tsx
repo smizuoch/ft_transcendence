@@ -3,13 +3,10 @@ import { useGameEngine, useKeyboardControls } from "@/utils/gameHooks";
 import { DEFAULT_CONFIG } from "@/utils/gameEngine";
 import { isUserAuthenticated } from "@/utils/authUtils";
 import type { NPCConfig } from "@/utils/npcTypes";
-// import { NPCSettingsPanel } from "@/utils/NPCSettingsPanel";
-// import { NPCDebugPanel } from "@/utils/NPCDebugPanel";
 import { SpectatorPanel } from "@/utils/SpectatorPanel";
 import { DTLSDebugPanel } from "@/utils/DTLSDebugPanel";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
 import { apiClient } from "@/utils/authApi";
-// NPCアルゴリズムの登録を確実に行うためにインポート
 import "@/utils/npcAlgorithmRegistry";
 
 interface PlayerInfo {
@@ -28,7 +25,6 @@ interface GamePong2Props {
 }
 
 const ICON_PATH = "/images/icons/";
-
 const defaultPlayers = {
   player1: { id: 1, avatar: "/images/avatar/default_avatar.png", name: "Player 1" },
   player2: { id: 2, avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
@@ -52,6 +48,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     player1: { id: 1, avatar: "/images/avatar/default_avatar.png", name: "Player 1" },
     player2: { id: 2, avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
   });
+
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
 
   // ============= APIからユーザー情報を取得 =============
@@ -85,7 +82,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
               name: userData.username || "Player 1"
             }
           }));
-          
           console.log('User data loaded:', userData);
         } else {
           console.error('Failed to fetch user data');
@@ -119,7 +115,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       if (response.ok) {
         const result = await response.json();
         const opponentData = result.data;
-        
         return {
           id: opponentData.username,
           avatar: opponentData.profileImage || "/images/avatar/default_avatar1.png",
@@ -154,8 +149,8 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   const [isGameReady, setIsGameReady] = useState(false);
   const [playerNumber, setPlayerNumber] = useState<1 | 2 | 'spectator' | null>(null);
   const [remotePlayerInput, setRemotePlayerInput] = useState<PlayerInput | null>(null);
-  const [isAuthoritativeClient, setIsAuthoritativeClient] = useState(false);
-  const [isSpectator, setIsSpectator] = useState(false);
+  const [isAuthoritativeClient, setIsAuthoritativeClient] = useState(false);  const [isSpectator, setIsSpectator] = useState(false);
+  const [isResultSent, setIsResultSent] = useState(false);
 
   // 未使用変数の警告を抑制（将来的なUI表示用）
   void multiplayerConnected;
@@ -165,7 +160,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
 
   // ============= NPC関連の状態 =============
   const [npcEnabled, setNpcEnabled] = useState(false);
-  
   const [npcSettings, setNpcSettings] = useState<NPCConfig>({
     player: 1 as 1 | 2,
     mode: 'technician' as any,
@@ -192,7 +186,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       courseAccuracy: 0.9
     }
   });
-  
+
   const [npcDebugInfo, setNpcDebugInfo] = useState<{
     state: string;
     timeInState: number;
@@ -203,6 +197,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
 
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
+
   // engineRefの未使用警告を抑制
   void engineRef;
 
@@ -233,12 +228,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setIsSpectator(data.isSpectator || data.playerNumber === 'spectator');
           console.log(`Joined as ${data.isSpectator ? 'spectator' : `player ${data.playerNumber}`}`);
           setShowRoomInput(false);
-          
+
           // 対戦相手の情報をrealPlayersに設定
           console.log('roomJoined data received:', data);
           console.log('Current playerId:', multiplayerService.getPlayerId());
+          
           if (data.players && data.players.length > 0) {
             console.log('All players in room:', data.players);
+            
             const opponentPlayer = data.players.find(p => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
               console.log('Found opponent player:', opponentPlayer);
@@ -256,9 +253,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           } else {
             console.log('No players data or empty players array');
           }
-          
+
           const isAuth = data.playerNumber === 1;
           setIsAuthoritativeClient(isAuth);
+          
           if (engineRef.current) {
             engineRef.current.setAuthoritativeClient(isAuth);
           }
@@ -268,11 +266,12 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setRoomPlayers(data.players || []);
           setRoomSpectators(data.spectators || []);
           setIsGameReady(data.isGameReady);
-          
+
           // 新しく参加したプレイヤーが対戦相手の場合、情報を更新
           console.log('playerJoined data received:', data);
           if (data.players && data.players.length > 0) {
             console.log('All players after join:', data.players);
+            
             const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
               console.log('Found new opponent player:', opponentPlayer);
@@ -296,10 +295,11 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setRoomPlayers(data.players || []);
           setRoomSpectators(data.spectators || []);
           setIsGameReady(data.isGameReady);
-          
+
           // 新しく参加したプレイヤーが対戦相手の場合、情報を更新
           if (data.players && data.players.length > 0) {
             console.log('All players after participant join:', data.players);
+            
             const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
               console.log('Found participant opponent player:', opponentPlayer);
@@ -320,7 +320,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setIsGameReady(true);
           setRoomPlayers(data.players);
           console.log(`Game is now ready! Players: ${data.players.length}`);
-          
+
           // ゲーム開始準備時にも対戦相手の情報を更新
           if (data.players && data.players.length > 0) {
             const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
@@ -374,9 +374,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           }
         });
 
-        multiplayerService.on('scoreUpdated', (data: { 
-          scorer: 'player1' | 'player2'; 
-          playerId: string; 
+        multiplayerService.on('scoreUpdated', (data: {
+          scorer: 'player1' | 'player2';
+          playerId: string;
           scores: { player1: number; player2: number };
           gameOver: boolean;
           winner: number | null;
@@ -388,9 +388,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           }
         });
 
-        multiplayerService.on('gameEnded', (data: { 
-          winner: number; 
-          playerId: string; 
+        multiplayerService.on('gameEnded', (data: {
+          winner: number;
+          playerId: string;
           finalScores: { player1: number; player2: number };
         }) => {
           setScore(data.finalScores);
@@ -401,7 +401,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       } catch (error) {
         console.error('Failed to setup multiplayer:', error);
         setMultiplayerConnected(false);
-        
         // 認証エラーの場合はHomeページにリダイレクト
         if (error instanceof Error && error.message.includes('Authentication required')) {
           console.log('❌ GamePong2: Authentication error, redirecting to Home');
@@ -432,12 +431,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   useEffect(() => {
     // Initialize engine once, no resize handling for fixed size game
     initializeEngine();
-
     return () => {
       stopGameLoop();
     };
   }, [initializeEngine, stopGameLoop]);
-
   const handleScore = useCallback((scorer: 'player1' | 'player2') => {
     setScore((prev) => {
       const newScore = { ...prev, [scorer]: prev[scorer] + 1 };
@@ -445,10 +442,17 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         setGameOver(true);
         const winnerNumber = scorer === 'player1' ? 1 : 2;
         setWinner(winnerNumber);
+        
+        // ゲーム終了時に即座にゲームループを停止
+        console.log('🛑 Game ended, stopping game loop immediately');
+        stopGameLoop();
+        
+        // ゲーム状態をリセット
+        setGameStarted(false);
       }
       return newScore;
     });
-  }, []);
+  }, [stopGameLoop]);
 
   useEffect(() => {
     if (gameStarted) {
@@ -459,7 +463,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             if (keysRef.current) {
               let up = false;
               let down = false;
-
+              
               if (playerNumber === 1) {
                 up = keysRef.current['arrowLeft'] || keysRef.current['a'];
                 down = keysRef.current['arrowRight'] || keysRef.current['d'];
@@ -467,7 +471,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
                 up = keysRef.current['arrowLeft'] || keysRef.current['a'];
                 down = keysRef.current['arrowRight'] || keysRef.current['d'];
               }
-
+              
               multiplayerService.sendPlayerInput({
                 up: up || false,
                 down: down || false,
@@ -475,11 +479,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
               });
             }
           };
-          
+
           const inputInterval = setInterval(sendInputs, 16);
-
           startGameLoop(handleScore, gameStarted, keysRef, '#212121', npcEnabled, remotePlayerInput, playerNumber);
-
+          
           return () => {
             clearInterval(inputInterval);
             stopGameLoop();
@@ -506,8 +509,11 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     return () => clearTimeout(t);
   }, [gameStarted]);
   useEffect(() => {
-    if (gameOver && winner) {
-      const t = setTimeout(async () => {
+    // ゲーム結果の送信処理（重複防止機能付き）
+    if (gameOver && winner && !isResultSent) {
+      setIsResultSent(true); // 即座に送信フラグを設定して重複を防ぐ
+      
+      const sendResult = async () => {
         try {
           // JWTを取得
           const token = apiClient.getStoredToken();
@@ -523,7 +529,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
 
           // 対戦相手の名前を決定
           let opponentUsername = '';
-          
           if (npcEnabled) {
             // NPC対戦の場合
             opponentUsername = 'NPC';
@@ -536,17 +541,30 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           }
 
           // 勝敗結果を決定
-          const result = winner === 1 ? 'win' : 'lose';
+          let result: 'win' | 'lose';
+          if (npcEnabled) {
+            // NPCモード: NPCはplayer1、人間はplayer2
+            result = winner === 2 ? 'win' : 'lose';
+            console.log('🎮 NPC Mode - Winner:', winner, 'Human result:', result);
+          } else if (isMultiplayer && playerNumber) {
+            // マルチプレイヤーモード: 自分のプレイヤー番号と勝者を比較
+            result = winner === playerNumber ? 'win' : 'lose';
+            console.log('🎮 Multiplayer Mode - Winner:', winner, 'My number:', playerNumber, 'My result:', result);
+          } else {
+            // ローカルPvPモード（通常は使用されない）
+            result = winner === 1 ? 'win' : 'lose';
+            console.log('🎮 Local PvP Mode - Winner:', winner, 'Result:', result);
+          }
 
           // 現在の日付を取得（ISO文字列形式YYYY-MM-DD）
           const today = new Date();
           const gameDate = today.toISOString().split('T')[0]; // YYYY-MM-DD形式
 
-          console.log('🏆 Saving GamePong2 result:', { 
-            username, 
-            opponentUsername, 
-            result, 
-            gameDate 
+          console.log('🏆 Saving GamePong2 result:', {
+            username,
+            opponentUsername,
+            result,
+            gameDate
           });
 
           // ゲーム結果をresult_searchサービスに送信
@@ -572,14 +590,18 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         } catch (error) {
           console.error('Error while saving GamePong2 result:', error);
         } finally {
-          // 処理が完了したら画面遷移
-          console.log('🚀 Navigating to GameResult');
-          navigate("GameResult");
+          // 処理が完了したら画面遷移（少し遅延を入れて結果表示を見せる）
+          setTimeout(() => {
+            console.log('🚀 Navigating to GameResult');
+            navigate("GameResult");
+          }, 800);
         }
-      }, 1200);
-      return () => clearTimeout(t);
+      };
+      
+      // 結果表示のために少し遅延を入れてから処理開始
+      setTimeout(sendResult, 400);
     }
-  }, [gameOver, winner, navigate, npcEnabled, isMultiplayer, realPlayers.player2.name]);
+  }, [gameOver, winner, navigate, npcEnabled, isMultiplayer, realPlayers.player2.name, isResultSent, playerNumber]);
 
   // マルチプレイヤー時のゲームエンジンコールバック設定
   useEffect(() => {
@@ -588,21 +610,21 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         engineRef.current.setGameStateUpdateCallback((gameState) => {
           multiplayerService.sendFullGameState(gameState);
         });
-
         engineRef.current.setScoreUpdateCallback((scorer) => {
           multiplayerService.sendScoreUpdate(scorer);
         });
       }
     }
   }, [gameStarted, isMultiplayer, isAuthoritativeClient]);
-
   const handleStartGame = useCallback(() => {
+    // ゲーム開始時にフラグをリセット
+    setIsResultSent(false);
+    
     // マルチプレイヤーモードで相手がいない場合、自動的にNPCモードに切り替え
     if (isMultiplayer && !isGameReady) {
       console.log('No opponent found, switching to NPC mode...');
       setIsMultiplayer(false);
       setNpcEnabled(true);
-      
       // NPCの設定
       if (engineRef.current) {
         engineRef.current.updateNPCConfig({
@@ -614,7 +636,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           reactionDelayMs: 50,
         });
       }
-      
       setGameStarted(true);
       return;
     }
@@ -665,48 +686,60 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     }, 100);
 
     return () => clearInterval(interval);
-  }, [gameStarted, npcEnabled]);  const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
-    let displayedScore;
-    let avatarPlayerKey: "player1" | "player2";
+  }, [gameStarted, npcEnabled]);
+  // ============= 簡潔化されたrenderAvatarGroup関数 =============
+  const renderAvatarGroup = (side: "left" | "right") => {
+    let displayedScore: number;
+    let playerInfo: PlayerInfo;
     
-    if (isMultiplayer && playerNumber) {
-      // プレイヤー1の場合は画面が回転するため、アイコン位置も調整
-      if (playerNumber === 1) {
-        // Player1の場合: 左=自分、右=相手（画面回転を考慮した修正）
-        const isMyScore = (side === "left");
-        if (isMyScore) {
-          displayedScore = score.player1;
-          avatarPlayerKey = "player1";
-        } else {
-          displayedScore = score.player2;
-          avatarPlayerKey = "player2";
-        }
-      } else {
-        // Player2の場合: 左=相手、右=自分
-        const isMyScore = (side === "right");
-        if (isMyScore) {
-          displayedScore = score.player2;
-          avatarPlayerKey = "player2";
-        } else {
-          displayedScore = score.player1;
-          avatarPlayerKey = "player1";
-        }
-      }
-    } else if (npcEnabled) {
-      // NPC対戦時: スコアは通常通り、アイコンは左=自分、右=NPCに固定
-      displayedScore = idx === 1 ? score.player1 : score.player2;
+    // NPCモードの場合
+    if (npcEnabled) {
+      // NPCモードでは左が人間（player2）、右がNPC（player1）
       if (side === "left") {
-        // 左側は常にPlayer 1（自分）
-        avatarPlayerKey = "player1";
+        displayedScore = score.player2;
+        playerInfo = realPlayers.player1; // 人間プレイヤーの情報
       } else {
-        // 右側は常にPlayer 2（NPC）
-        avatarPlayerKey = "player2";
+        displayedScore = score.player1;
+        playerInfo = {
+          id: "NPC",
+          avatar: "/images/avatar/npc_avatar.png",
+          name: "NPC"
+        };
       }
-    } else {
-      displayedScore = idx === 1 ? score.player1 : score.player2;
-      avatarPlayerKey = idx === 1 ? "player1" : "player2";
+    } 
+    // マルチプレイヤーモードの場合
+    else if (isMultiplayer && playerNumber) {
+      if (playerNumber === 1) {
+        // プレイヤー1: キャンバスが180度回転しているため、アバターも入れ替えて表示
+        if (side === "left") {
+          displayedScore = score.player1;
+          playerInfo = realPlayers.player1; // 自分のアバター
+        } else {
+          displayedScore = score.player2;
+          playerInfo = realPlayers.player2; // 相手のアバター
+        }
+      } else {
+        // プレイヤー2: 通常表示、左が相手、右が自分
+        if (side === "left") {
+          displayedScore = score.player2;
+          playerInfo = realPlayers.player1; // 相手のアバター
+        } else {
+          displayedScore = score.player1;
+          playerInfo = realPlayers.player2; // 自分のアバター
+        }
+      }
+    } 
+    // ローカルPvPモードの場合
+    else {
+      if (side === "left") {
+        displayedScore = score.player2;
+        playerInfo = realPlayers.player2;
+      } else {
+        displayedScore = score.player1;
+        playerInfo = realPlayers.player1;
+      }
     }
-    
+
     const pts = displayedScore;
     const translateClass = side === "left"
       ? (iconsDocked ? "-translate-x-full" : "")
@@ -714,15 +747,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     const positionClass = side === "left"
       ? "left-0 bottom-16"
       : "right-0 top-16";
-    const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";    const playerInfo = realPlayers[avatarPlayerKey];
-    
-    // NPC対戦時の名前とアバター表示を調整
-    let displayName = playerInfo.name;
-    let displayAvatar = playerInfo.avatar;
-    if (npcEnabled && avatarPlayerKey === "player2") {
-      displayName = "NPC";
-      displayAvatar = "/images/avatar/npc_avatar.png";
-    }
+    const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
 
     return (
       <div
@@ -734,14 +759,18 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           <img src={`${ICON_PATH}win.svg`} alt="win" className="w-12 h-12 lg:w-16 lg:h-16" />
         ) : (
           <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
-        )}        <div className="flex flex-col items-center gap-1">
+        )}
+        
+        <div className="flex flex-col items-center gap-1">
           <img
-            src={displayAvatar}
+            src={playerInfo.avatar}
             alt="avatar"
             className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
-          />          {playerInfo.name && (
+          />
+          
+          {playerInfo.name && (
             <span className="text-white text-xs lg:text-sm font-medium">
-              {displayName}
+              {playerInfo.name}
             </span>
           )}
         </div>
@@ -754,11 +783,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     if (propRoomNumber) {
       setRoomNumber(propRoomNumber);
       setShowRoomInput(false);
-
       // 通信対戦の場合の処理
       if (!multiplayerService.isInRoom()) {
         setIsMultiplayer(true);
-
         const autoJoinRoom = async () => {
           try {
             if (multiplayerService.isInRoom()) {
@@ -769,7 +796,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             if (!multiplayerService.isConnectedToServer()) {
               await multiplayerService.connect();
               setMultiplayerConnected(true);
-            }            const playerInfo = {
+            }
+
+            const playerInfo = {
               id: String(realPlayers.player1.id),
               avatar: realPlayers.player1.avatar,
               name: realPlayers.player1.name || 'Player'
@@ -780,7 +809,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           } catch (error) {
             console.error('Auto join room failed:', error);
             setMultiplayerConnected(false);
-            
             // 認証エラーの場合はHomeページにリダイレクト
             if (error instanceof Error && error.message.includes('Authentication required')) {
               console.log('❌ GamePong2: Authentication error, redirecting to Home');
@@ -790,7 +818,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             }
           }
         };
-
         setTimeout(autoJoinRoom, 100);
       }
     }
@@ -819,7 +846,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       if (!multiplayerService.isConnectedToServer()) {
         await multiplayerService.connect();
         setMultiplayerConnected(true);
-      }      const playerInfo = {
+      }
+
+      const playerInfo = {
         id: String(realPlayers.player1.id),
         avatar: realPlayers.player1.avatar,
         name: realPlayers.player1.name || 'Player'
@@ -830,7 +859,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     } catch (error) {
       console.error('Failed to join room:', error);
       setMultiplayerConnected(false);
-      
       // 認証エラーの場合はHomeページにリダイレクト
       if (error instanceof Error && error.message.includes('Authentication required')) {
         console.log('❌ GamePong2: Authentication error, redirecting to Home');
@@ -847,33 +875,21 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         src="/images/background/noon.png"
         alt="bg"
         className="absolute inset-0 w-full h-full object-cover"
-      />      {/* ローディング表示 */}
-      {/* {isLoadingUserData && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="text-white text-3xl">ユーザー情報を読み込み中...</div>
-        </div>
-      )} */}
+      />
 
       <div className="relative z-10 w-full h-full flex items-center justify-center">
-        <div className="relative w-[840px] h-[840px]">          <canvas 
-            ref={canvasRef} 
+        <div className="relative w-[840px] h-[840px]">
+          
+          <canvas
+            ref={canvasRef}
             className={`border border-white ${playerNumber === 1 && !npcEnabled ? 'rotate-180' : ''}`}
             style={{ width: '840px', height: '840px' }}
           />
 
           {gameStarted && !gameOver && (
             <>
-              {isMultiplayer && playerNumber ? (
-                <>
-                  {renderAvatarGroup(1, "left")}
-                  {renderAvatarGroup(1, "right")}
-                </>
-              ) : (
-                <>
-                  {renderAvatarGroup(1, "right")}
-                  {renderAvatarGroup(2, "left")}
-                </>
-              )}
+              {renderAvatarGroup("left")}
+              {renderAvatarGroup("right")}
             </>
           )}
         </div>
@@ -902,10 +918,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             ) : (
               <>
                 <div className="text-5xl mb-4 tracking-widest" style={{ color: "#212121" }}>
-                  {isMultiplayer ? roomNumber.toString().padStart(6, "0") : 
-                   npcEnabled ? "CPU対戦" : "PvP"}
+                  {isMultiplayer ? roomNumber.toString().padStart(6, "0") :
+                  npcEnabled ? "CPU対戦" : "PvP"}
                 </div>
-
                 <img
                   src={`${ICON_PATH}${hoverClose ? "close" : "open"}.svg`}
                   alt="toggle"
@@ -914,7 +929,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
                   onMouseLeave={() => setHoverClose(false)}
                   onClick={handleStartGame}
                 />
-
                 {isMultiplayer && !isGameReady && (
                   <div className="text-2xl text-white mt-4">
                     他のプレイヤーを待っています...
@@ -923,7 +937,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
                     </div>
                   </div>
                 )}
-
                 {isMultiplayer && isGameReady && (
                   <div className="text-2xl text-white mt-4">
                     ドアをクリックしてゲーム開始！
@@ -935,24 +948,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         )}
       </div>
 
-      {/* ============= NPC設定パネル（コメントアウト） ============= */}
-      {/* <NPCSettingsPanel
-        npcEnabled={npcEnabled}
-        setNpcEnabled={setNpcEnabled}
-        npcSettings={npcSettings}
-        setNpcSettings={setNpcSettings}
-        gameStarted={gameStarted}
-        localEnabled={false}
-        setLocalEnabled={() => {}}
-      /> */}
-
-      {/* ============= NPC状態デバッグ表示（コメントアウト） ============= */}
-      {/* <NPCDebugPanel
-        gameStarted={gameStarted}
-        npcEnabled={npcEnabled}
-        npcSettings={npcSettings}
-        npcDebugInfo={npcDebugInfo}
-      /> */}      {/* ============= 観戦者パネル ============= */}
+      {/* ============= 観戦者パネル ============= */}
       {isSpectator && (
         <SpectatorPanel
           roomPlayers={roomPlayers}
@@ -965,7 +961,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
 
       {/* ============= DTLS デバッグパネル ============= */}
       {isMultiplayer && (
-        <DTLSDebugPanel 
+        <DTLSDebugPanel
           multiplayerService={multiplayerService}
           visible={true}
         />
