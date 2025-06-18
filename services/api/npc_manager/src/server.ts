@@ -286,15 +286,20 @@ function startNPCDataTransmission(roomNumber: string) {
 function stopRoomNPCs(roomNumber: string): { success: boolean; message: string } {
   const roomData = roomNPCs.get(roomNumber);
   if (!roomData) {
+    // 部屋が見つからない場合（すでに停止済み）は成功として扱う
     return {
-      success: false,
-      message: `Room ${roomNumber} not found`
+      success: true,
+      message: `Room ${roomNumber} was already stopped or not found`
     };
   }
 
   // 全てのNPCゲームを停止
+  let stoppedCount = 0;
   roomData.gameInstances.forEach(gameId => {
-    gameManager.stopGame(gameId);
+    const stopped = gameManager.stopGame(gameId);
+    if (stopped) {
+      stoppedCount++;
+    }
   });
 
   // SFU接続を切断
@@ -307,7 +312,7 @@ function stopRoomNPCs(roomNumber: string): { success: boolean; message: string }
 
   return {
     success: true,
-    message: `Stopped ${roomData.gameInstances.length} NPCs for room ${roomNumber}`
+    message: `Stopped ${stoppedCount}/${roomData.gameInstances.length} NPCs for room ${roomNumber}`
   };
 }
 

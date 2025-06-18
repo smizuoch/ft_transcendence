@@ -53,6 +53,7 @@ export class GameEngine {
   private gameStarted: boolean = false;
   private gameOver: boolean = false;
   private winner: number | null = null;
+  private isCleanedUp: boolean = false; // クリーンアップ状態を追跡
 
   // マルチプレイヤー用の状態管理
   private isAuthoritativeClient: boolean = false;
@@ -237,6 +238,11 @@ export class GameEngine {
   }
 
   public update(): 'none' | 'player1' | 'player2' {
+    // クリーンアップ済みの場合は何もしない
+    if (this.isCleanedUp) {
+      return 'none';
+    }
+
     // 時間ベース計算のためのデルタタイム更新
     const currentTime = performance.now();
     if (this.lastFrameTime === 0) {
@@ -257,14 +263,20 @@ export class GameEngine {
     if (this.npcEngine) {
       this.npcEngine.updatePaddle(this.getGameState(), 240 * deltaTimeSeconds); // 固定速度240 pixels/second（プレイヤーと統一）
     } else if (this.config.npc.enabled && this.config.npc.player === 1) {
-      console.warn('⚠️ NPC for Player1 should be enabled but npcEngine is null');
+      // クリーンアップ済みでない場合のみ警告を表示
+      if (!this.isCleanedUp) {
+        console.warn('⚠️ NPC for Player1 should be enabled but npcEngine is null');
+      }
     }
 
     // NPC更新（Player2用）
     if (this.npcEngine2) {
       this.npcEngine2.updatePaddle(this.getGameState(), 240 * deltaTimeSeconds); // 固定速度240 pixels/second（プレイヤーと統一）
     } else if (this.config.npc.enabled && this.config.npc.player === 2) {
-      console.warn('⚠️ NPC for Player2 should be enabled but npcEngine2 is null');
+      // クリーンアップ済みでない場合のみ警告を表示
+      if (!this.isCleanedUp) {
+        console.warn('⚠️ NPC for Player2 should be enabled but npcEngine2 is null');
+      }
     }
 
     this.updatePaddles();
@@ -651,6 +663,9 @@ export class GameEngine {
    * ゲームエンジンをクリーンアップする
    */
   public cleanup(): void {
+    // クリーンアップ状態を設定
+    this.isCleanedUp = true;
+
     // NPCエンジンの停止
     if (this.npcEngine) {
       this.npcEngine = null;
@@ -668,5 +683,7 @@ export class GameEngine {
 
     // ボールをリセット
     this.resetBall();
+
+    console.log('🛑 GameEngine cleanup completed - further updates will be ignored');
   }
 }

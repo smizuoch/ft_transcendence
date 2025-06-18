@@ -325,10 +325,13 @@ export class NPCGameManager {
   public stopGame(gameId: string): boolean {
     const session = this.games.get(gameId);
     if (!session) {
-      return false;
+      // ゲームが見つからない場合（すでに停止済み）も成功として扱う
+      console.log(`⚠️ Game ${gameId} not found (already stopped?)`);
+      return true;
     }
 
     session.isRunning = false;
+    console.log(`✅ Game ${gameId} stopped successfully`);
     return true;
   }
 

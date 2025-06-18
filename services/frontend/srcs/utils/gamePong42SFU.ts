@@ -454,13 +454,28 @@ export const useGamePong42SFU = () => {
       console.log('🤖 NPC response:', data);
 
       if (data.success && data.data) {
-        if (data.data.success) {
+        // データの詳細構造をログ出力
+        console.log('🔍 NPC response data details:', {
+          hasSuccess: 'success' in data.data,
+          successValue: data.data.success,
+          hasError: 'error' in data.data,
+          errorValue: data.data.error,
+          dataKeys: Object.keys(data.data)
+        });
+
+        if (data.data.success === true) {
           console.log('✅ NPC request successful:', data.data);
+        } else if (data.data.success === false) {
+          // エラーメッセージをより詳細に表示
+          const errorMsg = data.data.error || data.data.message || 'Unknown error';
+          console.error('❌ NPC request failed:', errorMsg);
+          console.error('Full response data:', data.data);
         } else {
-          console.error('❌ NPC request failed:', data.data.error);
+          // successフィールドがない場合の処理
+          console.log('ℹ️ NPC response (no success field):', data.data);
         }
       } else {
-        console.error('❌ SFU request failed:', data.error);
+        console.error('❌ SFU request failed:', data.error || 'Unknown SFU error');
       }
     });
 
@@ -741,7 +756,7 @@ export const useGamePong42SFU = () => {
     }
 
     return new Promise((resolve, reject) => {
-      const requestId = Date.now().toString();
+      const requestId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`; // より一意なIDを生成
       const timeout = setTimeout(() => {
         reject(new Error('NPC game creation timeout'));
       }, 10000);
@@ -780,7 +795,7 @@ export const useGamePong42SFU = () => {
     }
 
     return new Promise((resolve, reject) => {
-      const requestId = Date.now().toString();
+      const requestId = `${Date.now()}_${gameId.slice(-8)}`; // より一意なIDを生成
       const timeout = setTimeout(() => {
         reject(new Error('Speed boost timeout'));
       }, 10000);
@@ -819,7 +834,7 @@ export const useGamePong42SFU = () => {
     }
 
     return new Promise((resolve, reject) => {
-      const requestId = Date.now().toString();
+      const requestId = `${Date.now()}_${gameId.slice(-8)}`; // より一意なIDを生成
       const timeout = setTimeout(() => {
         reject(new Error('Stop game timeout'));
       }, 10000);
@@ -828,12 +843,23 @@ export const useGamePong42SFU = () => {
         if (data.requestId === requestId) {
           clearTimeout(timeout);
           socketRef.current?.off('npc-response', responseHandler);
+
+          // 詳細なログでデバッグ情報を出力
+          console.log(`🔍 Stop game ${gameId} response:`, {
+            success: data.success,
+            dataExists: !!data.data,
+            dataSuccess: data.data?.success,
+            dataError: data.data?.error,
+            fullData: data
+          });
+
           // SFUが正常に応答し、かつNPC Managerからの実際の結果も成功の場合
           if (data.success && data.data && data.data.success) {
             resolve(data.data); // NPC Managerからの実際のレスポンスを返す
           } else {
             // エラー情報を適切に取得
             const errorMsg = data.data?.error || data.error || 'Failed to stop NPC game';
+            console.log(`❌ Stop game ${gameId} failed:`, errorMsg);
             reject(new Error(errorMsg));
           }
         }

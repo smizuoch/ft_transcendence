@@ -841,16 +841,39 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       // ゲーム終了をsfu42に通知
       sfu.sendGameOver(winner);
 
-      // ゲーム終了時にすべてのミニゲームを停止
-      const currentMiniGames = miniGames;
-      currentMiniGames.forEach(async (game) => {
-        if (game.gameId && game.active) {
-          try {
-            await sfu.stopNPCGame(game.gameId);
-          } catch (error) {
-            console.error(`Failed to stop game ${game.gameId}:`, error);
+      // ゲームエンジンをクリーンアップしてスコア発生を防ぐ
+      if (engineRef.current) {
+        console.log('🛑 Cleaning up game engine due to game over');
+        engineRef.current.cleanup();
+      }
+
+      // ゲームループを停止してメインループを完全に止める
+      console.log('🛑 Stopping game loop due to game over');
+      stopGameLoop();
+
+      // ゲーム終了時にすべてのミニゲームを停止（非同期で実行）
+      const stopAllMiniGames = async () => {
+        const currentMiniGames = miniGames;
+        for (const game of currentMiniGames) {
+          if (game.gameId && game.active) {
+            try {
+              await sfu.stopNPCGame(game.gameId);
+              console.log(`✅ Successfully stopped game ${game.gameId}`);
+            } catch (error) {
+              // ゲーム停止エラーを詳細にログ出力するが、処理は継続
+              if (error instanceof Error) {
+                console.warn(`⚠️ Could not stop game ${game.gameId}: ${error.message} (likely already stopped)`);
+              } else {
+                console.warn(`⚠️ Could not stop game ${game.gameId}: Unknown error (likely already stopped)`);
+              }
+            }
           }
         }
+      };
+
+      // ミニゲーム停止を非同期で実行（メイン処理をブロックしない）
+      stopAllMiniGames().catch(error => {
+        console.error('Error stopping mini games:', error);
       });
 
       // JWTを取得し、ゲーム結果をAPIに送信してから画面遷移
