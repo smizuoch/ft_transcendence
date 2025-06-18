@@ -149,8 +149,8 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   const [isGameReady, setIsGameReady] = useState(false);
   const [playerNumber, setPlayerNumber] = useState<1 | 2 | 'spectator' | null>(null);
   const [remotePlayerInput, setRemotePlayerInput] = useState<PlayerInput | null>(null);
-  const [isAuthoritativeClient, setIsAuthoritativeClient] = useState(false);
-  const [isSpectator, setIsSpectator] = useState(false);
+  const [isAuthoritativeClient, setIsAuthoritativeClient] = useState(false);  const [isSpectator, setIsSpectator] = useState(false);
+  const [isResultSent, setIsResultSent] = useState(false);
 
   // 未使用変数の警告を抑制（将来的なUI表示用）
   void multiplayerConnected;
@@ -435,7 +435,6 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       stopGameLoop();
     };
   }, [initializeEngine, stopGameLoop]);
-
   const handleScore = useCallback((scorer: 'player1' | 'player2') => {
     setScore((prev) => {
       const newScore = { ...prev, [scorer]: prev[scorer] + 1 };
@@ -443,10 +442,17 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         setGameOver(true);
         const winnerNumber = scorer === 'player1' ? 1 : 2;
         setWinner(winnerNumber);
+        
+        // ゲーム終了時に即座にゲームループを停止
+        console.log('🛑 Game ended, stopping game loop immediately');
+        stopGameLoop();
+        
+        // ゲーム状態をリセット
+        setGameStarted(false);
       }
       return newScore;
     });
-  }, []);
+  }, [stopGameLoop]);
 
   useEffect(() => {
     if (gameStarted) {
@@ -502,10 +508,12 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     const t = setTimeout(() => setIconsDocked(true), ICON_LAUNCH_DELAY);
     return () => clearTimeout(t);
   }, [gameStarted]);
-
   useEffect(() => {
-    if (gameOver && winner) {
-      const t = setTimeout(async () => {
+    // ゲーム結果の送信処理（重複防止機能付き）
+    if (gameOver && winner && !isResultSent) {
+      setIsResultSent(true); // 即座に送信フラグを設定して重複を防ぐ
+      
+      const sendResult = async () => {
         try {
           // JWTを取得
           const token = apiClient.getStoredToken();
@@ -582,15 +590,18 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         } catch (error) {
           console.error('Error while saving GamePong2 result:', error);
         } finally {
-          // 処理が完了したら画面遷移
-          console.log('🚀 Navigating to GameResult');
-          navigate("GameResult");
+          // 処理が完了したら画面遷移（少し遅延を入れて結果表示を見せる）
+          setTimeout(() => {
+            console.log('🚀 Navigating to GameResult');
+            navigate("GameResult");
+          }, 800);
         }
-      }, 1200);
-
-      return () => clearTimeout(t);
+      };
+      
+      // 結果表示のために少し遅延を入れてから処理開始
+      setTimeout(sendResult, 400);
     }
-  }, [gameOver, winner, navigate, npcEnabled, isMultiplayer, realPlayers.player2.name]);
+  }, [gameOver, winner, navigate, npcEnabled, isMultiplayer, realPlayers.player2.name, isResultSent, playerNumber]);
 
   // マルチプレイヤー時のゲームエンジンコールバック設定
   useEffect(() => {
@@ -605,8 +616,10 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       }
     }
   }, [gameStarted, isMultiplayer, isAuthoritativeClient]);
-
   const handleStartGame = useCallback(() => {
+    // ゲーム開始時にフラグをリセット
+    setIsResultSent(false);
+    
     // マルチプレイヤーモードで相手がいない場合、自動的にNPCモードに切り替え
     if (isMultiplayer && !isGameReady) {
       console.log('No opponent found, switching to NPC mode...');
