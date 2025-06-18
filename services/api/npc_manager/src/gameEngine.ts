@@ -150,7 +150,7 @@ export class NPCGameEngine {
 
     this.state.paddleHits++;
     // パドル衝突時にボール速度を加速
-    this.state.ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.08, 4); // 最大4倍まで加速、加速度を小さく
+    this.state.ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.04, 4); // 加速率を半分に（0.08 → 0.04）
   }
 
   private checkScore(): void {
@@ -186,7 +186,22 @@ export class NPCGameEngine {
     // ランダムな角度でボールを射出
     const angle = (Math.random() * 0.167 + 0.083) * Math.PI;
     const direction = Math.random() > 0.5 ? 1 : -1;
-    const verticalDirection = Math.random() > 0.5 ? 1 : -1;
+
+    let verticalDirection: number;
+
+    // ミニゲーム判定（100x100のキャンバス）：初球は必ずPlayer1側に向ける
+    if (this.state.canvasWidth === 100 && this.state.canvasHeight === 100) {
+      if (!lastScorer) {
+        // ミニゲームの初球はPlayer1（上）側に向ける
+        verticalDirection = -1; // 上方向
+      } else {
+        // 得点後は得点者の方向にボールを射出
+        verticalDirection = lastScorer === 'player1' ? -1 : 1;
+      }
+    } else {
+      // 通常のランダム方向
+      verticalDirection = Math.random() > 0.5 ? 1 : -1;
+    }
 
     ball.dx = ball.speed * Math.sin(angle) * direction;
     ball.dy = ball.speed * Math.cos(angle) * verticalDirection;

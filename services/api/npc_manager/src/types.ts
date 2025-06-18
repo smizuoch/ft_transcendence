@@ -118,7 +118,7 @@ export const DEFAULT_NPC_CONFIG: NPCConfig = {
 export const DEFAULT_CONFIG: GameConfig = {
   winningScore: 11,
   maxBallSpeed: 4, // ボール最大速度をさらに制限（遅くしました）
-  paddleSpeed: 4, // プレイヤーと同じ速度に統一
+  paddleSpeed: 10, // パドル速度を10に変更
   ballRadiusRatio: 0.02, // キャンバス幅の2%（ミニゲーム用）
   paddleWidthRatio: 0.08, // キャンバス幅の8%（ミニゲーム用）
   paddleHeightRatio: 0.015, // キャンバス高さの1.5%（ミニゲーム用）
