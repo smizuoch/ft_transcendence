@@ -419,9 +419,8 @@ const MyPage: React.FC<MyPageProps> = ({ navigate }) => {
 
       {/* ---------------------------------------------------------------- */}
       {/* DevOps icon – bottom‑right with wider margin                       */}
-      {/* ---------------------------------------------------------------- */}
-      <a
-        href="https://localhost:5601"
+      {/* ---------------------------------------------------------------- */}      <a
+        href={`https://${import.meta.env.VITE_HOST_IP || '10.16.2.10'}:5601`}
         target="_blank"
         rel="noopener noreferrer"
         className="absolute transition-opacity hover:opacity-80"

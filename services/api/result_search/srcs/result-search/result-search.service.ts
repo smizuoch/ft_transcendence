@@ -98,7 +98,7 @@ export class ResultSearchService {
 
     const pong2Wins = pong2Results.filter(r => r.result === 'win').length;
     const pong2TotalGames = pong2Results.length;
-    const pong2WinRate = pong2TotalGames > 0 ? (pong2Wins / pong2TotalGames) * 100 : 0;
+    const pong2WinRate = pong2TotalGames > 0 ? (pong2Wins / pong2TotalGames) : 0;
 
     const pong2Recent = pong2Results.slice(0, 5).map(result => ({
       id: result.id,
@@ -131,7 +131,7 @@ export class ResultSearchService {
       totalGames: pong2TotalGames,
       wins: pong2Wins,
       losses: pong2TotalGames - pong2Wins,
-      winRate: Math.round(pong2WinRate * 100) / 100,
+      winRate: Math.round(pong2WinRate * 10000) / 10000,
       recentGames: pong2Recent,
     };
 

@@ -19,6 +19,12 @@ async function main() {
       username: 'testuser',
       profileImage: '/images/avatar/default_avatar.png',
       isOnline: true,
+    },
+    // NPCプロフィールを追加
+    {
+      username: 'NPC',
+      profileImage: '/images/avatar/npc_avatar.png',
+      isOnline: false, // NPCは常にオフライン状態
     }
   ];
 
