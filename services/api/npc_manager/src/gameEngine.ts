@@ -16,27 +16,32 @@ export class NPCGameEngine {
     this.lastUpdateTime = Date.now();
     this.isRunning = true;
 
+    // 比率から実際のサイズを計算
+    const ballRadius = canvasWidth * config.ballRadiusRatio;
+    const paddleWidth = canvasWidth * config.paddleWidthRatio;
+    const paddleHeight = canvasHeight * config.paddleHeightRatio;
+
     this.state = {
       ball: {
         x: canvasWidth / 2,
         y: canvasHeight / 2,
         dx: 0,
         dy: 0,
-        radius: config.ballRadius,
+        radius: ballRadius,
         speed: config.initialBallSpeed,
         speedMultiplier: 1,
       },
       paddle1: {
-        x: canvasWidth / 2 - config.paddleWidth / 2,
+        x: canvasWidth / 2 - paddleWidth / 2,
         y: 20,
-        width: config.paddleWidth,
-        height: config.paddleHeight,
+        width: paddleWidth,
+        height: paddleHeight,
       },
       paddle2: {
-        x: canvasWidth / 2 - config.paddleWidth / 2,
-        y: canvasHeight - 20 - config.paddleHeight,
-        width: config.paddleWidth,
-        height: config.paddleHeight,
+        x: canvasWidth / 2 - paddleWidth / 2,
+        y: canvasHeight - 20 - paddleHeight,
+        width: paddleWidth,
+        height: paddleHeight,
       },
       canvasWidth,
       canvasHeight,
