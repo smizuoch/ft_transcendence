@@ -13,7 +13,7 @@ const GAMEPONG42_CONFIG = {
     enabled: true,
     player: 1 as const, // Player1をpidNPCに設定
     mode: 'pid' as const,
-    difficulty: 'Hard' as const,
+    difficulty: 'Hard' as const, // EasyからHardに変更
   },
 };
 
@@ -494,20 +494,20 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         paddleWidthRatio: 0.1, // キャンバス幅の10%
         paddleHeightRatio: 0.015, // キャンバス高さの1.5%
         ballRadiusRatio: 0.02, // キャンバス幅の2%
-        paddleSpeed: 6, // パドル速度を下げてより長いラリーを実現
-        initialBallSpeed: 1.0, // 初期ボール速度を下げる
-        maxBallSpeed: 2.5, // ボール最大速度を2.5に制限
+        paddleSpeed: 10, // パドル速度を10に変更
+        initialBallSpeed: 0.3, // 初期ボール速度を0.3に変更
+        maxBallSpeed: 2.0, // ボール最大速度を2.0に変更
         npc: {
           enabled: true,
           player: 1,
           mode: 'pid',
-          difficulty: 'Easy',
+          difficulty: 'Easy', // EasyからEasyのまま（要求通り）
         },
         npc2: {
           enabled: true,
           player: 2,
           mode: 'pid',
-          difficulty: 'Nightmare', // HardからNightmareに変更
+          difficulty: 'Nightmare', // Nightmare維持（要求通り）
         },
       };
 
@@ -590,7 +590,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
           player: 1 as 1 | 2, // Player 1 (上)がNPC
           mode: 'pid' as any,
           enabled: true,
-          difficulty: 'Normal' as any,
+          difficulty: 'Hard' as any, // EasyからHardに変更
         });
       }
 

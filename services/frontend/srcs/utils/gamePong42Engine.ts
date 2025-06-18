@@ -33,12 +33,12 @@ export interface GameConfig {
 
 export const DEFAULT_CONFIG: GameConfig = {
   winningScore: 11,
-  maxBallSpeed: 8, // ボール最大速度を遅く
-  paddleSpeed: 8,
+  maxBallSpeed: 6, // ボール最大速度を6に変更
+  paddleSpeed: 10, // パドル速度を10に変更
   ballRadiusRatio: 0.01, // キャンバス幅の1%
   paddleWidthRatio: 0.095, // キャンバス幅の9.5%
   paddleHeightRatio: 0.014, // キャンバス高さの1.4%
-  initialBallSpeed: 2.4, // 初期ボール速度を遅く
+  initialBallSpeed: 2.5, // 初期ボール速度を2.5に変更
   npc: DEFAULT_NPC_CONFIG,
 };
 
@@ -203,8 +203,17 @@ export class GameEngine {
 
     let verticalDirection: number;
 
-    // NPCが有効な場合は常にプレイヤー側にボールを向ける
-    if (this.npcEngine && this.config.npc.enabled) {
+    // ミニゲーム判定（100x100のキャンバス）：初球は必ずPlayer1側に向ける
+    if (canvasWidth === 100 && canvasHeight === 100) {
+      if (!lastScorer) {
+        // ミニゲームの初球はPlayer1（上）側に向ける
+        verticalDirection = -1; // 上方向
+      } else {
+        // 得点後は得点者の方向にボールを射出
+        verticalDirection = lastScorer === 'player1' ? -1 : 1;
+      }
+    } else if (this.npcEngine && this.config.npc.enabled) {
+      // NPCが有効な場合は常にプレイヤー側にボールを向ける（メインゲーム）
       // NPCがPlayer1の場合はPlayer2（下）にボールを向ける
       // NPCがPlayer2の場合はPlayer1（上）にボールを向ける
       verticalDirection = this.config.npc.player === 1 ? 1 : -1;
@@ -261,7 +270,7 @@ export class GameEngine {
 
     // NPC更新（Player1用）
     if (this.npcEngine) {
-      this.npcEngine.updatePaddle(this.getGameState(), 240 * deltaTimeSeconds); // 固定速度240 pixels/second（プレイヤーと統一）
+      this.npcEngine.updatePaddle(this.getGameState(), 300 * deltaTimeSeconds); // 300 pixels/second（paddleSpeed 10に対応）
     } else if (this.config.npc.enabled && this.config.npc.player === 1) {
       // クリーンアップ済みでない場合のみ警告を表示
       if (!this.isCleanedUp) {
@@ -271,7 +280,7 @@ export class GameEngine {
 
     // NPC更新（Player2用）
     if (this.npcEngine2) {
-      this.npcEngine2.updatePaddle(this.getGameState(), 240 * deltaTimeSeconds); // 固定速度240 pixels/second（プレイヤーと統一）
+      this.npcEngine2.updatePaddle(this.getGameState(), 300 * deltaTimeSeconds); // 300 pixels/second（paddleSpeed 10に対応）
     } else if (this.config.npc.enabled && this.config.npc.player === 2) {
       // クリーンアップ済みでない場合のみ警告を表示
       if (!this.isCleanedUp) {
@@ -423,7 +432,7 @@ export class GameEngine {
 
     // 【速度増加システム】
     this.state.paddleHits += 1;
-    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.08, 4); // 最大4倍まで加速、加速度を小さく
+    ball.speedMultiplier = Math.min(1 + this.state.paddleHits * 0.1, 4); // 加速率を10%/hitに変更
   }
 
   private checkGoals(): 'none' | 'player1' | 'player2' {
@@ -518,7 +527,7 @@ export class GameEngine {
         this.updateNPCConfig2({
           mode: 'pid' as any,
           enabled: true,
-          difficulty: 'Nightmare' as any, // Hard → Nightmareに変更（最強）
+          difficulty: 'Nightmare' as any, // Nightmare維持（最強）
         });
       }
     }
