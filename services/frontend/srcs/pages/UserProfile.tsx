@@ -41,21 +41,12 @@ interface UserStats {
     wins: number;
     losses: number;
     winRate: number;
-  };
-  pong42: {
+  };  pong42: {
     currentRank?: number;
     bestRank: number;
     totalGames: number;
     averageRank: number;
   };
-}
-
-interface MockData {
-  name: string;
-  avatar: string;
-  rank: number;
-  pong42RankHistory: { date: string; rank: number; }[];
-  pong2History: { date: string; isWin: boolean; opponentAvatar: string; opponentUsername?: string; }[];
 }
 
 const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
@@ -346,30 +337,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
 
   // 対戦相手のアバターが更新された際に再レンダリングを促す
   useEffect(() => {
-    // opponentAvatarsが変更された場合、自動的に再レンダリングされます
-    console.log('対戦相手のアバターが更新されました:', Object.keys(opponentAvatars).length, '件');
+    // opponentAvatarsが変更された場合、自動的に再レンダリングされます    console.log('対戦相手のアバターが更新されました:', Object.keys(opponentAvatars).length, '件');
   }, [opponentAvatars]);
 
-  // モックデータ（フォールバック用）
-  const mockData = {
-    name: userId || "NAME",
-    avatar: "/images/avatar/default_avatar.png",
-    rank: 42.00,    // PONG42のランキング履歴（グラフ用）- テスト用明確な順位変化
-    pong42RankHistory: [
-      { date: "2024-05-01", rank: 42 }, // 最下位（一番下）
-      { date: "2024-05-08", rank: 35 }, // 少し改善
-      { date: "2024-05-15", rank: 25 }, // 中位に改善
-      { date: "2024-05-22", rank: 10 }, // 大幅改善！
-      { date: "2024-05-29", rank: 3 },  // さらに改善！トップ3に
-      { date: "2024-06-05", rank: 1 },  // 最高順位！（一番上）
-    ],// PONG2の対戦履歴
-    pong2History: [
-      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent1" },
-      { date: "yyyy / mm / dd / hh:mm", isWin: false, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent2" },
-      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent3" },
-      { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent4" },
-    ],
-  };  // フォロー状態の切り替え（useCallbackでメモ化）
+  // フォロー状態の切り替え（useCallbackでメモ化）
   const toggleFollow = useCallback(async () => {
     if (!userData || !friendshipStatus) return;
     
@@ -454,19 +425,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
         <p className="text-2xl text-red-500">{error}</p>
       </div>
     );
-  }
-  // ユーザーデータの表示（JWTデータを優先、フォールバックはモックデータ）
-  const displayData = userData || mockData;
-    // 表示用データの処理
+  }  // 表示用データの処理
   const getDisplayName = () => {
     if (userData) return userData.username;
-    return mockData.name;
+    return "ユーザー名不明";
   };
   
   const getDisplayImage = () => {
     if (userData) return userData.profileImage;
-    return mockData.avatar;
-  };    const getDisplayRank = () => {
+    return "/images/avatar/default_avatar.png";
+  };const getDisplayRank = () => {
     // PONG42の最新10回の平均順位を計算
     if (pong42Results.length > 0) {
       const latest10Results = pong42Results
@@ -478,45 +446,36 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
         return averageRank;
       }
     }
-    
-    // フォールバック: 統計情報から平均ランクを取得、なければユーザーデータのランク、最後にモックデータ
+      // フォールバック: 統計情報から平均ランクを取得、なければユーザーデータのランク
     if (userStats?.pong42?.averageRank) return userStats.pong42.averageRank;
     if (userData?.rank) return userData.rank;
-    return mockData.rank;
-  };  // Pong42ランキング履歴の処理（API結果から生成）
+    
+    // データがない場合は42位（最下位）をデフォルトとして返す
+    return 42;
+  };// Pong42ランキング履歴の処理（API結果から生成）
   const getPong42RankHistory = () => {
     console.log('🔍 getPong42RankHistory called. pong42Results.length:', pong42Results.length);
     console.log('🔍 pong42Results:', pong42Results);
     console.log('🔍 dataSource:', dataSource);
     
-    // 開発環境では一時的にモックデータを強制使用（デバッグ用）
-    const forceMockData = true; // テスト用フラグ
-    
-    if (pong42Results.length > 0 && !forceMockData) {
-      // 最新の10件を日付順にソート（最新が最後になるように）
+    if (pong42Results.length > 1) {
+      // 複数のデータがある場合のみグラフを表示
+      // 最新の10件を日付降順にソート（最新が最初、古いデータが最後になるように）
       const sortedData = pong42Results
-        .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
-        .slice(-10)
+        .sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime())
+        .slice(0, 10)
+        .reverse() // 表示用に古い順に並び替え（左が古い、右が最新）
         .map(result => ({
           date: new Date(result.gameDate).toLocaleDateString('ja-JP'),
           rank: result.rank
         }));
       
-      console.log('📊 Using API data for graph:', sortedData);
+      console.log('📊 Using API data for graph (左=古い, 右=最新):', sortedData);
       return sortedData;
     }
     
-    console.log('🔄 Using mock data for graph (forceMockData=' + forceMockData + ')');
-    // モックデータも日付順にソート
-    const sortedMockData = [...mockData.pong42RankHistory]
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .map(item => ({
-        date: item.date,
-        rank: Math.max(1, Math.min(42, item.rank)) // 範囲チェック
-      }));
-    
-    console.log('📊 Using sorted mock data for graph:', sortedMockData);
-    return sortedMockData;
+    console.log('� No graph data - insufficient data points (need 2+, have:', pong42Results.length, ')');
+    return [];
   };// Pong2戦績履歴の処理（API結果から生成）
   const getPong2History = () => {
     if (pong2Results.length > 0) {
@@ -530,8 +489,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
           const isWin = result.username === profileUsername && result.result === 'win';
           // 対戦相手のアバターを取得（キャッシュされていればそれを使用、なければデフォルト）
           const opponentAvatar = opponentAvatars[result.opponentUsername] || "/images/avatar/default_avatar.png";
-          
-          return {
+            return {
             date: new Date(result.gameDate).toLocaleDateString('ja-JP'),
             isWin,
             opponentAvatar,
@@ -539,7 +497,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
           };
         });
     }
-    return mockData.pong2History;
+    
+    console.log('📊 No Pong2 history data available');
+    return [];
   };return (
     <div className="bg-[#FFFFFF] min-h-screen p-4 relative font-sans text-[#5C5E7A]">
       <main className="max-w-7xl mx-auto flex justify-center items-start gap-12 pt-8">        {/* 左側: アバターと名前 */}
@@ -646,16 +606,20 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
                         );
                       })}
                     </>
-                  );
-                } else {
-                  // デフォルトのグラフ（データがない場合）
+                  );                } else {
+                  // データが不足している場合のメッセージ
                   return (
-                    <polyline
-                      fill="none"
-                      stroke="#9496A6"
-                      strokeWidth="2.5"
-                      points="0,55 120,62 240,40 360,65 480,58 600,52"
-                    />
+                    <text
+                      x="300"
+                      y="50"
+                      textAnchor="middle"
+                      fontSize="16"
+                      fill="#9496A6"
+                    >
+                      {rankHistory.length === 0 
+                        ? "まだPONG42の戦績がありません" 
+                        : "グラフ表示には2回以上の戦績が必要です"}
+                    </text>
                   );
                 }
               })()}
