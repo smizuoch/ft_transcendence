@@ -8,6 +8,7 @@ import type { NPCConfig } from "@/utils/npcTypes";
 import { SpectatorPanel } from "@/utils/SpectatorPanel";
 import { DTLSDebugPanel } from "@/utils/DTLSDebugPanel";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
+import { apiClient } from "@/utils/authApi";
 // NPCアルゴリズムの登録を確実に行うためにインポート
 import "@/utils/npcAlgorithmRegistry";
 
@@ -504,13 +505,81 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     const t = setTimeout(() => setIconsDocked(true), ICON_LAUNCH_DELAY);
     return () => clearTimeout(t);
   }, [gameStarted]);
-
   useEffect(() => {
     if (gameOver && winner) {
-      const t = setTimeout(() => navigate("GameResult"), 1200);
+      const t = setTimeout(async () => {
+        try {
+          // JWTを取得
+          const token = apiClient.getStoredToken();
+          if (!token) {
+            console.error('JWT token not found');
+            navigate("GameResult");
+            return;
+          }
+
+          // JWTからユーザー名を取得
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const username = payload.username;
+
+          // 対戦相手の名前を決定
+          let opponentUsername = '';
+          
+          if (npcEnabled) {
+            // NPC対戦の場合
+            opponentUsername = 'NPC';
+          } else if (isMultiplayer && realPlayers.player2.name) {
+            // マルチプレイヤー対戦の場合
+            opponentUsername = String(realPlayers.player2.name);
+          } else {
+            // その他の場合（デフォルト）
+            opponentUsername = 'Unknown';
+          }
+
+          // 勝敗結果を決定
+          const result = winner === 1 ? 'win' : 'lose';
+
+          // 現在の日付を取得（ISO文字列形式YYYY-MM-DD）
+          const today = new Date();
+          const gameDate = today.toISOString().split('T')[0]; // YYYY-MM-DD形式
+
+          console.log('🏆 Saving GamePong2 result:', { 
+            username, 
+            opponentUsername, 
+            result, 
+            gameDate 
+          });
+
+          // ゲーム結果をresult_searchサービスに送信
+          const response = await fetch('/api/results/pong2', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              username,
+              opponentUsername,
+              result,
+              gameDate
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to save game result: ${response.status}`);
+          }
+
+          console.log('✅ GamePong2 result saved successfully');
+        } catch (error) {
+          console.error('Error while saving GamePong2 result:', error);
+        } finally {
+          // 処理が完了したら画面遷移
+          console.log('🚀 Navigating to GameResult');
+          navigate("GameResult");
+        }
+      }, 1200);
       return () => clearTimeout(t);
     }
-  }, [gameOver, winner, navigate]);
+  }, [gameOver, winner, navigate, npcEnabled, isMultiplayer, realPlayers.player2.name]);
 
   // マルチプレイヤー時のゲームエンジンコールバック設定
   useEffect(() => {
