@@ -1,9 +1,16 @@
-// Online status management utility
+// Online status management utility with user activity detection
 export class OnlineStatusManager {
   private static instance: OnlineStatusManager;
   private isInitialized = false;
   private heartbeatInterval: number | null = null;
-  private readonly HEARTBEAT_INTERVAL = 5000; // 5秒間隔
+  private activityTimeoutInterval: number | null = null;
+  private lastActivityTime: number = Date.now();
+  private isCurrentlyOnline = false;
+  
+  // 設定値
+  private readonly HEARTBEAT_INTERVAL = 10000; // 10秒間隔でheartbeat
+  private readonly ACTIVITY_TIMEOUT = 60000; // 60秒間アクティビティがない場合はオフライン
+  private readonly STATUS_UPDATE_DEBOUNCE = 2000; // ステータス更新の間隔制限
 
   private constructor() {}
 
@@ -29,49 +36,83 @@ export class OnlineStatusManager {
     // ページ読み込み時にオンライン状態を設定
     this.setOnlineStatus(true);
 
+    // ユーザーアクティビティイベントを設定
+    this.setupActivityListeners();
+
     // 定期的なheartbeatを開始
     this.startHeartbeat();
+
+    // アクティビティタイムアウト監視を開始
+    this.startActivityTimeout();
 
     // ページ離脱時にオフライン状態を設定
     window.addEventListener('beforeunload', () => {
       this.setOnlineStatus(false, true); // 同期的に送信
     });
 
-    // ページの可視性変更時にオンライン状態を管理
+    this.isInitialized = true;
+    console.log('Online status management initialized with activity detection');
+  }
+
+  private setupActivityListeners() {
+    const activityEvents = [
+      'click',
+      'keydown',
+      'keypress',
+      'mousemove',
+      'mousedown',
+      'mouseup',
+      'scroll',
+      'touchstart',
+      'touchmove',
+      'touchend',
+      'focus',
+      'input',
+      'change'
+    ];
+
+    const updateActivity = () => {
+      this.lastActivityTime = Date.now();
+      if (!this.isCurrentlyOnline) {
+        this.setOnlineStatus(true);
+      }
+    };
+
+    // 各イベントにリスナーを追加
+    activityEvents.forEach(eventType => {
+      document.addEventListener(eventType, updateActivity, { passive: true });
+    });
+
+    // ページの可視性変更を監視
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        // ページが非表示になった時はheartbeatを停止してオフライン
-        this.stopHeartbeat();
-        this.setOnlineStatus(false);
-      } else {
-        // ページが表示された時はオンラインに戻してheartbeatを再開
-        this.setOnlineStatus(true);
-        this.startHeartbeat();
-      }
-    });
-
-    // フォーカス/ブラー時のオンライン状態管理（より細かい制御）
-    let isPageActive = true;
-    
-    window.addEventListener('focus', () => {
-      if (!isPageActive) {
-        isPageActive = true;
+      if (!document.hidden) {
+        // ページが表示されたら即座にオンライン状態に
+        this.lastActivityTime = Date.now();
         this.setOnlineStatus(true);
       }
     });
 
-    window.addEventListener('blur', () => {
-      // 少し遅延を入れて、すぐに戻ってくる場合は無視
-      setTimeout(() => {
-        if (document.hidden) {
-          isPageActive = false;
+    console.log('Activity listeners set up for:', activityEvents.join(', '));
+  }
+
+  private startActivityTimeout() {
+    // 既存のタイムアウトをクリア
+    if (this.activityTimeoutInterval) {
+      clearInterval(this.activityTimeoutInterval);
+    }
+
+    // 1秒ごとにアクティビティをチェック
+    this.activityTimeoutInterval = setInterval(() => {
+      const timeSinceLastActivity = Date.now() - this.lastActivityTime;
+      
+      if (timeSinceLastActivity > this.ACTIVITY_TIMEOUT) {
+        // アクティビティがない場合はオフライン状態に
+        if (this.isCurrentlyOnline) {
+          console.log(`No activity for ${this.ACTIVITY_TIMEOUT}ms, setting offline`);
           this.setOnlineStatus(false);
         }
-      }, 5000); // 5秒後にチェック
-    });
-
-    this.isInitialized = true;
-    console.log('Online status management initialized');
+      }
+    }, 1000);
   }
 
   private async setOnlineStatus(isOnline: boolean, sync: boolean = false) {
@@ -117,6 +158,7 @@ export class OnlineStatusManager {
         }
       }
 
+      this.isCurrentlyOnline = isOnline;
       console.log(`Online status updated: ${isOnline}`);
     } catch (error) {
       console.error('Failed to update online status:', error);
@@ -134,12 +176,20 @@ export class OnlineStatusManager {
   public cleanup() {
     // 明示的なクリーンアップが必要な場合
     this.stopHeartbeat();
+    if (this.activityTimeoutInterval) {
+      clearInterval(this.activityTimeoutInterval);
+      this.activityTimeoutInterval = null;
+    }
     this.setOnlineStatus(false);
   }
 
   public async logout() {
     // ログアウト時にオフライン状態に設定してトークンを削除
     this.stopHeartbeat();
+    if (this.activityTimeoutInterval) {
+      clearInterval(this.activityTimeoutInterval);
+      this.activityTimeoutInterval = null;
+    }
     await this.setOnlineStatus(false);
     localStorage.removeItem('authToken');
     this.isInitialized = false;
@@ -153,7 +203,7 @@ export class OnlineStatusManager {
     // 定期的にオンライン状態を送信
     this.heartbeatInterval = setInterval(() => {
       const token = localStorage.getItem('authToken');
-      if (token && !document.hidden) {
+      if (token && !document.hidden && this.isCurrentlyOnline) {
         this.setOnlineStatus(true);
       }
     }, this.HEARTBEAT_INTERVAL);
