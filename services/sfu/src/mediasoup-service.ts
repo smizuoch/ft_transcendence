@@ -1,5 +1,9 @@
 import * as mediasoup from 'mediasoup';
 import { Worker, Router, WebRtcTransport, Producer, Consumer, DataProducer, DataConsumer } from 'mediasoup/node/lib/types';
+import * as os from 'os';
+
+// 型定義の問題回避
+declare const process: any;
 
 export class MediasoupService {
   private worker: Worker | null = null;
@@ -17,14 +21,11 @@ export class MediasoupService {
 
       // Mediasoupワーカーを作成
       this.worker = await mediasoup.createWorker({
-        logLevel: 'warn', // debugから変更してログを減らす
+        logLevel: 'warn',
         logTags: [
           'info',
           'ice',
           'dtls',
-          'rtp',
-          'srtp',
-          'rtcp',
         ],
         rtcMinPort: 10000,
         rtcMaxPort: 10100,
@@ -32,7 +33,7 @@ export class MediasoupService {
 
       console.log('Mediasoup worker created successfully');
 
-      this.worker.on('died', (error) => {
+      this.worker.on('died', (error: any) => {
         console.error('Mediasoup worker died:', error);
         process.exit(1);
       });
@@ -102,90 +103,57 @@ export class MediasoupService {
     }
 
     // ローカルネットワーク対応のためのlistenIps設定
+    const announcedIp = process.env.ANNOUNCED_IP || process.env.HOST_IP || this.getLocalIpAddress();
+    
     const listenIps = [
       {
         ip: '0.0.0.0',
-        announcedIp: process.env.ANNOUNCED_IP || this.getLocalIpAddress(),
+        announcedIp: announcedIp,
       },
     ];
-
-    // Dockerコンテナ内の場合は追加のlistenIpを設定
-    if (process.env.DOCKER_ENV === 'true') {
-      listenIps.push({
-        ip: '0.0.0.0',
-        announcedIp: process.env.HOST_IP || this.getLocalIpAddress(),
-      });
-    }
 
     const transport = await this.router.createWebRtcTransport({
       listenIps,
       enableUdp: true,
-      enableTcp: true,
+      enableTcp: false, // TCPを無効化してUDPのみに
       preferUdp: true,
       // SCTPを有効化（データチャンネル用）
       enableSctp: true,
       numSctpStreams: { OS: 1024, MIS: 1024 },
+      appData: {
+        socketId: socketId
+      }
     });
 
     this.transports.set(socketId, transport);
 
-    // DTLS接続状態の詳細監視
-    transport.on('dtlsstatechange', (dtlsState) => {
-      console.log(`[DTLS] Transport ${transport.id} (${socketId}) state changed to: ${dtlsState}`);
+    // DTLS接続状態の監視
+    transport.on('dtlsstatechange', (dtlsState: string) => {
+      console.log(`[DTLS] ${socketId}: ${dtlsState}`);
       
-      switch (dtlsState) {
-        case 'connecting':
-          console.log(`[DTLS] ${socketId}: DTLS handshake starting...`);
-          break;
-        case 'connected':
-          console.log(`[DTLS] ${socketId}: DTLS handshake completed successfully! 🔒`);
-          console.log(`[DTLS] ${socketId}: Secure connection established`);
-          break;
-        case 'failed':
-          console.error(`[DTLS] ${socketId}: DTLS handshake failed! ❌`);
-          break;
-        case 'closed':
-          console.log(`[DTLS] ${socketId}: DTLS connection closed`);
-          transport.close();
-          this.transports.delete(socketId);
-          break;
+      if (dtlsState === 'failed') {
+        console.error(`[DTLS] ${socketId}: DTLS handshake failed`);
+      } else if (dtlsState === 'closed') {
+        console.log(`[DTLS] ${socketId}: DTLS connection closed`);
+        this.transports.delete(socketId);
       }
     });
 
-    // ICE接続状態も監視
+    // ICE接続状態の監視
     transport.on('icestatechange', (iceState: any) => {
-      console.log(`[ICE] Transport ${transport.id} (${socketId}) ICE state: ${iceState}`);
+      console.log(`[ICE] ${socketId}: ${iceState}`);
       
-      switch (iceState) {
-        case 'new':
-          console.log(`[ICE] ${socketId}: ICE gathering started`);
-          break;
-        case 'checking':
-          console.log(`[ICE] ${socketId}: ICE connectivity checks in progress`);
-          break;
-        case 'connected':
-          console.log(`[ICE] ${socketId}: ICE connection established! 🌐`);
-          break;
-        case 'completed':
-          console.log(`[ICE] ${socketId}: ICE connection completed successfully! ✅`);
-          break;
-        case 'failed':
-          console.error(`[ICE] ${socketId}: ICE connection failed! ❌`);
-          break;
-        case 'disconnected':
-          console.warn(`[ICE] ${socketId}: ICE connection disconnected! ⚠️`);
-          break;
-        case 'closed':
-          console.log(`[ICE] ${socketId}: ICE connection closed`);
-          break;
-        default:
-          console.log(`[ICE] ${socketId}: Unknown ICE state: ${iceState}`);
+      if (iceState === 'failed') {
+        console.error(`[ICE] ${socketId}: ICE connection failed`);
+      } else if (iceState === 'disconnected') {
+        console.warn(`[ICE] ${socketId}: ICE disconnected`);
       }
     });
 
-    // SCTP状態監視（データチャネル用）
-    transport.on('sctpstatechange', (sctpState: any) => {
-      console.log(`[SCTP] Transport ${transport.id} (${socketId}) SCTP state: ${sctpState}`);
+    // transport監視を削除し、基本的なrouter closeのみ監視
+    transport.on('routerclose', () => {
+      console.log(`[TRANSPORT] Router closed for ${socketId}`);
+      this.transports.delete(socketId);
     });
 
     return {
@@ -205,7 +173,13 @@ export class MediasoupService {
       throw new Error('Transport not found');
     }
 
-    await transport.connect({ dtlsParameters });
+    try {
+      await transport.connect({ dtlsParameters });
+      console.log(`[CONNECT] ✅ Transport connected: ${socketId}`);
+    } catch (error) {
+      console.error(`[CONNECT] ❌ Failed: ${socketId}`, error instanceof Error ? error.message : error);
+      throw error;
+    }
   }
 
   async produce(
@@ -301,16 +275,12 @@ export class MediasoupService {
     protocol: string = 'gameProtocol',
     appData: any = {}
   ): Promise<{ id: string; sctpStreamParameters: any }> {
-    console.log(`[DATA-PRODUCER] Creating data producer for socket: ${socketId}`);
-    console.log(`[DATA-PRODUCER] SCTP parameters:`, sctpStreamParameters);
-    
     // 既存のデータプロデューサーをチェック
     const existingProducers = Array.from(this.dataProducers.values()).filter(
       producer => producer.appData && producer.appData.socketId === socketId
     );
     
     if (existingProducers.length > 0) {
-      console.log(`[DATA-PRODUCER] ⚠️ Data producer already exists for socket: ${socketId}, returning existing one`);
       const existingProducer = existingProducers[0];
       return { 
         id: existingProducer.id, 
@@ -320,12 +290,8 @@ export class MediasoupService {
     
     const transport = this.transports.get(socketId);
     if (!transport) {
-      console.error(`[DATA-PRODUCER] ❌ Transport not found for socket: ${socketId}`);
       throw new Error('Transport not found');
     }
-
-    console.log(`[DATA-PRODUCER] Transport found, SCTP enabled: ${transport.sctpParameters ? 'YES' : 'NO'}`);
-    console.log(`[DATA-PRODUCER] Transport SCTP parameters:`, transport.sctpParameters);
 
     try {
       const dataProducer = await transport.produceData({
@@ -335,11 +301,9 @@ export class MediasoupService {
         appData: { ...appData, socketId },
       });
 
-      console.log(`[DATA-PRODUCER] ✅ Data producer created successfully: ${dataProducer.id}`);
       this.dataProducers.set(dataProducer.id, dataProducer);
 
       dataProducer.on('transportclose', () => {
-        console.log('Data producer transport closed');
         this.dataProducers.delete(dataProducer.id);
         dataProducer.close();
       });
@@ -349,7 +313,7 @@ export class MediasoupService {
         sctpStreamParameters: dataProducer.sctpStreamParameters 
       };
     } catch (error) {
-      console.error(`[DATA-PRODUCER] ❌ Failed to create data producer for socket ${socketId}:`, error);
+      console.error(`[DATA-PRODUCER] Failed for ${socketId}:`, error);
       throw error;
     }
   }
@@ -599,14 +563,16 @@ export class MediasoupService {
   }
 
   private getLocalIpAddress(): string {
-    const { networkInterfaces } = require('os');
-    const nets = networkInterfaces();
+    const nets = os.networkInterfaces();
     
     for (const name of Object.keys(nets)) {
-      for (const net of nets[name]) {
-        // IPv4で内部ネットワークでないものを探す
-        if (net.family === 'IPv4' && !net.internal) {
-          return net.address;
+      const netList = nets[name];
+      if (netList) {
+        for (const net of netList) {
+          // IPv4で内部ネットワークでないものを探す
+          if (net.family === 'IPv4' && !net.internal) {
+            return net.address;
+          }
         }
       }
     }

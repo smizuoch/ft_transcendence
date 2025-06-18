@@ -585,21 +585,39 @@ async function startServer() {
       socket.on('create-tournament', async (data: { maxPlayers: number; playerInfo: any }) => {
         try {
           const { maxPlayers, playerInfo } = data;
+          
+          // JWTトークンから実際のユーザー情報を取得
+          let realPlayerInfo = playerInfo;
+          
+          // Socket.IOのハンドシェイクからJWTトークンを取得
+          const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
+          if (token) {
+            const username = extractUsernameFromToken(token);
+            if (username) {
+              console.log(`Fetching real profile for tournament creator: ${username}`);
+              realPlayerInfo = await fetchUserProfile(username);
+              console.log(`Real tournament creator info for ${username}:`, realPlayerInfo);
+            }
+          }
+          
           const tournamentId = Math.floor(100000 + Math.random() * 900000).toString();
           
           const tournament = tournamentManager.createTournament(tournamentId, maxPlayers);
-          const role = tournamentManager.addPlayer(tournamentId, socket.id, playerInfo);
+          const role = tournamentManager.addPlayer(tournamentId, socket.id, realPlayerInfo);
           
           socket.join(`tournament-${tournamentId}`);
+          
+          const participants = tournamentManager.getAllParticipants(tournamentId);
           
           socket.emit('tournament-created', {
             tournamentId,
             tournament,
             playerId: socket.id,
-            role
+            role,
+            participants
           });
 
-          console.log(`Tournament ${tournamentId} created with max ${maxPlayers} players`);
+          console.log(`Tournament ${tournamentId} created with max ${maxPlayers} players by ${realPlayerInfo.name} (${realPlayerInfo.id})`);
         } catch (error) {
           console.error('Error creating tournament:', error);
           socket.emit('error', { message: 'Failed to create tournament' });
@@ -611,7 +629,21 @@ async function startServer() {
         try {
           const { tournamentId, playerInfo } = data;
           
-          const role = tournamentManager.addPlayer(tournamentId, socket.id, playerInfo);
+          // JWTトークンから実際のユーザー情報を取得
+          let realPlayerInfo = playerInfo;
+          
+          // Socket.IOのハンドシェイクからJWTトークンを取得
+          const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
+          if (token) {
+            const username = extractUsernameFromToken(token);
+            if (username) {
+              console.log(`Fetching real profile for tournament player: ${username}`);
+              realPlayerInfo = await fetchUserProfile(username);
+              console.log(`Real tournament player info for ${username}:`, realPlayerInfo);
+            }
+          }
+          
+          const role = tournamentManager.addPlayer(tournamentId, socket.id, realPlayerInfo);
           const tournament = tournamentManager.getTournament(tournamentId);
           
           if (!tournament) {
@@ -634,12 +666,12 @@ async function startServer() {
           // 他の参加者に新しい参加者を通知
           socket.to(`tournament-${tournamentId}`).emit('tournament-participant-joined', {
             playerId: socket.id,
-            playerInfo,
+            playerInfo: realPlayerInfo,
             role,
             participants
           });
 
-          console.log(`Player ${socket.id} joined tournament ${tournamentId} as ${role}`);
+          console.log(`Player ${socket.id} (${realPlayerInfo.name}) joined tournament ${tournamentId} as ${role}`);
         } catch (error) {
           console.error('Error joining tournament:', error);
           socket.emit('error', { message: 'Failed to join tournament' });
