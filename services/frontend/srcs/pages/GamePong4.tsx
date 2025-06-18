@@ -969,7 +969,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
   };
 
   const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
-    // 自分のプレイヤー番号に基づいてスコアとアバターを決定
+    // 自分のプレイヤー番号に基づいてスコアとプレイヤー名を決定
     let displayedScore;
     let avatarPlayerKey: "player1" | "player2";
     
@@ -977,11 +977,11 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       // マルチプレイヤーの場合：左=自分、右=相手
       const isMyScore = (side === "left");
       if (isMyScore) {
-        // 自分のスコアとアバター
+        // 自分のスコアと名前
         displayedScore = playerNumber === 1 ? score.player1 : score.player2;
         avatarPlayerKey = "player1"; // 自分の情報（realPlayers.player1）
       } else {
-        // 相手のスコアとアバター  
+        // 相手のスコアと名前  
         displayedScore = playerNumber === 1 ? score.player2 : score.player1;
         avatarPlayerKey = "player2"; // 相手の情報（realPlayers.player2）
       }
@@ -1000,8 +1000,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       : "right-0 top-16";
     const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
 
-    // 実際のプレイヤー情報を使用
-    const playerInfo = realPlayers[avatarPlayerKey];
 
     return (
       <div
@@ -1016,20 +1014,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
           <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
         )}
         
-        {/* inner avatar */}
-        <img
-          src={playerInfo.avatar}
-          alt={`${playerInfo.name || 'Player'} avatar`}
-          className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = '/images/avatar/default_avatar.png';
-          }}
-        />
-        
-        {/* プレイヤー名表示（オプション） */}
-        <span className="text-white font-medium text-sm lg:text-base">
-          {playerInfo.name || 'Player'}
-        </span>
       </div>
     );
   };
@@ -1061,11 +1045,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
               
               {/* 勝者情報 */}
               <div className="flex flex-col items-center mb-12">
-                <img 
-                  src={tournamentWinner?.playerInfo.avatar || '/images/avatar/default_avatar.png'} 
-                  alt="winner avatar" 
-                  className="w-24 h-24 rounded-full mb-6 border-4 border-slate-500"
-                />
                 <div className="text-3xl font-bold text-slate-500">
                   {tournamentWinner?.playerInfo.name || 'Champion'}
                 </div>
@@ -1219,21 +1198,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
                               player ? 'border-slate-500 bg-slate-50' : 'border-gray-200 bg-gray-50'
                             }`}
                           >
-                            <div className="w-16 h-16 mb-3">
-                              {player ? (
-                                <img 
-                                  src={player.playerInfo.avatar} 
-                                  alt="player avatar" 
-                                  className="w-full h-full rounded-full object-cover border-2 border-slate-500"
-                                />
-                              ) : (
-                                <div className="w-full h-full rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center">
-                                  <div className="text-2xl text-gray-300">
-                                    ?
-                                  </div>
-                                </div>
-                              )}
-                            </div>
                             <div className={`text-sm font-medium text-center ${
                               player ? 'text-slate-500' : 'text-gray-400'
                             }`}>
