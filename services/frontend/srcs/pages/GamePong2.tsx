@@ -34,7 +34,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   // JWT認証チェック
   useEffect(() => {
     if (!isUserAuthenticated()) {
-      console.log('❌ GamePong2: User not authenticated, redirecting to Home');
+      // console.log('❌ GamePong2: User not authenticated, redirecting to Home');
       navigate('Home');
       return;
     }
@@ -57,7 +57,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       try {
         const token = localStorage.getItem('authToken');
         if (!token) {
-          console.log('No auth token found, using default players');
+          // console.log('No auth token found, using default players');
           setIsLoadingUserData(false);
           return;
         }
@@ -82,7 +82,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
               name: userData.username || "Player 1"
             }
           }));
-          console.log('User data loaded:', userData);
+          // console.log('User data loaded:', userData);
         } else {
           console.error('Failed to fetch user data');
         }
@@ -101,7 +101,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
-        console.log('No auth token found for opponent profile');
+        // console.log('No auth token found for opponent profile');
         return { id: username, avatar: "/images/avatar/default_avatar1.png", name: username };
       }
 
@@ -211,7 +211,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     const setupMultiplayer = async () => {
       try {
         if (multiplayerService.isConnectedToServer()) {
-          console.log('Already connected to multiplayer service');
+          // console.log('Already connected to multiplayer service');
           setMultiplayerConnected(true);
           return;
         }
@@ -226,32 +226,32 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setRoomSpectators(data.spectators || []);
           setIsGameReady(data.isGameReady);
           setIsSpectator(data.isSpectator || data.playerNumber === 'spectator');
-          console.log(`Joined as ${data.isSpectator ? 'spectator' : `player ${data.playerNumber}`}`);
+          // console.log(`Joined as ${data.isSpectator ? 'spectator' : `player ${data.playerNumber}`}`);
           setShowRoomInput(false);
 
           // 対戦相手の情報をrealPlayersに設定
-          console.log('roomJoined data received:', data);
-          console.log('Current playerId:', multiplayerService.getPlayerId());
+          // console.log('roomJoined data received:', data);
+          // console.log('Current playerId:', multiplayerService.getPlayerId());
 
           if (data.players && data.players.length > 0) {
-            console.log('All players in room:', data.players);
+            // console.log('All players in room:', data.players);
 
             const opponentPlayer = data.players.find(p => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
-              console.log('Found opponent player:', opponentPlayer);
+              // console.log('Found opponent player:', opponentPlayer);
               // APIから対戦相手の詳細プロフィール（画像含む）を取得
               fetchOpponentProfile(opponentPlayer.playerInfo.id).then(opponentProfile => {
                 setRealPlayers(prev => ({
                   ...prev,
                   player2: opponentProfile
                 }));
-                console.log('Opponent player profile updated with API data:', opponentProfile);
+                // console.log('Opponent player profile updated with API data:', opponentProfile);
               });
             } else {
-              console.log('No opponent player found in room');
+              // console.log('No opponent player found in room');
             }
           } else {
-            console.log('No players data or empty players array');
+            // console.log('No players data or empty players array');
           }
 
           const isAuth = data.playerNumber === 1;
@@ -268,58 +268,58 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setIsGameReady(data.isGameReady);
 
           // 新しく参加したプレイヤーが対戦相手の場合、情報を更新
-          console.log('playerJoined data received:', data);
+          // console.log('playerJoined data received:', data);
           if (data.players && data.players.length > 0) {
-            console.log('All players after join:', data.players);
+            // console.log('All players after join:', data.players);
 
             const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
-              console.log('Found new opponent player:', opponentPlayer);
+              // console.log('Found new opponent player:', opponentPlayer);
               // APIから対戦相手の詳細プロフィール（画像含む）を取得
               fetchOpponentProfile(opponentPlayer.playerInfo.id).then(opponentProfile => {
                 setRealPlayers(prev => ({
                   ...prev,
                   player2: opponentProfile
                 }));
-                console.log('New opponent player profile updated with API data:', opponentProfile);
+                // console.log('New opponent player profile updated with API data:', opponentProfile);
               });
             } else {
-              console.log('No new opponent player found');
+              // console.log('No new opponent player found');
             }
           }
         });
 
         // participant-joinedイベントも追加で監視
         multiplayerService.on('participantJoined', (data: any) => {
-          console.log('participantJoined data received:', data);
+          // console.log('participantJoined data received:', data);
           setRoomPlayers(data.players || []);
           setRoomSpectators(data.spectators || []);
           setIsGameReady(data.isGameReady);
 
           // 新しく参加したプレイヤーが対戦相手の場合、情報を更新
           if (data.players && data.players.length > 0) {
-            console.log('All players after participant join:', data.players);
+            // console.log('All players after participant join:', data.players);
 
             const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
-              console.log('Found participant opponent player:', opponentPlayer);
+              // console.log('Found participant opponent player:', opponentPlayer);
               // APIから対戦相手の詳細プロフィール（画像含む）を取得
               fetchOpponentProfile(opponentPlayer.playerInfo.id).then(opponentProfile => {
                 setRealPlayers(prev => ({
                   ...prev,
                   player2: opponentProfile
                 }));
-                console.log('Participant opponent player profile updated with API data:', opponentProfile);
+                // console.log('Participant opponent player profile updated with API data:', opponentProfile);
               });
             }
           }
         });
 
         multiplayerService.on('gameReady', (data: any) => {
-          console.log('Game ready data:', data);
+          // console.log('Game ready data:', data);
           setIsGameReady(true);
           setRoomPlayers(data.players);
-          console.log(`Game is now ready! Players: ${data.players.length}`);
+          // console.log(`Game is now ready! Players: ${data.players.length}`);
 
           // ゲーム開始準備時にも対戦相手の情報を更新
           if (data.players && data.players.length > 0) {
@@ -331,16 +331,16 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
                   ...prev,
                   player2: opponentProfile
                 }));
-                console.log('Game ready: Opponent player profile updated with API data:', opponentProfile);
+                // console.log('Game ready: Opponent player profile updated with API data:', opponentProfile);
               });
             } else {
-              console.log('Game ready: No opponent player found');
+              // console.log('Game ready: No opponent player found');
             }
           }
         });
 
         multiplayerService.on('gameStarted', (data: { roomNumber: string; players: any[]; initiator: string }) => {
-          console.log('Game started by player:', data.initiator);
+          // console.log('Game started by player:', data.initiator);
           if (engineRef.current) {
             engineRef.current.updateNPCConfig({ enabled: false });
           }
@@ -351,7 +351,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         });
 
         multiplayerService.on('gameStartFailed', (data: { reason: string; currentPlayers: number }) => {
-          console.log('Game start failed:', data.reason);
+          // console.log('Game start failed:', data.reason);
           alert(`ゲーム開始に失敗しました: ${data.reason} (現在のプレイヤー数: ${data.currentPlayers})`);
         });
 
@@ -403,7 +403,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         setMultiplayerConnected(false);
         // 認証エラーの場合はHomeページにリダイレクト
         if (error instanceof Error && error.message.includes('Authentication required')) {
-          console.log('❌ GamePong2: Authentication error, redirecting to Home');
+          // console.log('❌ GamePong2: Authentication error, redirecting to Home');
           navigate('Home');
         }
       }
@@ -423,7 +423,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     return () => {
       if (multiplayerService.isInRoom()) {
         multiplayerService.leaveRoom();
-        console.log('Left room due to component unmount');
+        // console.log('Left room due to component unmount');
       }
     };
   }, []);
@@ -444,7 +444,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         setWinner(winnerNumber);
 
         // ゲーム終了時に即座にゲームループを停止
-        console.log('🛑 Game ended, stopping game loop immediately');
+        // console.log('🛑 Game ended, stopping game loop immediately');
         stopGameLoop();
 
         // ゲーム状態をリセット
@@ -545,27 +545,25 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           if (npcEnabled) {
             // NPCモード: NPCはplayer1、人間はplayer2
             result = winner === 2 ? 'win' : 'lose';
-            console.log('🎮 NPC Mode - Winner:', winner, 'Human result:', result);
+            // console.log('🎮 NPC Mode - Winner:', winner, 'Human result:', result);
           } else if (isMultiplayer && playerNumber) {
             // マルチプレイヤーモード: 自分のプレイヤー番号と勝者を比較
             result = winner === playerNumber ? 'win' : 'lose';
-            console.log('🎮 Multiplayer Mode - Winner:', winner, 'My number:', playerNumber, 'My result:', result);
+            // console.log('🎮 Multiplayer Mode - Winner:', winner, 'My number:', playerNumber, 'My result:', result);
           } else {
             // ローカルPvPモード（通常は使用されない）
             result = winner === 1 ? 'win' : 'lose';
-            console.log('🎮 Local PvP Mode - Winner:', winner, 'Result:', result);
-          }
-
-          // 現在の日付を取得（ISO文字列形式YYYY-MM-DD）
+            // console.log('🎮 Local PvP Mode - Winner:', winner, 'Result:', result);
+          }          // 現在の日付を取得（ISO文字列形式YYYY-MM-DD）
           const today = new Date();
           const gameDate = today.toISOString().split('T')[0]; // YYYY-MM-DD形式
 
-          console.log('🏆 Saving GamePong2 result:', {
-            username,
-            opponentUsername,
-            result,
-            gameDate
-          });
+          // console.log('🏆 Saving GamePong2 result:', {
+          //   username,
+          //   opponentUsername,
+          //   result,
+          //   gameDate
+          // });
 
           // ゲーム結果をresult_searchサービスに送信
           const response = await fetch('/api/results/pong2', {
@@ -586,13 +584,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             throw new Error(`Failed to save game result: ${response.status}`);
           }
 
-          console.log('✅ GamePong2 result saved successfully');
+          // console.log('✅ GamePong2 result saved successfully');
         } catch (error) {
           console.error('Error while saving GamePong2 result:', error);
         } finally {
           // 処理が完了したら画面遷移（少し遅延を入れて結果表示を見せる）
           setTimeout(() => {
-            console.log('🚀 Navigating to MyPage');
+            // console.log('🚀 Navigating to MyPage');
             navigate("MyPage");
           }, 800);
         }
@@ -622,7 +620,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
 
     // マルチプレイヤーモードで相手がいない場合、自動的にNPCモードに切り替え
     if (isMultiplayer && !isGameReady) {
-      console.log('No opponent found, switching to NPC mode...');
+      // console.log('No opponent found, switching to NPC mode...');
       setIsMultiplayer(false);
       setNpcEnabled(true);
       // NPCの設定
@@ -642,7 +640,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
 
     // マルチプレイヤーモードの場合、サーバーにゲーム開始要求を送信
     if (isMultiplayer && isGameReady) {
-      console.log('Requesting to start multiplayer game...');
+      // console.log('Requesting to start multiplayer game...');
       multiplayerService.startGame();
       return;
     }
@@ -789,7 +787,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         const autoJoinRoom = async () => {
           try {
             if (multiplayerService.isInRoom()) {
-              console.log('Already in room, skipping join');
+              // console.log('Already in room, skipping join');
               return;
             }
 
@@ -805,13 +803,13 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             };
 
             await multiplayerService.joinRoom(propRoomNumber, playerInfo);
-            console.log(`Auto-joining room: ${propRoomNumber}`);
+            // console.log(`Auto-joining room: ${propRoomNumber}`);
           } catch (error) {
             console.error('Auto join room failed:', error);
             setMultiplayerConnected(false);
             // 認証エラーの場合はHomeページにリダイレクト
             if (error instanceof Error && error.message.includes('Authentication required')) {
-              console.log('❌ GamePong2: Authentication error, redirecting to Home');
+              // console.log('❌ GamePong2: Authentication error, redirecting to Home');
               navigate('Home');
             } else {
               alert('部屋への参加に失敗しました');
@@ -861,7 +859,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       setMultiplayerConnected(false);
       // 認証エラーの場合はHomeページにリダイレクト
       if (error instanceof Error && error.message.includes('Authentication required')) {
-        console.log('❌ GamePong2: Authentication error, redirecting to Home');
+        // console.log('❌ GamePong2: Authentication error, redirecting to Home');
         navigate('Home');
       } else {
         alert('部屋への参加に失敗しました');
@@ -949,7 +947,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       </div>
 
       {/* ============= 観戦者パネル ============= */}
-      {isSpectator && (
+      {/* {isSpectator && (
         <SpectatorPanel
           roomPlayers={roomPlayers}
           roomSpectators={roomSpectators}
@@ -957,15 +955,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           score={score}
           gameStarted={gameStarted}
         />
-      )}
+      )} */}
 
       {/* ============= DTLS デバッグパネル ============= */}
-      {isMultiplayer && (
+      {/* {isMultiplayer && (
         <DTLSDebugPanel
           multiplayerService={multiplayerService}
           visible={true}
         />
-      )}
+      )} */}
     </div>
   );
 };
