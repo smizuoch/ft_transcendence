@@ -3,9 +3,94 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { MediasoupService } from './mediasoup-service';
 import { RoomManager } from './room-manager';
 import { TournamentManager } from './tournament-manager';
-import { GameState } from './types';
+import { GameState, PlayerInfo } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as jwt from 'jsonwebtoken';
+
+// JWT認証機能
+interface JWTPayload {
+  username: string;
+  userId?: string;
+  iat?: number;
+  exp?: number;
+}
+
+// ユーザープロフィール取得機能（Node.js標準のhttpモジュールを使用）
+const fetchUserProfile = async (username: string): Promise<PlayerInfo> => {
+  return new Promise((resolve) => {
+    const http = require('http');
+    
+    const options = {
+      hostname: 'user_search',
+      port: 3000,
+      path: `/api/user-search/profile/${username}`,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+
+    const req = http.request(options, (res: any) => {
+      let data = '';
+      
+      res.on('data', (chunk: any) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          if (res.statusCode === 200) {
+            const result = JSON.parse(data);
+            const userData = result.data;
+            
+            resolve({
+              id: userData.username,
+              avatar: userData.profileImage || "/images/avatar/default_avatar.png",
+              name: userData.username
+            });
+          } else {
+            console.error(`Failed to fetch profile for ${username}, status: ${res.statusCode}`);
+            resolve({
+              id: username,
+              avatar: "/images/avatar/default_avatar.png",
+              name: username
+            });
+          }
+        } catch (error) {
+          console.error(`Error parsing response for ${username}:`, error);
+          resolve({
+            id: username,
+            avatar: "/images/avatar/default_avatar.png",
+            name: username
+          });
+        }
+      });
+    });
+
+    req.on('error', (error: any) => {
+      console.error(`Error fetching profile for ${username}:`, error);
+      resolve({
+        id: username,
+        avatar: "/images/avatar/default_avatar.png",
+        name: username
+      });
+    });
+
+    req.end();
+  });
+};
+
+// JWTトークンからユーザー名を抽出
+const extractUsernameFromToken = (token: string): string | null => {
+  try {
+    const decoded = jwt.decode(token) as JWTPayload;
+    return decoded?.username || null;
+  } catch (error) {
+    console.error('Error decoding JWT token:', error);
+    return null;
+  }
+};
 
 // SSL証明書の設定
 const getSSLOptions = () => {
@@ -265,6 +350,20 @@ async function startServer() {
           const { roomNumber, playerInfo } = data;
           console.log(`Player ${socket.id} attempting to join room ${roomNumber}`);
 
+          // JWTトークンから実際のユーザー情報を取得
+          let realPlayerInfo = playerInfo;
+          
+          // Socket.IOのハンドシェイクからJWTトークンを取得
+          const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
+          if (token) {
+            const username = extractUsernameFromToken(token);
+            if (username) {
+              console.log(`Fetching real profile for user: ${username}`);
+              realPlayerInfo = await fetchUserProfile(username);
+              console.log(`Real player info for ${username}:`, realPlayerInfo);
+            }
+          }
+
           // 既に同じ部屋にいるかチェック
           const existingRooms = Array.from(socket.rooms);
           if (existingRooms.includes(roomNumber)) {
@@ -282,10 +381,10 @@ async function startServer() {
           }
 
           // 部屋に参加
-          const { room, role } = roomManager.joinRoom(roomNumber, socket.id, playerInfo);
+          const { room, role } = roomManager.joinRoom(roomNumber, socket.id, realPlayerInfo);
           socket.join(roomNumber);
 
-          console.log(`Player ${socket.id} successfully joined room ${roomNumber} as ${role === 'spectator' ? 'spectator' : `player ${role}`}`);
+          console.log(`Player ${socket.id} (${realPlayerInfo.name}) successfully joined room ${roomNumber} as ${role === 'spectator' ? 'spectator' : `player ${role}`}`);
 
           // 参加者情報を送信
           const roomData = room.getAllParticipants();
@@ -301,14 +400,14 @@ async function startServer() {
           // 他の参加者に新しい参加者を通知
           socket.to(roomNumber).emit('participant-joined', {
             playerId: socket.id,
-            playerInfo,
+            playerInfo: realPlayerInfo,
             role: role,
             players: roomData.players,
             spectators: roomData.spectators,
             isGameReady: room.getPlayerCount() === 2
           });
 
-          // 2人揃ったらゲーム開始準備
+          // 2人揃ったらゲーム開始準備（実際のプレイヤー情報と共に）
           if (room.getPlayerCount() === 2) {
             io.to(roomNumber).emit('game-ready', {
               players: roomData.players,

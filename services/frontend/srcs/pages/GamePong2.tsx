@@ -79,7 +79,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setRealPlayers(prev => ({
             ...prev,
             player1: {
-              id: userData.userId,
+              id: userData.username,
               avatar: userData.profileImage || "/images/avatar/default_avatar.png",
               name: userData.username || "Player 1"
             }
@@ -98,6 +98,41 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
 
     fetchUserData();
   }, []);
+
+  // ============= 対戦相手のプロフィールデータを取得 =============
+  const fetchOpponentProfile = async (username: string): Promise<PlayerInfo> => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.log('No auth token found for opponent profile');
+        return { id: username, avatar: "/images/avatar/default_avatar1.png", name: username };
+      }
+
+      const response = await fetch(`/api/user-search/profile/${username}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const opponentData = result.data;
+        
+        return {
+          id: opponentData.username,
+          avatar: opponentData.profileImage || "/images/avatar/default_avatar1.png",
+          name: opponentData.username
+        };
+      } else {
+        console.error('Failed to fetch opponent profile data');
+        return { id: username, avatar: "/images/avatar/default_avatar1.png", name: username };
+      }
+    } catch (error) {
+      console.error('Error fetching opponent profile data:', error);
+      return { id: username, avatar: "/images/avatar/default_avatar1.png", name: username };
+    }
+  };
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameStarted, setGameStarted] = useState(false);
@@ -198,6 +233,30 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           console.log(`Joined as ${data.isSpectator ? 'spectator' : `player ${data.playerNumber}`}`);
           setShowRoomInput(false);
           
+          // 対戦相手の情報をrealPlayersに設定
+          console.log('roomJoined data received:', data);
+          console.log('Current playerId:', multiplayerService.getPlayerId());
+          if (data.players && data.players.length > 0) {
+            console.log('All players in room:', data.players);
+            const opponentPlayer = data.players.find(p => p.playerId !== multiplayerService.getPlayerId());
+            if (opponentPlayer) {
+              console.log('Found opponent player:', opponentPlayer);
+              setRealPlayers(prev => ({
+                ...prev,
+                player2: {
+                  id: opponentPlayer.playerInfo.id,
+                  avatar: opponentPlayer.playerInfo.avatar,
+                  name: opponentPlayer.playerInfo.name || 'Player 2'
+                }
+              }));
+              console.log('Opponent player info updated:', opponentPlayer.playerInfo);
+            } else {
+              console.log('No opponent player found in room');
+            }
+          } else {
+            console.log('No players data or empty players array');
+          }
+          
           const isAuth = data.playerNumber === 1;
           setIsAuthoritativeClient(isAuth);
           if (engineRef.current) {
@@ -209,6 +268,53 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setRoomPlayers(data.players || []);
           setRoomSpectators(data.spectators || []);
           setIsGameReady(data.isGameReady);
+          
+          // 新しく参加したプレイヤーが対戦相手の場合、情報を更新
+          console.log('playerJoined data received:', data);
+          if (data.players && data.players.length > 0) {
+            console.log('All players after join:', data.players);
+            const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
+            if (opponentPlayer) {
+              console.log('Found new opponent player:', opponentPlayer);
+              setRealPlayers(prev => ({
+                ...prev,
+                player2: {
+                  id: opponentPlayer.playerInfo.id,
+                  avatar: opponentPlayer.playerInfo.avatar,
+                  name: opponentPlayer.playerInfo.name || 'Player 2'
+                }
+              }));
+              console.log('New opponent player info updated:', opponentPlayer.playerInfo);
+            } else {
+              console.log('No new opponent player found');
+            }
+          }
+        });
+
+        // participant-joinedイベントも追加で監視
+        multiplayerService.on('participantJoined', (data: any) => {
+          console.log('participantJoined data received:', data);
+          setRoomPlayers(data.players || []);
+          setRoomSpectators(data.spectators || []);
+          setIsGameReady(data.isGameReady);
+          
+          // 新しく参加したプレイヤーが対戦相手の場合、情報を更新
+          if (data.players && data.players.length > 0) {
+            console.log('All players after participant join:', data.players);
+            const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
+            if (opponentPlayer) {
+              console.log('Found participant opponent player:', opponentPlayer);
+              setRealPlayers(prev => ({
+                ...prev,
+                player2: {
+                  id: opponentPlayer.playerInfo.id,
+                  avatar: opponentPlayer.playerInfo.avatar,
+                  name: opponentPlayer.playerInfo.name || 'Player 2'
+                }
+              }));
+              console.log('Participant opponent player info updated:', opponentPlayer.playerInfo);
+            }
+          }
         });
 
         multiplayerService.on('gameReady', (data: any) => {
@@ -216,6 +322,24 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setIsGameReady(true);
           setRoomPlayers(data.players);
           console.log(`Game is now ready! Players: ${data.players.length}`);
+          
+          // ゲーム開始準備時にも対戦相手の情報を更新
+          if (data.players && data.players.length > 0) {
+            const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
+            if (opponentPlayer) {
+              setRealPlayers(prev => ({
+                ...prev,
+                player2: {
+                  id: opponentPlayer.playerInfo.id,
+                  avatar: opponentPlayer.playerInfo.avatar,
+                  name: opponentPlayer.playerInfo.name || 'Player 2'
+                }
+              }));
+              console.log('Game ready: Opponent player info updated:', opponentPlayer.playerInfo);
+            } else {
+              console.log('Game ready: No opponent player found');
+            }
+          }
         });
 
         multiplayerService.on('gameStarted', (data: { roomNumber: string; players: any[]; initiator: string }) => {
@@ -578,9 +702,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
               await multiplayerService.connect();
               setMultiplayerConnected(true);
             }            const playerInfo = {
-              id: '',
-              avatar: realPlayers.player2.avatar,
-              name: realPlayers.player2.name || 'Player'
+              id: String(realPlayers.player1.id),
+              avatar: realPlayers.player1.avatar,
+              name: realPlayers.player1.name || 'Player'
             };
 
             await multiplayerService.joinRoom(propRoomNumber, playerInfo);
@@ -628,9 +752,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
         await multiplayerService.connect();
         setMultiplayerConnected(true);
       }      const playerInfo = {
-        id: '',
-        avatar: realPlayers.player2.avatar,
-        name: realPlayers.player2.name || 'Player'
+        id: String(realPlayers.player1.id),
+        avatar: realPlayers.player1.avatar,
+        name: realPlayers.player1.name || 'Player'
       };
 
       await multiplayerService.joinRoom(roomNumber, playerInfo);
