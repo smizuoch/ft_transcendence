@@ -1139,6 +1139,24 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     }
   };
 
+  // Helper function for safe gameState property access
+  const safeGetGameStateValue = (gameState: any, path: string, defaultValue: number = 0): number => {
+    try {
+      const keys = path.split('.');
+      let value = gameState;
+      for (const key of keys) {
+        if (value && typeof value === 'object' && key in value) {
+          value = value[key];
+        } else {
+          return defaultValue;
+        }
+      }
+      return typeof value === 'number' ? value : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  };
+
   return (
     <div
       className="relative w-full h-screen overflow-hidden font-[Futura]"
@@ -1217,15 +1235,36 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
               // NPCゲームか他のプレイヤーゲームかを判定
               const gameState = hasPlayerGame ? otherPlayerGame.gameState : game?.gameState?.gameState;
+
+              // ゲーム状態の安全性チェック
+              if (!gameState || !gameState.paddle1 || !gameState.paddle2 || !gameState.ball ||
+                  typeof gameState.paddle1.x === 'undefined' || typeof gameState.paddle2.x === 'undefined' ||
+                  typeof gameState.ball.x === 'undefined') {
+                // ゲーム状態が不完全な場合はロード中状態を表示
+                return (
+                  <div
+                    key={`left-${i}`}
+                    className="cursor-pointer transition-all duration-200 relative"
+                    style={{ width: "12.8vmin", height: "12.8vmin" }}
+                  >
+                    <div className="w-full h-full border border-white relative overflow-hidden bg-gray-800">
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-white text-xs opacity-60">Loading...</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要
               const isPlayerVsPlayer = hasPlayerGame;
 
               // デバッグ: パドル位置情報をログに出力
               if (gameState && i === 0) { // 最初のゲームのみログ出力
                 console.log(`🎯 Game ${i} paddle positions:`, {
-                  paddle1: { x: gameState.paddle1.x, y: gameState.paddle1.y },
-                  paddle2: { x: gameState.paddle2.x, y: gameState.paddle2.y },
-                  ball: { x: gameState.ball.x, y: gameState.ball.y }
+                  paddle1: { x: gameState.paddle1?.x || 0, y: gameState.paddle1?.y || 0 },
+                  paddle2: { x: gameState.paddle2?.x || 0, y: gameState.paddle2?.y || 0 },
+                  ball: { x: gameState.ball?.x || 0, y: gameState.ball?.y || 0 }
                 });
               }
 
@@ -1359,6 +1398,27 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
               }
 
               const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
+
+              // 右側ゲーム状態の安全性チェック
+              if (!gameState || !gameState.paddle1 || !gameState.paddle2 || !gameState.ball ||
+                  typeof gameState.paddle1.x === 'undefined' || typeof gameState.paddle2.x === 'undefined' ||
+                  typeof gameState.ball.x === 'undefined') {
+                // ゲーム状態が不完全な場合はロード中状態を表示
+                return (
+                  <div
+                    key={`right-${gameIndex}`}
+                    className="cursor-pointer transition-all duration-200 relative"
+                    style={{ width: "12.8vmin", height: "12.8vmin" }}
+                  >
+                    <div className="w-full h-full border border-white relative overflow-hidden bg-gray-800">
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-white text-xs opacity-60">Loading...</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要
               const isPlayerVsPlayer = false; // 右側は純粋にNPCゲーム
 
