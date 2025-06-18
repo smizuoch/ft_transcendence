@@ -5,7 +5,7 @@ import { isUserAuthenticated } from "@/utils/authUtils";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
 
 interface PlayerInfo {
-  id: number | string;
+  id: string;
   avatar: string;
   name?: string;
 }
@@ -48,12 +48,73 @@ interface GamePong4Props {
 
 const ICON_PATH = "/images/icons/";
 
-const defaultPlayers = {
-  player1: { id: 1, avatar: "/images/avatar/default_avatar.png", name: "Player 1" },
-  player2: { id: 2, avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
+// ユーザー情報を取得するユーティリティ関数
+const fetchUserProfile = async (username: string): Promise<PlayerInfo | null> => {
+  try {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      console.error('No auth token found');
+      return null;
+    }
+
+    const response = await fetch(`/api/user-search/profile/${encodeURIComponent(username)}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return {
+        id: result.data.username,
+        avatar: result.data.profileImage || '/images/avatar/default_avatar.png',
+        name: result.data.username
+      };
+    } else {
+      console.error('Failed to fetch user profile:', response.status);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return null;
+  }
 };
 
-const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayers }) => {
+// 現在のユーザー情報を取得
+const getCurrentUser = async (): Promise<PlayerInfo | null> => {
+  try {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      console.error('No auth token found');
+      return null;
+    }
+
+    const response = await fetch('/api/user-search/me', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return {
+        id: result.data.username,
+        avatar: result.data.profileImage || '/images/avatar/default_avatar.png',
+        name: result.data.username
+      };
+    } else {
+      console.error('Failed to fetch current user:', response.status);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error fetching current user:', error);
+    return null;
+  }
+};
+
+const GamePong4: React.FC<GamePong4Props> = ({ navigate, players }) => {
   // JWT認証チェック
   useEffect(() => {
     if (!isUserAuthenticated()) {
@@ -62,6 +123,17 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       return;
     }
   }, [navigate]);
+
+  // 現在のユーザー情報を取得
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      const userInfo = await getCurrentUser();
+      if (userInfo) {
+        setCurrentUserInfo(userInfo);
+      }
+    };
+    loadCurrentUser();
+  }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -100,6 +172,10 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
   
   // 重複防止フラグ
   const [tournamentResultSent, setTournamentResultSent] = useState(false);
+  
+  // プレイヤー情報の状態管理
+  const [currentUserInfo, setCurrentUserInfo] = useState<PlayerInfo | null>(null);
+  const [participantPlayers, setParticipantPlayers] = useState<{ [key: string]: PlayerInfo }>({});
 
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
@@ -144,6 +220,22 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         multiplayerService.on('tournament-participant-joined', (data: any) => {
           console.log('New participant joined:', data);
           setParticipants(data.participants);
+          
+          // 新しい参加者の情報を取得
+          if (data.participants && data.participants.players) {
+            data.participants.players.forEach(async (player: any) => {
+              const playerInfo = player.playerInfo;
+              if (playerInfo && playerInfo.name && !participantPlayers[playerInfo.name]) {
+                const profile = await fetchUserProfile(playerInfo.name);
+                if (profile) {
+                  setParticipantPlayers(prev => ({
+                    ...prev,
+                    [playerInfo.name]: profile
+                  }));
+                }
+              }
+            });
+          }
         });
 
         multiplayerService.on('tournament-started', (data: any) => {
@@ -512,10 +604,11 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       // スコアを必ずリセット
       setScore({ player1: 0, player2: 0 });
       
-      const playerInfo = {
+      // 現在のユーザー情報を使用してプレイヤー情報を構築
+      const playerInfo = currentUserInfo || {
         id: '',
-        avatar: players.player2.avatar,
-        name: players.player2.name || 'Player'
+        avatar: '/images/avatar/default_avatar.png',
+        name: 'Player'
       };
 
       await multiplayerService.joinRoom(roomNum, playerInfo);
@@ -550,10 +643,10 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         console.log('Connected successfully');
       }
 
-      const playerInfo = {
+      const playerInfo = currentUserInfo || {
         id: '',
-        avatar: players.player1.avatar,
-        name: players.player1.name || 'Tournament Host'
+        avatar: '/images/avatar/default_avatar.png',
+        name: 'Tournament Host'
       };
 
       console.log('Sending create tournament request with playerInfo:', playerInfo);
@@ -579,10 +672,10 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
     }
 
     try {
-      const playerInfo = {
+      const playerInfo = currentUserInfo || {
         id: '',
-        avatar: players.player2.avatar,
-        name: players.player2.name || 'Player'
+        avatar: '/images/avatar/default_avatar.png',
+        name: 'Player'
       };
 
       multiplayerService.joinTournament(tournamentId, playerInfo);
@@ -856,7 +949,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
   const renderAvatarGroup = (idx: 1 | 2, side: "left" | "right") => {
     // 自分のプレイヤー番号に基づいてスコアとアバターを決定
     let displayedScore;
-    let avatarPlayerKey: "player1" | "player2";
+    let avatarSrc = '/images/avatar/default_avatar.png';
     
     if (isMultiplayer && playerNumber) {
       // マルチプレイヤーの場合：左=自分、右=相手
@@ -864,16 +957,26 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       if (isMyScore) {
         // 自分のスコアとアバター
         displayedScore = playerNumber === 1 ? score.player1 : score.player2;
-        avatarPlayerKey = playerNumber === 1 ? "player1" : "player2";
+        avatarSrc = currentUserInfo?.avatar || '/images/avatar/default_avatar.png';
       } else {
-        // 相手のスコアとアバター  
+        // 相手のスコアとアバター
         displayedScore = playerNumber === 1 ? score.player2 : score.player1;
-        avatarPlayerKey = playerNumber === 1 ? "player2" : "player1";
+        // 現在の試合の相手のアバターを取得
+        if (currentMatch) {
+          const myPlayerId = multiplayerService.getPlayerId();
+          if (currentMatch.player1?.playerId === myPlayerId) {
+            avatarSrc = currentMatch.player2?.playerInfo.avatar || '/images/avatar/default_avatar.png';
+          } else {
+            avatarSrc = currentMatch.player1?.playerInfo.avatar || '/images/avatar/default_avatar.png';
+          }
+        }
       }
     } else {
       // ローカルゲーム/NPCモードの場合は従来通り
       displayedScore = idx === 1 ? score.player1 : score.player2;
-      avatarPlayerKey = idx === 1 ? "player1" : "player2";
+      if (players) {
+        avatarSrc = players[idx === 1 ? "player1" : "player2"]?.avatar || '/images/avatar/default_avatar.png';
+      }
     }
     
     const pts = displayedScore;
@@ -900,7 +1003,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         
         {/* inner avatar */}
         <img
-          src={players[avatarPlayerKey].avatar}
+          src={avatarSrc}
           alt="avatar"
           className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
         />
