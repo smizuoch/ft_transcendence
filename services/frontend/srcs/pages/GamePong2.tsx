@@ -533,10 +533,22 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           } else {
             // その他の場合（デフォルト）
             opponentUsername = 'Unknown';
+          }          // 勝敗結果を決定
+          let result: 'win' | 'lose';
+          
+          if (npcEnabled) {
+            // NPCモード: NPCはplayer1、人間はplayer2
+            result = winner === 2 ? 'win' : 'lose';
+            console.log('🎮 NPC Mode - Winner:', winner, 'Human result:', result);
+          } else if (isMultiplayer && playerNumber) {
+            // マルチプレイヤーモード: 自分のプレイヤー番号と勝者を比較
+            result = winner === playerNumber ? 'win' : 'lose';
+            console.log('🎮 Multiplayer Mode - Winner:', winner, 'My number:', playerNumber, 'My result:', result);
+          } else {
+            // ローカルPvPモード（通常は使用されない）
+            result = winner === 1 ? 'win' : 'lose';
+            console.log('🎮 Local PvP Mode - Winner:', winner, 'Result:', result);
           }
-
-          // 勝敗結果を決定
-          const result = winner === 1 ? 'win' : 'lose';
 
           // 現在の日付を取得（ISO文字列形式YYYY-MM-DD）
           const today = new Date();
