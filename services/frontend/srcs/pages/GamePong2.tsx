@@ -645,9 +645,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     const positionClass = side === "left"
       ? "left-0 bottom-16"
       : "right-0 top-16";
-    const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
-
-    const playerInfo = realPlayers[avatarPlayerKey];
+    const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";    const playerInfo = realPlayers[avatarPlayerKey];
+    
+    // NPC対戦時の名前とアバター表示を調整
+    let displayName = playerInfo.name;
+    let displayAvatar = playerInfo.avatar;
+    if (npcEnabled && avatarPlayerKey === "player2") {
+      displayName = "NPC";
+      displayAvatar = "/images/avatar/npc_avatar.png";
+    }
 
     return (
       <div
@@ -659,17 +665,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           <img src={`${ICON_PATH}win.svg`} alt="win" className="w-12 h-12 lg:w-16 lg:h-16" />
         ) : (
           <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
-        )}
-
-        <div className="flex flex-col items-center gap-1">
+        )}        <div className="flex flex-col items-center gap-1">
           <img
-            src={playerInfo.avatar}
+            src={displayAvatar}
             alt="avatar"
             className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
-          />
-          {playerInfo.name && (
+          />          {playerInfo.name && (
             <span className="text-white text-xs lg:text-sm font-medium">
-              {playerInfo.name}
+              {displayName}
             </span>
           )}
         </div>
