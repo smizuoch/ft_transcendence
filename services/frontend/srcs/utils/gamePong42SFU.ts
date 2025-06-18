@@ -27,7 +27,11 @@ interface PlayerGameState {
   isActive: boolean;
 }
 
-const SFU_URL = 'http://localhost:3042';
+const SFU_URL = () => {
+  const hostname = window.location.hostname;
+  // WebRTCにはHTTPS/WSSが必要なので、必ずhttpsを使用
+  return `https://${hostname}:3042`;
+};
 
 // クライアント側で管理するゲーム状態の型定義
 interface GamePong42LocalState {
@@ -185,16 +189,22 @@ export const useGamePong42SFU = () => {
       return;
     }
 
-    console.log('🔗 Connecting to SFU server:', SFU_URL);
+    console.log('🔗 Connecting to SFU server:', SFU_URL());
 
-    const socket = io(SFU_URL, {
-      transports: ['websocket'],
+    const socket = io(SFU_URL(), {
+      transports: ['websocket'], // WebSocketのみ使用
+      // HTTPS/WSS設定
+      secure: true, // HTTPS/WSS強制
       upgrade: false,
       rememberUpgrade: false,
       timeout: 20000,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      // CORS設定
+      withCredentials: true,
+      // 追加のSSL設定（自己署名証明書対応）
+      rejectUnauthorized: false
     });
 
     socketRef.current = socket;

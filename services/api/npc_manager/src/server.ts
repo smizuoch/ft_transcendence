@@ -37,7 +37,7 @@ const roomNPCs = new Map<string, NPCRoomData>();
 
 // SFUサーバーへの接続
 let defaultSfuSocket: Socket | null = null;
-const defaultSfuUrl = process.env.SFU_URL || 'http://sfu42:3042';
+const defaultSfuUrl = process.env.SFU_URL || 'https://sfu42:3042';
 
 // 特定の部屋用にSFUサーバーに接続
 function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<Socket> {
@@ -45,8 +45,16 @@ function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<
     console.log(`Connecting to SFU server at ${sfuServerUrl} for room ${roomNumber}...`);
 
     const sfuSocket = SocketIOClient(sfuServerUrl, {
-      transports: ['websocket', 'polling'],
-      timeout: 10000
+      transports: ['websocket'], // WebSocketのみ使用
+      // HTTPS/WSS設定
+      secure: true, // HTTPS/WSS強制
+      timeout: 10000,
+      // 自己署名証明書対応
+      rejectUnauthorized: false,
+      // 追加の設定
+      forceNew: true,
+      upgrade: true,
+      rememberUpgrade: false
     });
 
     sfuSocket.on('connect', () => {
@@ -94,7 +102,15 @@ function connectToDefaultSFU() {
   console.log(`Connecting to default SFU server at ${defaultSfuUrl}...`);
 
   defaultSfuSocket = SocketIOClient(defaultSfuUrl, {
-    transports: ['websocket', 'polling']
+    transports: ['websocket'], // WebSocketのみ使用
+    // HTTPS/WSS設定
+    secure: true, // HTTPS/WSS強制
+    // 自己署名証明書対応
+    rejectUnauthorized: false,
+    // 追加の設定
+    forceNew: true,
+    upgrade: true,
+    rememberUpgrade: false
   });
 
   defaultSfuSocket.on('connect', () => {
