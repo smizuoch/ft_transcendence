@@ -273,6 +273,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       // NPCの数を計算（42 - 参加者数）
       const npcCount = Math.max(0, 42 - gameState.participantCount);
 
+      // ゲーム開始時は常に生存者数を42に設定
+      setSurvivors(42);
+
       if (npcCount > 0) {
         initMiniGames(npcCount);
       } else {
@@ -314,11 +317,13 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
   // NPCデータの監視・処理（SFU経由でNPCデータを受信）
   useEffect(() => {
-    sfu.receivedData.forEach(data => {
-      if (data.type === 'gameState' && data.playerId === 'npc-manager' && data.payload.npcStates) {
-        // 生存者数の更新（アクティブなNPCの数 + 参加プレイヤー数）
+    sfu.receivedData.forEach(data => {      if (data.type === 'gameState' && data.playerId === 'npc-manager' && data.payload.npcStates) {
+        // 生存者数の更新（常に42に固定、NPCが余分に作成されている問題への対処）
         const activeNPCCount = data.payload.npcStates.filter((npc: any) => npc.active !== false).length;
-        const totalSurvivors = activeNPCCount + sfu.gameState.participantCount;
+        // 理想的には activeNPCCount + participantCount = 42 であるべき
+        // しかし現在NPCが1つ多く作成されているため、最大42に制限
+        const totalSurvivors = Math.min(42, activeNPCCount + sfu.gameState.participantCount);
+
         setSurvivors(totalSurvivors);
 
         // NPCの状態をミニゲームに反映
@@ -1004,13 +1009,8 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
               const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
               const hasNPCGame = game?.active;
 
-              // 💀 非表示条件の強化: NPCゲームもプレイヤーゲームもない場合は非表示
+              // 💀 表示条件: NPCゲームまたはプレイヤーゲームのどちらかがアクティブであれば表示
               if (!hasNPCGame && !hasPlayerGame) {
-                return null;
-              }
-
-              // 💀 プレイヤーゲームが非アクティブな場合の追加チェック
-              if (otherPlayerGame && !otherPlayerGame.isActive) {
                 return null;
               }
 
@@ -1146,27 +1146,28 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
               const gameIndex = 21 + i;
               const game = miniGames[gameIndex];
 
-              if (!game?.active) {
+              // 他のプレイヤーのゲーム状態を取得（インデックス順）
+              const otherPlayerGame = getOtherPlayerGames()[gameIndex];
+              const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
+              const hasNPCGame = game?.active;
+
+              // 💀 表示条件: NPCゲームまたはプレイヤーゲームのどちらかがアクティブであれば表示
+              if (!hasNPCGame && !hasPlayerGame) {
                 return null;
               }
 
-              // ⏰ 1秒以上更新されていないNPCキャンバスは非表示
-              const rightNpcCanvasId = `npc-${gameIndex}`;
-              const isRightNPCStale = isCanvasStale(rightNpcCanvasId);
-
-              if (isRightNPCStale) {
-                return null;
-              }
-
-              // ⏰ 1秒以上更新されていないNPCキャンバスは非表示
+              // ⏰ 更新されていないキャンバスは非表示
+              const playerCanvasId = `player-${otherPlayerGame?.playerId}`;
               const npcCanvasId = `npc-${gameIndex}`;
-              const isNPCStale = isCanvasStale(npcCanvasId);
+              const isPlayerStale = hasPlayerGame && isCanvasStale(playerCanvasId);
+              const isNPCStale = hasNPCGame && isCanvasStale(npcCanvasId);
 
-              if (isNPCStale) {
+              if (isPlayerStale || isNPCStale) {
                 return null;
               }
 
-              const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
+              // NPCゲームか他のプレイヤーゲームかを判定
+              const gameState = hasPlayerGame ? otherPlayerGame.gameState : game?.gameState?.gameState;
 
               // 右側ゲーム状態の安全性チェック
               if (!gameState || !gameState.paddle1 || !gameState.paddle2 || !gameState.ball ||
