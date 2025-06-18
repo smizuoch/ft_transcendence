@@ -163,7 +163,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
         return cleaned;
       });
-    }, 30000); // 30秒ごとにクリーンアップ
+    }, 30000); // 30秒ごとに非アクティブなプレイヤーをクリーンアップ
 
     return () => clearInterval(cleanupInterval);
   }, []);
@@ -949,7 +949,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
           stableHandleScore, // onScore
           gameStarted, // gameStarted
           keysRef, // keysRef
-          getPaddleAndBallColor(), // paddleAndBallColor
+          () => getPaddleAndBallColor(), // パドルとボールの色を関数として渡して動的に更新できるようにする
           true, // isPVEMode
           null, // remotePlayerInput
           2, // playerNumber（Player2）
@@ -962,7 +962,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         stopGameLoop();
       };
     }
-  }, [gameStarted, initializeEngine, startGameLoop, stopGameLoop]);
+  }, [gameStarted, initializeEngine, startGameLoop, stopGameLoop, survivors]);
 
   // キャンバスマウント時の初期化
   useEffect(() => {
@@ -982,8 +982,14 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   // リサイズ処理
   useEffect(() => {
     const handleResize = () => {
-      if (canvasRef.current) {
-        initializeEngine();
+      // リサイズ時はキャンバスのみリサイズし、ボールやパドルの位置は相対的に維持
+      if (canvasRef.current && engineRef.current) {
+        const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
+        canvasRef.current.width = size;
+        canvasRef.current.height = size;
+
+        // 既存のエンジンを使用してキャンバスサイズのみ更新
+        engineRef.current.updateCanvasSize(size, size);
       }
     };
 
@@ -1195,7 +1201,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
               const isNPCStale = hasNPCGame && isCanvasStale(npcCanvasId);
 
               if (isPlayerStale || isNPCStale) {
-                if (i < 3 && Date.now() % 2000 < 100) {
+                if (i < 3 && Date.now() % 3000 < 100) {
                   console.log(`⏰💀 Canvas ${i} HIDDEN: stale updates (playerStale: ${isPlayerStale}, npcStale: ${isNPCStale})`);
                 }
                 return null;

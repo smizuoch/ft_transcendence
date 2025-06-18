@@ -137,9 +137,43 @@ export class GameEngine {
   }
 
   public updateCanvasSize(width: number, height: number): void {
+    // 現在のボールとパドルの相対位置を保存
+    const ballXRatio = this.state.ball.x / this.state.canvasWidth;
+    const ballYRatio = this.state.ball.y / this.state.canvasHeight;
+    const paddle1XRatio = this.state.paddle1.x / this.state.canvasWidth;
+    const paddle2XRatio = this.state.paddle2.x / this.state.canvasWidth;
+
+    // キャンバスサイズを更新
     this.state.canvasWidth = width;
     this.state.canvasHeight = height;
-    this.initializePositions();
+
+    // パドルのサイズは更新が必要
+    this.state.paddle1.width = this.config.paddleWidth;
+    this.state.paddle1.height = this.config.paddleHeight;
+    this.state.paddle2.width = this.config.paddleWidth;
+    this.state.paddle2.height = this.config.paddleHeight;
+
+    // 相対位置を維持
+    this.state.ball.x = ballXRatio * width;
+    this.state.ball.y = ballYRatio * height;
+    this.state.paddle1.x = paddle1XRatio * width;
+    this.state.paddle1.y = 20; // Y位置は固定
+    this.state.paddle2.x = paddle2XRatio * width;
+    this.state.paddle2.y = height - 20 - this.state.paddle2.height;
+
+    // 以下のsyncPlayersPosition()と同期が必要
+    this.state.players = {
+      player1: {
+        x: this.state.paddle1.x,
+        y: this.state.paddle1.y,
+      },
+      player2: {
+        x: this.state.paddle2.x,
+        y: this.state.paddle2.y,
+      },
+    };
+
+    console.log('Canvas size updated while preserving ball and paddle positions');
   }
 
   public setKeyState(): void {

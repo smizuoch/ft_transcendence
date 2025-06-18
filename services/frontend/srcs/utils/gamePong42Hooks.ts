@@ -34,10 +34,12 @@ export const useGameEngine = (
     canvas.height = size;
 
     if (!engineRef.current) {
+      // エンジンが存在しない場合のみ新規作成（初期化時のみ）
       engineRef.current = new GameEngine(size, size, config);
       console.log('Created new GameEngine with size:', size);
     } else {
-      // エンジンが既に存在する場合はキャンバスサイズを更新
+      // エンジンが既に存在する場合はボールとパドルの位置を保持してキャンバスサイズのみ更新
+      // この更新はupdateCanvasSize内で既に相対位置を保持するよう修正済み
       engineRef.current.updateCanvasSize(size, size);
       console.log('Updated existing GameEngine canvas size to:', size);
     }
@@ -48,7 +50,7 @@ export const useGameEngine = (
     onScore: (scorer: 'player1' | 'player2') => void,
     gameStarted: boolean,
     keysRef: React.RefObject<{ [key: string]: boolean }>,
-    paddleAndBallColor?: string, // 色パラメータ
+    paddleAndBallColor?: string | (() => string), // 色パラメータ（文字列または関数）
     isPVEMode?: boolean, // PVEモード（npcEnabledに対応）
     remotePlayerInput?: PlayerInput | boolean | any, // リモートプレイヤー入力
     playerNumber?: number | 'spectator' | boolean, // プレイヤー番号
@@ -214,7 +216,8 @@ export const useGameEngine = (
       }
 
       if (engineRef.current) {
-        engineRef.current.draw(ctx, paddleAndBallColor || '#212121');
+        const color = typeof paddleAndBallColor === 'function' ? paddleAndBallColor() : (paddleAndBallColor || '#212121');
+        engineRef.current.draw(ctx, color);
       }
 
       // ゲーム状態を60fpsで送信（GamePong42の場合は常に送信、観戦者モードは除く）
