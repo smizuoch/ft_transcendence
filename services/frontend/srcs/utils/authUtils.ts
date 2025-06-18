@@ -9,6 +9,7 @@ export const isUserAuthenticated = (): boolean => {
     const parts = token.split('.');
     if (parts.length !== 3) {
       console.log('❌ Invalid JWT format');
+      localStorage.removeItem('authToken'); // 無効なトークンを削除
       return false;
     }
 
@@ -19,6 +20,7 @@ export const isUserAuthenticated = (): boolean => {
     // トークンの有効期限をチェック
     if (payload.exp && payload.exp < Date.now() / 1000) {
       console.log('❌ Token expired');
+      localStorage.removeItem('authToken'); // 期限切れトークンを削除
       return false;
     }
 
@@ -30,6 +32,7 @@ export const isUserAuthenticated = (): boolean => {
     return isAuthenticated;
   } catch (error) {
     console.log('❌ JWT decode error:', error);
+    localStorage.removeItem('authToken'); // エラーが発生したトークンを削除
     return false;
   }
 };

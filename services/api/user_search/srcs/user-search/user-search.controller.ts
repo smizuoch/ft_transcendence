@@ -69,7 +69,14 @@ export class UserSearchController {
   @Put('status')
   async updateOnlineStatus(@Request() req, @Body() body: { isOnline: boolean }) {
     try {
+      // リクエストにユーザー情報が含まれているかチェック
+      if (!req.user || !req.user.username) {
+        throw new HttpException('User information not found in request', HttpStatus.UNAUTHORIZED);
+      }
+
       const username = req.user.username;
+      console.log(`Updating online status for user: ${username} to ${body.isOnline}`);
+      
       const userProfile = await this.userSearchService.updateOnlineStatus(username, body.isOnline);
       
       return {
@@ -81,6 +88,18 @@ export class UserSearchController {
         },
       };
     } catch (error) {
+      console.error('Error updating online status:', error);
+      
+      // 認証エラーの場合は401を返す
+      if (error instanceof HttpException && error.getStatus() === 401) {
+        throw error;
+      }
+      
+      // ユーザーが見つからない場合
+      if (error.code === 'P2025' || error.message?.includes('not found')) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+      
       throw new HttpException('Failed to update online status', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }

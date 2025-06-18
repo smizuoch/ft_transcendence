@@ -33,6 +33,13 @@ export class OnlineStatusManager {
       return;
     }
 
+    // トークンの有効性をチェック
+    if (!this.isTokenValid(token)) {
+      console.log('Invalid or expired token found, cleaning up');
+      localStorage.removeItem('authToken');
+      return;
+    }
+
     // ページ読み込み時にオンライン状態を設定
     this.setOnlineStatus(true);
 
@@ -122,6 +129,14 @@ export class OnlineStatusManager {
         return;
       }
 
+      // トークンの有効性をチェック
+      if (!this.isTokenValid(token)) {
+        console.log('Invalid or expired token, stopping online status updates');
+        this.stopHeartbeat();
+        this.cleanup();
+        return;
+      }
+
       const requestBody = JSON.stringify({ isOnline });
       const headers = {
         'Authorization': `Bearer ${token}`,
@@ -154,6 +169,15 @@ export class OnlineStatusManager {
         });
 
         if (!response.ok) {
+          // 401エラーの場合は認証エラーとして処理
+          if (response.status === 401) {
+            console.log('Authentication failed (401), stopping online status updates');
+            this.stopHeartbeat();
+            this.cleanup();
+            // トークンを削除してユーザーをログアウト状態にする
+            localStorage.removeItem('authToken');
+            return;
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
       }
@@ -162,6 +186,38 @@ export class OnlineStatusManager {
       console.log(`Online status updated: ${isOnline}`);
     } catch (error) {
       console.error('Failed to update online status:', error);
+      // 401エラーの場合はheartbeatを停止
+      if (error.message && error.message.includes('401')) {
+        console.log('Stopping heartbeat due to authentication error');
+        this.stopHeartbeat();
+        this.cleanup();
+      }
+    }
+  }
+
+  // JWTトークンの有効性をチェックする関数
+  private isTokenValid(token: string): boolean {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return false;
+      }
+
+      const payload = JSON.parse(atob(parts[1]));
+      
+      // トークンの有効期限をチェック
+      if (payload.exp && payload.exp < Date.now() / 1000) {
+        return false;
+      }
+
+      // 2FA完了済みのトークンかチェック
+      if (payload.twoFactorPending === true) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 
@@ -204,7 +260,14 @@ export class OnlineStatusManager {
     this.heartbeatInterval = setInterval(() => {
       const token = localStorage.getItem('authToken');
       if (token && !document.hidden && this.isCurrentlyOnline) {
-        this.setOnlineStatus(true);
+        // トークンの有効性をチェック
+        if (this.isTokenValid(token)) {
+          this.setOnlineStatus(true);
+        } else {
+          console.log('Token invalid during heartbeat, stopping heartbeat');
+          this.stopHeartbeat();
+          this.cleanup();
+        }
       }
     }, this.HEARTBEAT_INTERVAL);
 

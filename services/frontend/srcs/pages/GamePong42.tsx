@@ -43,6 +43,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       const parts = token.split('.');
       if (parts.length !== 3) {
         console.log('❌ Invalid JWT format');
+        localStorage.removeItem('authToken'); // 無効なトークンを削除
         return false;
       }
 
@@ -53,6 +54,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       // トークンの有効期限をチェック
       if (payload.exp && payload.exp < Date.now() / 1000) {
         console.log('❌ Token expired');
+        localStorage.removeItem('authToken'); // 期限切れトークンを削除
         return false;
       }
 
@@ -64,6 +66,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       return isAuthenticated;
     } catch (error) {
       console.log('❌ JWT decode error:', error);
+      localStorage.removeItem('authToken'); // エラーが発生したトークンを削除
       return false;
     }
   };
