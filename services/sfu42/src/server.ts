@@ -1,9 +1,10 @@
 import Fastify from 'fastify';
 import { Server } from 'socket.io';
-import { createServer } from 'http';
 import cors from '@fastify/cors';
 import axios from 'axios';
 import { GamePong42Manager } from './game-pong42-manager';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // GamePong42マネージャーのインスタンスを作成
 const gamePong42Manager = new GamePong42Manager();
@@ -56,6 +57,112 @@ setInterval(() => {
 // NPC Manager URL for proxy requests
 const NPC_MANAGER_URL = process.env.NPC_MANAGER_URL || 'http://npc_manager:3003';
 
+// SSL証明書の設定（SFUサービスから移植）
+const getSSLOptions = () => {
+  const certDirs = ['/app/internal-certs', '/app/certs', '/certs', './certs'];
+
+  console.log('=== SSL Certificate Debug ===');
+
+  for (const certDir of certDirs) {
+    console.log(`Checking certificate directory: ${certDir}`);
+
+    // 証明書ディレクトリの存在確認
+    if (!fs.existsSync(certDir)) {
+      console.log(`Certificate directory does not exist: ${certDir}`);
+      continue;
+    }
+
+    // ディレクトリの内容を表示
+    try {
+      const files = fs.readdirSync(certDir);
+      console.log('Files in certificate directory:', files);
+
+      // 共通証明書のパス
+      const keyPath = path.join(certDir, 'server.key');
+      const certPath = path.join(certDir, 'server.crt');
+
+      console.log('Checking certificate paths:');
+      console.log('- Common key:', keyPath, 'exists:', fs.existsSync(keyPath));
+      console.log('- Common cert:', certPath, 'exists:', fs.existsSync(certPath));
+
+      // まず共通証明書を試す
+      if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+        console.log('Using common SSL certificates from:', certDir);
+        const keyContent = fs.readFileSync(keyPath);
+        const certContent = fs.readFileSync(certPath);
+        console.log('Successfully read common SSL certificates');
+        console.log('Key size:', keyContent.length, 'bytes');
+        console.log('Cert size:', certContent.length, 'bytes');
+        console.log('=== End SSL Certificate Debug ===');
+        return {
+          key: keyContent,
+          cert: certContent
+        };
+      }
+
+    } catch (error) {
+      console.log(`Error accessing certificate directory ${certDir}:`, error);
+      continue;
+    }
+  }
+
+  console.error('No valid SSL certificate files found in any directory');
+
+  // 自己署名証明書を生成
+  console.log('Generating self-signed certificate...');
+  try {
+    const { execSync } = require('child_process');
+    const tempCertDir = '/tmp/ssl-certs';
+
+    // 一時ディレクトリを作成
+    if (!fs.existsSync(tempCertDir)) {
+      fs.mkdirSync(tempCertDir, { recursive: true });
+    }
+
+    const keyPath = path.join(tempCertDir, 'server.key');
+    const certPath = path.join(tempCertDir, 'server.crt');
+
+    // 自己署名証明書を生成
+    const cmd = `openssl req -x509 -newkey rsa:4096 -keyout ${keyPath} -out ${certPath} -days 365 -nodes -subj "/C=JP/ST=Tokyo/L=Tokyo/O=42Tokyo/OU=ft_transcendence/CN=localhost" -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:0.0.0.0,IP:10.16.2.9"`;
+
+    execSync(cmd);
+
+    const keyContent = fs.readFileSync(keyPath);
+    const certContent = fs.readFileSync(certPath);
+
+    console.log('Generated self-signed certificate');
+    console.log('Key size:', keyContent.length, 'bytes');
+    console.log('Cert size:', certContent.length, 'bytes');
+    console.log('=== End SSL Certificate Debug ===');
+
+    return {
+      key: keyContent,
+      cert: certContent
+    };
+  } catch (error: any) {
+    console.error('Error generating self-signed certificate:', error?.message || error);
+  }
+
+  console.log('=== End SSL Certificate Debug ===');
+  return null;
+};
+
+const sslOptions = getSSLOptions();
+
+console.log('=== SFU42 Server Configuration ===');
+console.log('SSL Options available:', !!sslOptions);
+
+// SSL証明書が必須なのでHTTPS/WSSを強制
+if (!sslOptions) {
+  console.error('❌ SSL certificates are required for HTTPS/WSS operation');
+  console.error('Cannot start server without valid SSL certificates');
+  console.error('SFU servers must use HTTPS/WSS for WebRTC functionality');
+  process.exit(1);
+}
+
+console.log('✅ SSL certificates loaded successfully');
+console.log('🔒 Server will run with HTTPS/WSS (required for WebRTC)');
+
 // npc_managerのエミュレーションを停止する関数
 async function stopNPCManagerEmulation(roomId: string): Promise<void> {
   try {
@@ -76,11 +183,12 @@ async function stopNPCManagerEmulation(roomId: string): Promise<void> {
   }
 }
 
-// FastifyとSocket.IOサーバーを作成
+// FastifyとSocket.IOサーバーを作成（HTTPS対応）
 const fastify = Fastify({
   logger: {
     level: 'info'
-  }
+  },
+  https: sslOptions // HTTPS強制
 });
 
 // CORS設定
@@ -89,13 +197,17 @@ fastify.register(cors, {
   credentials: true
 });
 
-const server = createServer(fastify.server);
-const io = new Server(server, {
+const io = new Server({
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
+    credentials: true
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket'], // WebSocketのみ使用（polling無効化）
+  allowEIO3: false, // 最新のEngine.IOのみ使用
+  serveClient: false, // クライアントファイル配信無効
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // Socket.IO handlers - Pure data relay only
@@ -494,7 +606,7 @@ io.on('connection', (socket) => {
         ...data,
         roomNumber,
         requesterId: socket.id,
-        sfuServerUrl: `http://sfu42:3042` // SFU自身のURL
+        sfuServerUrl: `https://sfu42:3042` // SFU自身のURL
       }, {
         timeout: 10000,
         headers: {
@@ -613,11 +725,22 @@ fastify.get('/rooms/:roomNumber/info', async (request, reply) => {
 const start = async () => {
   try {
     const PORT = parseInt(process.env.PORT || '3042');
+    const protocol = sslOptions ? 'HTTPS' : 'HTTP';
 
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`SFU Data Relay Server running on port ${PORT}`);
-      console.log(`Server principle: Pure data relay - no state management`);
-    });
+    // Socket.IOをFastifyサーバーに接続（サーバー起動前）
+    io.attach(fastify.server);
+
+    // Fastifyサーバーを起動
+    await fastify.listen({ port: Number(PORT), host: '0.0.0.0' });
+    console.log(`${protocol} SFU42 Data Relay Server running on port ${PORT}`);
+    console.log(`Server principle: Pure data relay - no state management`);
+
+    if (sslOptions) {
+      console.log('WSS (WebSocket Secure) connections enabled');
+    } else {
+      console.log('WS (WebSocket) connections enabled');
+    }
+
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
