@@ -75,10 +75,8 @@ const GameSelect: React.FC<GameSelectProps> = ({ navigate }) => {
   // MyPageへの遷移
   const navigateToMyPage = () => {
     navigate('MyPage');
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4 relative">      {/* X下線 - 画面中央に固定サイズで配置 */}
+  };  return (
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-white text-slate-700 font-sans overflow-hidden">      {/* X下線 - 画面中央に固定サイズで配置 */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
         <div className="relative w-[800px] h-[800px]">
           <div
