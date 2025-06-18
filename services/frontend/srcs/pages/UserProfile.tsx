@@ -66,13 +66,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
-    // 戦績データ用のstate
+  // 戦績データ用のstate
   const [pong2Results, setPong2Results] = useState<Pong2Result[]>([]);
   const [pong42Results, setPong42Results] = useState<Pong42Result[]>([]);
-  const [userStats, setUserStats] = useState<UserStats | null>(null);  const [resultsLoading, setResultsLoading] = useState(false);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [resultsLoading, setResultsLoading] = useState(false);
+  // データソースの状態を追跡
+  const [dataSource, setDataSource] = useState<'loading' | 'api' | 'mock' | 'error'>('loading');
   // 対戦相手のアバター情報を管理
   const [opponentAvatars, setOpponentAvatars] = useState<{[username: string]: string}>({});  // 開発・検証用: ダミーデータを追加する関数
   const addDummyPong2Result = () => {
@@ -187,18 +189,23 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
       } else {
         console.warn('Pong2結果の取得に失敗しました');
         setPong2Results([]);
-      }
-
-      // Pong42結果の処理
+      }      // Pong42結果の処理
       if (pong42Response.status === 'fulfilled' && pong42Response.value.ok) {
         const pong42Data = await pong42Response.value.json();
         if (pong42Data.success) {
           setPong42Results(pong42Data.data || []);
+        } else {
+          console.warn('❌ Pong42 API response marked as unsuccessful:', pong42Data);
+          setPong42Results([]);
         }
       } else {
-        console.warn('Pong42結果の取得に失敗しました');
+        console.warn('❌ Pong42結果の取得に失敗しました. Status:', pong42Response.status);
+        if (pong42Response.status === 'fulfilled') {
+          console.warn('Response status:', pong42Response.value.status);
+          console.warn('Response text:', await pong42Response.value.text());
+        }
         setPong42Results([]);
-      }      // 統計情報の処理
+      }// 統計情報の処理
       if (statsResponse.status === 'fulfilled' && statsResponse.value.ok) {
         const statsData = await statsResponse.value.json();
         if (statsData.success && statsData.data) {
@@ -347,16 +354,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
   const mockData = {
     name: userId || "NAME",
     avatar: "/images/avatar/default_avatar.png",
-    rank: 42.00,
-    // PONG42のランキング履歴（グラフ用）
+    rank: 42.00,    // PONG42のランキング履歴（グラフ用）- テスト用明確な順位変化
     pong42RankHistory: [
-      { date: "2024/05/01", rank: 45 },
-      { date: "2024/05/08", rank: 38 },
-      { date: "2024/05/15", rank: 50 },
-      { date: "2024/05/22", rank: 35 },
-      { date: "2024/05/29", rank: 42 },
-      { date: "2024/06/05", rank: 48 },
-    ],    // PONG2の対戦履歴
+      { date: "2024-05-01", rank: 42 }, // 最下位（一番下）
+      { date: "2024-05-08", rank: 35 }, // 少し改善
+      { date: "2024-05-15", rank: 25 }, // 中位に改善
+      { date: "2024-05-22", rank: 10 }, // 大幅改善！
+      { date: "2024-05-29", rank: 3 },  // さらに改善！トップ3に
+      { date: "2024-06-05", rank: 1 },  // 最高順位！（一番上）
+    ],// PONG2の対戦履歴
     pong2History: [
       { date: "yyyy / mm / dd / hh:mm", isWin: true, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent1" },
       { date: "yyyy / mm / dd / hh:mm", isWin: false, opponentAvatar: "/images/avatar/default_avatar1.png", opponentUsername: "opponent2" },
@@ -477,20 +483,41 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
     if (userStats?.pong42?.averageRank) return userStats.pong42.averageRank;
     if (userData?.rank) return userData.rank;
     return mockData.rank;
-  };// Pong42ランキング履歴の処理（API結果から生成）
+  };  // Pong42ランキング履歴の処理（API結果から生成）
   const getPong42RankHistory = () => {
-    if (pong42Results.length > 0) {
+    console.log('🔍 getPong42RankHistory called. pong42Results.length:', pong42Results.length);
+    console.log('🔍 pong42Results:', pong42Results);
+    console.log('🔍 dataSource:', dataSource);
+    
+    // 開発環境では一時的にモックデータを強制使用（デバッグ用）
+    const forceMockData = true; // テスト用フラグ
+    
+    if (pong42Results.length > 0 && !forceMockData) {
       // 最新の10件を日付順にソート（最新が最後になるように）
-      return pong42Results
+      const sortedData = pong42Results
         .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
         .slice(-10)
         .map(result => ({
           date: new Date(result.gameDate).toLocaleDateString('ja-JP'),
           rank: result.rank
         }));
+      
+      console.log('📊 Using API data for graph:', sortedData);
+      return sortedData;
     }
-    return mockData.pong42RankHistory;
-  };  // Pong2戦績履歴の処理（API結果から生成）
+    
+    console.log('🔄 Using mock data for graph (forceMockData=' + forceMockData + ')');
+    // モックデータも日付順にソート
+    const sortedMockData = [...mockData.pong42RankHistory]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map(item => ({
+        date: item.date,
+        rank: Math.max(1, Math.min(42, item.rank)) // 範囲チェック
+      }));
+    
+    console.log('📊 Using sorted mock data for graph:', sortedMockData);
+    return sortedMockData;
+  };// Pong2戦績履歴の処理（API結果から生成）
   const getPong2History = () => {
     if (pong2Results.length > 0) {
       return pong2Results
@@ -551,28 +578,74 @@ const UserProfile: React.FC<UserProfileProps> = ({ navigate, userId }) => {
           </div>          {/* PONG42ランキング推移グラフ */}
           <div className="w-full h-48">
             <svg className="w-full h-full" viewBox="0 0 600 100" preserveAspectRatio="none">
-              {(() => {
+              {/* グリッドライン（デバッグ用） */}
+              <g stroke="#e0e0e0" strokeWidth="0.5" opacity="0.3">
+                {/* 水平線（順位表示用） */}
+                <line x1="0" y1="10" x2="600" y2="10" />
+                <text x="10" y="8" fontSize="8" fill="#666">1位</text>
+                
+                <line x1="0" y1="30" x2="600" y2="30" />
+                <text x="10" y="28" fontSize="8" fill="#666">10位</text>
+                
+                <line x1="0" y1="50" x2="600" y2="50" />
+                <text x="10" y="48" fontSize="8" fill="#666">21位</text>
+                
+                <line x1="0" y1="70" x2="600" y2="70" />
+                <text x="10" y="68" fontSize="8" fill="#666">32位</text>
+                
+                <line x1="0" y1="90" x2="600" y2="90" />
+                <text x="10" y="88" fontSize="8" fill="#666">42位</text>
+              </g>              {(() => {
                 const rankHistory = getPong42RankHistory();
+                console.log('📈 Graph rendering - rankHistory:', rankHistory);
+                
                 if (rankHistory.length > 1) {
                   // ランクの最大値と最小値を取得してスケーリング
                   const ranks = rankHistory.map(item => item.rank);
                   const minRank = Math.min(...ranks);
                   const maxRank = Math.max(...ranks);
-                  const rankRange = maxRank - minRank || 1;                  // SVGポイントを生成（1位が常に上、42位が常に下）
+                  const rankRange = maxRank - minRank || 1;
+                  
+                  console.log('📈 Rank analysis:', { ranks, minRank, maxRank, rankRange });
+                    // SVGポイントを生成（1位が常に上、42位が常に下）
                   const points = rankHistory.map((item, index) => {
                     const x = (index / (rankHistory.length - 1)) * 600;
                     // 1位=10px(上), 42位=90px(下) の固定スケール
-                    const y = ((item.rank - 1) / 41) * 80 + 10;
+                    // 範囲チェック：1-42位に制限
+                    const clampedRank = Math.max(1, Math.min(42, item.rank));
+                    // 修正: 1位（rank=1）が上（y=10）、42位（rank=42）が下（y=90）になるよう計算
+                    const y = ((clampedRank - 1) / 41) * 80 + 10;
+                    console.log(`📈 Point ${index}: date=${item.date}, rank=${item.rank}(clamped=${clampedRank}) → x=${x.toFixed(1)}, y=${y.toFixed(1)} [1位=10px(上), 42位=90px(下)]`);
                     return `${x},${y}`;
                   }).join(' ');
+                    console.log('📈 SVG points:', points);
                   
                   return (
-                    <polyline
-                      fill="none"
-                      stroke="#9496A6"
-                      strokeWidth="2.5"
-                      points={points}
-                    />
+                    <>
+                      <polyline
+                        fill="none"
+                        stroke="#9496A6"
+                        strokeWidth="2.5"
+                        points={points}
+                      />
+                      {/* ポイントマーカー（デバッグ用） */}
+                      {rankHistory.map((item, index) => {
+                        const x = (index / (rankHistory.length - 1)) * 600;
+                        const clampedRank = Math.max(1, Math.min(42, item.rank));
+                        const y = ((clampedRank - 1) / 41) * 80 + 10;
+                        return (
+                          <circle
+                            key={index}
+                            cx={x}
+                            cy={y}
+                            r="3"
+                            fill="#FF6B6B"
+                            stroke="#FFF"
+                            strokeWidth="1"
+                          />
+                        );
+                      })}
+                    </>
                   );
                 } else {
                   // デフォルトのグラフ（データがない場合）
