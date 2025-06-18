@@ -134,9 +134,9 @@ async function handleNPCRoomCreation(roomNumber: string, npcCount: number, sfuSe
       const gameConfig: Partial<GameConfig> = {
         canvasWidth: 100,
         canvasHeight: 100,
-        paddleWidth: 10,
-        paddleHeight: 1.5,
-        ballRadius: 2,
+        paddleWidthRatio: 0.1, // キャンバス幅の10%
+        paddleHeightRatio: 0.015, // キャンバス高さの1.5%
+        ballRadiusRatio: 0.02, // キャンバス幅の2%
         paddleSpeed: 6,
         initialBallSpeed: 1.0,
         maxBallSpeed: 2.5,

@@ -24,9 +24,9 @@ export interface GameConfig {
   winningScore: number;
   maxBallSpeed: number;
   paddleSpeed: number;
-  ballRadius: number;
-  paddleWidth: number;
-  paddleHeight: number;
+  ballRadiusRatio: number; // キャンバス幅に対する比率
+  paddleWidthRatio: number; // キャンバス幅に対する比率
+  paddleHeightRatio: number; // キャンバス高さに対する比率
   initialBallSpeed: number;
   npc: NPCConfig;
 }
@@ -35,9 +35,9 @@ export const DEFAULT_CONFIG: GameConfig = {
   winningScore: 11,
   maxBallSpeed: 8, // ボール最大速度を遅く
   paddleSpeed: 8,
-  ballRadius: 8,
-  paddleWidth: 80,
-  paddleHeight: 12,
+  ballRadiusRatio: 0.01, // キャンバス幅の1%
+  paddleWidthRatio: 0.095, // キャンバス幅の9.5%
+  paddleHeightRatio: 0.014, // キャンバス高さの1.4%
   initialBallSpeed: 2.4, // 初期ボール速度を遅く
   npc: DEFAULT_NPC_CONFIG,
 };
@@ -77,6 +77,12 @@ export class GameEngine {
 
   constructor(canvasWidth: number, canvasHeight: number, config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
+
+    // 比率から実際のサイズを計算
+    const ballRadius = canvasWidth * config.ballRadiusRatio;
+    const paddleWidth = canvasWidth * config.paddleWidthRatio;
+    const paddleHeight = canvasHeight * config.paddleHeightRatio;
+
     this.state = {
       ball: {
         x: canvasWidth / 2,
@@ -85,21 +91,21 @@ export class GameEngine {
         dy: 0,
         vx: 0, // multiplayerService.tsとの互換性のため
         vy: 0, // multiplayerService.tsとの互換性のため
-        radius: config.ballRadius,
+        radius: ballRadius,
         speed: config.initialBallSpeed,
         speedMultiplier: 1,
       },
       paddle1: {
-        x: canvasWidth / 2 - config.paddleWidth / 2,
+        x: canvasWidth / 2 - paddleWidth / 2,
         y: 20,
-        width: config.paddleWidth,
-        height: config.paddleHeight,
+        width: paddleWidth,
+        height: paddleHeight,
       },
       paddle2: {
-        x: canvasWidth / 2 - config.paddleWidth / 2,
-        y: canvasHeight - 20 - config.paddleHeight,
-        width: config.paddleWidth,
-        height: config.paddleHeight,
+        x: canvasWidth / 2 - paddleWidth / 2,
+        y: canvasHeight - 20 - paddleHeight,
+        width: paddleWidth,
+        height: paddleHeight,
       },
       canvasWidth,
       canvasHeight,
@@ -108,12 +114,12 @@ export class GameEngine {
       // multiplayerService.tsとの互換性のため
       players: {
         player1: {
-          x: canvasWidth / 2 - config.paddleWidth / 2,
+          x: canvasWidth / 2 - paddleWidth / 2,
           y: 20,
         },
         player2: {
-          x: canvasWidth / 2 - config.paddleWidth / 2,
-          y: canvasHeight - 20 - config.paddleHeight,
+          x: canvasWidth / 2 - paddleWidth / 2,
+          y: canvasHeight - 20 - paddleHeight,
         },
       },
       score: { player1: 0, player2: 0 },
@@ -147,11 +153,19 @@ export class GameEngine {
     this.state.canvasWidth = width;
     this.state.canvasHeight = height;
 
-    // パドルのサイズは更新が必要
-    this.state.paddle1.width = this.config.paddleWidth;
-    this.state.paddle1.height = this.config.paddleHeight;
-    this.state.paddle2.width = this.config.paddleWidth;
-    this.state.paddle2.height = this.config.paddleHeight;
+    // 比率から新しいサイズを計算
+    const ballRadius = width * this.config.ballRadiusRatio;
+    const paddleWidth = width * this.config.paddleWidthRatio;
+    const paddleHeight = height * this.config.paddleHeightRatio;
+
+    // ボールサイズを更新
+    this.state.ball.radius = ballRadius;
+
+    // パドルのサイズを更新
+    this.state.paddle1.width = paddleWidth;
+    this.state.paddle1.height = paddleHeight;
+    this.state.paddle2.width = paddleWidth;
+    this.state.paddle2.height = paddleHeight;
 
     // 相対位置を維持
     this.state.ball.x = ballXRatio * width;

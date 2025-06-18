@@ -40,9 +40,9 @@ export interface NPCGameConfig {
   winningScore?: number;
   maxBallSpeed?: number;
   paddleSpeed?: number;
-  ballRadius?: number;
-  paddleWidth?: number;
-  paddleHeight?: number;
+  ballRadiusRatio?: number; // キャンバス幅に対する比率
+  paddleWidthRatio?: number; // キャンバス幅に対する比率
+  paddleHeightRatio?: number; // キャンバス高さに対する比率
   initialBallSpeed?: number;
   npc?: {
     enabled?: boolean;

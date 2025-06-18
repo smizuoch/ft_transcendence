@@ -57,9 +57,9 @@ export interface GameConfig {
   winningScore: number;
   maxBallSpeed: number;
   paddleSpeed: number;
-  ballRadius: number;
-  paddleWidth: number;
-  paddleHeight: number;
+  ballRadiusRatio: number; // キャンバス幅に対する比率
+  paddleWidthRatio: number; // キャンバス幅に対する比率
+  paddleHeightRatio: number; // キャンバス高さに対する比率
   initialBallSpeed: number;
   npc: NPCConfig;
   npc2?: NPCConfig; // NPC vs NPC用の2つ目のNPC設定
@@ -119,9 +119,9 @@ export const DEFAULT_CONFIG: GameConfig = {
   winningScore: 11,
   maxBallSpeed: 4, // ボール最大速度をさらに制限（遅くしました）
   paddleSpeed: 4, // プレイヤーと同じ速度に統一
-  ballRadius: 2, // フロントエンドに合わせて変更
-  paddleWidth: 8, // フロントエンドに合わせて変更
-  paddleHeight: 1.5, // より小さなパドル高さ
+  ballRadiusRatio: 0.02, // キャンバス幅の2%（ミニゲーム用）
+  paddleWidthRatio: 0.08, // キャンバス幅の8%（ミニゲーム用）
+  paddleHeightRatio: 0.015, // キャンバス高さの1.5%（ミニゲーム用）
   initialBallSpeed: 0.6, // 初期ボール速度をさらに低く（遅くしました）
   npc: DEFAULT_NPC_CONFIG,
 };
