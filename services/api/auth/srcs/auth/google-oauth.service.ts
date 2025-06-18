@@ -10,7 +10,7 @@ export class GoogleOAuthService {
   constructor(private configService: ConfigService) {
     this.clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     this.clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
-    this.redirectUri = this.configService.get<string>('GOOGLE_CALLBACK_URL') || 'https://localhost:8443/api/auth/google/callback';
+    this.redirectUri = this.configService.get<string>('GOOGLE_CALLBACK_URL') || `https://${process.env.HOST_IP}:8443/api/auth/google/callback`;
   }
 
   getAuthUrl(): string {

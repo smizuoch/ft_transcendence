@@ -21,13 +21,13 @@ async function bootstrap() {
   
   // 異なるオリジンとの通信をするためのCORSを有効化
   app.enableCors({
-    origin: ['https://localhost:8443', 'http://localhost:8080'],
+    origin: [`https://${process.env.HOST_IP}:8443`, `http://${process.env.HOST_IP}:8080`],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,
   });
   
   await app.listen(3000, '0.0.0.0'); // compose.ymlで3003:3000にマッピングされているので3000を使用
-  console.log('User Search service is running on http://127.0.0.1:3000 (mapped to external port 3003)');
+  console.log(`User Search service is running on http://${process.env.HOST_IP}:3000 (mapped to external port 3003)`);
 }
 bootstrap();

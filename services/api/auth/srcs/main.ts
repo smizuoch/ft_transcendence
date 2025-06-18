@@ -19,7 +19,7 @@ async function bootstrap() {
   
   // 異なるオリジンとの通信をするためのCORSを有効化
   app.enableCors({
-    origin: ['https://localhost:8443', 'http://localhost:8080'],
+    origin: [`https://${process.env.HOST_IP}:8443`, `http://${process.env.HOST_IP}:8080`],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,

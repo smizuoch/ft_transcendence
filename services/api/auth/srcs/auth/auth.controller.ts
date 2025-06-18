@@ -91,13 +91,13 @@ export class AuthController {
       
       if (!alphanumericRegex.test(proposedUsername) || japaneseRegex.test(proposedUsername)) {
         console.error('Google authentication failed: Username contains non-alphanumeric or Japanese characters:', proposedUsername);
-        return res.redirect('https://localhost:8443/?error=invalid_username&message=Username must contain only alphanumeric characters', 302);
+        return res.redirect(`https://${process.env.HOST_IP}:8443/?error=invalid_username&message=Username must contain only alphanumeric characters`, 302);
       }
       
       // ユーザー名の長さをチェック（16文字まで）
       if (proposedUsername.length > 16) {
         console.error('Google authentication failed: Username too long:', proposedUsername);
-        return res.redirect('https://localhost:8443/?error=username_too_long&message=Username must be 16 characters or less', 302);
+        return res.redirect(`https://${process.env.HOST_IP}:8443/?error=username_too_long&message=Username must be 16 characters or less`, 302);
       }
       
       // 既存ユーザーをメールアドレスでチェック（優先）
@@ -112,7 +112,7 @@ export class AuthController {
         // 既存ユーザーが見つかった場合（メールが異なるが同じユーザー名）
         if (existingUser) {
           console.error('Google authentication failed: Username already exists for different email:', proposedUsername);
-          return res.redirect('https://localhost:8443/?error=username_taken&message=This username is already taken', 302);
+          return res.redirect(`https://${process.env.HOST_IP}:8443/?error=username_taken&message=This username is already taken`, 302);
         }
       }
       
@@ -127,11 +127,11 @@ export class AuthController {
       const result = await this.authService.googleLogin({ user });
       
       // フロントエンドにリダイレクトしてトークンを渡す
-      const redirectUrl = `https://localhost:8443/auth/callback?token=${result.access_token}`;
+      const redirectUrl = `https://${process.env.HOST_IP}:8443/auth/callback?token=${result.access_token}`;
       return res.redirect(redirectUrl, 302);
     } catch (error) {
       console.error('Google authentication error:', error);
-      return res.redirect('https://localhost:8443/?error=auth_failed', 302);
+      return res.redirect(`https://${process.env.HOST_IP}:8443/?error=auth_failed`, 302);
     }
   }
 }

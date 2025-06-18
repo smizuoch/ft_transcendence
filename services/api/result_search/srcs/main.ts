@@ -20,7 +20,7 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: ['https://localhost:8443', 'http://localhost:8080'],
+    origin: [`https://${process.env.HOST_IP}:8443`, `http://${process.env.HOST_IP}:8080`],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,
@@ -30,7 +30,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   await app.listen(3000, '0.0.0.0'); // compose.ymlで3004:3000にマッピングされているので3000を使用
-  console.log('Result Search service is running on http://127.0.0.1:3000 (mapped to external port 3004)');
+  console.log(`Result Search service is running on http://${process.env.HOST_IP}:3000 (mapped to external port 3004)`);
 }
 
 bootstrap();
