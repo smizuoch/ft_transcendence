@@ -470,18 +470,18 @@ export const useGamePong42SFU = () => {
       }
     });    // NPCデータの受信 (npc_manager → SFU → client)
     socket.on('gamepong42-data', (data: any) => {
-      console.log('🤖 Received NPC data:', data);
+      // console.log('🤖 Received NPC data:', data);
 
       // データ構造を確認
       const payload = data.payload || data;
       const npcStates = payload.npcStates || data.npcStates;
 
-      console.log('📊 Data structure:', {
-        hasPayload: !!data.payload,
-        hasDirectNpcStates: !!data.npcStates,
-        payloadNpcStatesCount: payload.npcStates?.length || 0,
-        directNpcStatesCount: data.npcStates?.length || 0
-      });
+      // console.log('📊 Data structure:', {
+      //   hasPayload: !!data.payload,
+      //   hasDirectNpcStates: !!data.npcStates,
+      //   payloadNpcStatesCount: payload.npcStates?.length || 0,
+      //   directNpcStatesCount: data.npcStates?.length || 0
+      // });
 
       // NPCデータをreceivedDataに追加
       if (npcStates && Array.isArray(npcStates)) {
@@ -497,7 +497,7 @@ export const useGamePong42SFU = () => {
         };
 
         setReceivedData(prev => [...prev.slice(-49), npcData]); // 最新50件を保持
-        console.log('✅ NPC data processed and added to receivedData, count:', npcStates.length);
+        // console.log('✅ NPC data processed and added to receivedData, count:', npcStates.length);
       } else {
         console.warn('⚠️ Received NPC data without valid npcStates:', data);
         console.warn('⚠️ Payload structure:', payload);
@@ -663,12 +663,12 @@ export const useGamePong42SFU = () => {
       isActive: true,
     };
 
-    console.log('🚨 About to emit player-game-state from:', playerIdRef.current);
+    // console.log('🚨 About to emit player-game-state from:', playerIdRef.current);
     socketRef.current.emit('player-game-state', {
       roomNumber: roomNumberRef.current,
       playerGameState: playerGameData,
     });
-    console.log('✅ player-game-state emitted successfully');
+    // console.log('✅ player-game-state emitted successfully');
   }, []);
 
   // ゲーム終了を送信

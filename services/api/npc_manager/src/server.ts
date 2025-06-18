@@ -42,8 +42,6 @@ const defaultSfuUrl = process.env.SFU_URL || 'https://sfu42:3042';
 // 特定の部屋用にSFUサーバーに接続
 function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<Socket> {
   return new Promise((resolve, reject) => {
-    console.log(`Connecting to SFU server at ${sfuServerUrl} for room ${roomNumber}...`);
-
     const sfuSocket = SocketIOClient(sfuServerUrl, {
       transports: ['websocket'], // WebSocketのみ使用
       // HTTPS/WSS設定
@@ -58,8 +56,6 @@ function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<
     });
 
     sfuSocket.on('connect', () => {
-      console.log(`Connected to SFU server for room ${roomNumber}`);
-
       // SFU部屋に参加
       sfuSocket.emit('join-gamepong42-room', {
         roomNumber: roomNumber,
@@ -74,7 +70,7 @@ function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<
     });
 
     sfuSocket.on('disconnect', () => {
-      console.log(`Disconnected from SFU server for room ${roomNumber}`);
+      // 切断時の処理
     });
 
     sfuSocket.on('error', (error: any) => {
@@ -99,8 +95,6 @@ function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<
 
 // デフォルトSFUサーバーに接続
 function connectToDefaultSFU() {
-  console.log(`Connecting to default SFU server at ${defaultSfuUrl}...`);
-
   defaultSfuSocket = SocketIOClient(defaultSfuUrl, {
     transports: ['websocket'], // WebSocketのみ使用
     // HTTPS/WSS設定
@@ -114,11 +108,11 @@ function connectToDefaultSFU() {
   });
 
   defaultSfuSocket.on('connect', () => {
-    console.log('Connected to default SFU server');
+    // 接続完了
   });
 
   defaultSfuSocket.on('disconnect', () => {
-    console.log('Disconnected from default SFU server');
+    // 切断時の処理
   });
 
   defaultSfuSocket.on('error', (error: any) => {
@@ -129,10 +123,7 @@ function connectToDefaultSFU() {
 // NPCの部屋作成処理
 async function handleNPCRoomCreation(roomNumber: string, npcCount: number, sfuServerUrl: string): Promise<{ success: boolean; message: string; npcInstances?: string[] }> {
   try {
-    console.log(`Creating ${npcCount} NPCs for room ${roomNumber}`);
-
     if (npcCount === 0) {
-      console.log('No NPCs needed for this room');
       return {
         success: true,
         message: 'No NPCs needed',
@@ -213,7 +204,6 @@ async function handleNPCRoomCreation(roomNumber: string, npcCount: number, sfuSe
 
       const gameId = gameManager.createGame(gameConfig);
       gameInstances.push(gameId);
-      console.log(`Created NPC game ${i + 1}/${npcCount}: ${gameId}`);
     }
 
     // 部屋データを保存
@@ -250,12 +240,9 @@ function startNPCDataTransmission(roomNumber: string) {
     return;
   }
 
-  console.log(`Starting NPC data transmission for room ${roomNumber} (${roomData.gameInstances.length} NPCs)`);
-
   const transmissionInterval = setInterval(() => {
     const roomData = roomNPCs.get(roomNumber);
     if (!roomData || !roomData.sfuSocket || !roomData.sfuSocket.connected) {
-      console.log(`Stopping NPC data transmission for room ${roomNumber} - room deleted or disconnected`);
       clearInterval(transmissionInterval);
       return;
     }
@@ -305,8 +292,6 @@ function stopRoomNPCs(roomNumber: string): { success: boolean; message: string }
     };
   }
 
-  console.log(`Stopping NPCs for room ${roomNumber}`);
-
   // 全てのNPCゲームを停止
   roomData.gameInstances.forEach(gameId => {
     gameManager.stopGame(gameId);
@@ -343,7 +328,6 @@ fastify.get('/health', async () => {
 fastify.get('/debug', async () => {
   const gameCount = gameManager.getGameCount();
   const activeGameCount = gameManager.getActiveGameCount();
-  console.log(`🔍 Debug info - Total games: ${gameCount}, Active games: ${activeGameCount}`);
 
   return {
     status: 'debug',
@@ -358,9 +342,7 @@ fastify.get('/debug', async () => {
 fastify.post('/games', async (request: any, reply: any) => {
   try {
     const config = request.body || {};
-    console.log('🎮 Creating new game with config:', config);
     const gameId = gameManager.createGame(config);
-    console.log('✅ Game created successfully:', gameId);
 
     reply.status(201).send({
       success: true,
@@ -544,8 +526,6 @@ fastify.post('/api/stop-room', async (request: any, reply: any) => {
       return;
     }
 
-    console.log(`🛑 Received stop request for room ${roomId}`);
-
     const result = stopRoomNPCs(roomId);
 
     if (result.success) {
@@ -626,7 +606,6 @@ fastify.post('/api/npc/request-via-sfu', async (request: any, reply: any) => {
     }
 
     const { type, roomNumber, npcCount, sfuServerUrl, requesterId, gameConfig, gameId } = request.body;
-    console.log(`🔄 SFU relay request - Type: ${type}, Room: ${roomNumber}, NPCs: ${npcCount}, Requester: ${requesterId}`);
 
     if (!roomNumber || !type) {
       reply.status(400).send({
@@ -650,7 +629,6 @@ fastify.post('/api/npc/request-via-sfu', async (request: any, reply: any) => {
         }
 
         if (npcCount === 0) {
-          console.log(`Room ${roomNumber} has 42 participants, no NPCs needed`);
           result = {
             success: true,
             message: `Room ${roomNumber} is full (42 participants), no NPCs created`,
@@ -783,7 +761,6 @@ fastify.post('/api/npc/request-via-sfu', async (request: any, reply: any) => {
 fastify.post('/gamepong42/request-npcs', async (request: any, reply: any) => {
   try {
     const { roomNumber, npcCount } = request.body;
-    console.log(`🎮 GamePong42 NPC request - Room: ${roomNumber}, NPCs: ${npcCount}`);
 
     if (!roomNumber || typeof npcCount !== 'number' || npcCount < 0) {
       reply.status(400).send({
@@ -795,7 +772,6 @@ fastify.post('/gamepong42/request-npcs', async (request: any, reply: any) => {
 
     // NPC数が0の場合（42人満員）は処理をスキップ
     if (npcCount === 0) {
-      console.log(`Room ${roomNumber} has 42 participants, no NPCs needed`);
       reply.send({
         success: true,
         message: `Room ${roomNumber} is full (42 participants), no NPCs created`,
