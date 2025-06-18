@@ -8,6 +8,7 @@ import type { NPCConfig } from "@/utils/npcTypes";
 import { SpectatorPanel } from "@/utils/SpectatorPanel";
 import { DTLSDebugPanel } from "@/utils/DTLSDebugPanel";
 import { multiplayerService, type PlayerInput, type RoomState } from "@/utils/multiplayerService";
+import { apiClient } from "@/utils/authApi";
 // NPCアルゴリズムの登録を確実に行うためにインポート
 import "@/utils/npcAlgorithmRegistry";
 
@@ -504,13 +505,81 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     const t = setTimeout(() => setIconsDocked(true), ICON_LAUNCH_DELAY);
     return () => clearTimeout(t);
   }, [gameStarted]);
-
   useEffect(() => {
     if (gameOver && winner) {
-      const t = setTimeout(() => navigate("GameResult"), 1200);
+      const t = setTimeout(async () => {
+        try {
+          // JWTを取得
+          const token = apiClient.getStoredToken();
+          if (!token) {
+            console.error('JWT token not found');
+            navigate("GameResult");
+            return;
+          }
+
+          // JWTからユーザー名を取得
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const username = payload.username;
+
+          // 対戦相手の名前を決定
+          let opponentUsername = '';
+          
+          if (npcEnabled) {
+            // NPC対戦の場合
+            opponentUsername = 'NPC';
+          } else if (isMultiplayer && realPlayers.player2.name) {
+            // マルチプレイヤー対戦の場合
+            opponentUsername = String(realPlayers.player2.name);
+          } else {
+            // その他の場合（デフォルト）
+            opponentUsername = 'Unknown';
+          }
+
+          // 勝敗結果を決定
+          const result = winner === 1 ? 'win' : 'lose';
+
+          // 現在の日付を取得（ISO文字列形式YYYY-MM-DD）
+          const today = new Date();
+          const gameDate = today.toISOString().split('T')[0]; // YYYY-MM-DD形式
+
+          console.log('🏆 Saving GamePong2 result:', { 
+            username, 
+            opponentUsername, 
+            result, 
+            gameDate 
+          });
+
+          // ゲーム結果をresult_searchサービスに送信
+          const response = await fetch('/api/results/pong2', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              username,
+              opponentUsername,
+              result,
+              gameDate
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to save game result: ${response.status}`);
+          }
+
+          console.log('✅ GamePong2 result saved successfully');
+        } catch (error) {
+          console.error('Error while saving GamePong2 result:', error);
+        } finally {
+          // 処理が完了したら画面遷移
+          console.log('🚀 Navigating to GameResult');
+          navigate("GameResult");
+        }
+      }, 1200);
       return () => clearTimeout(t);
     }
-  }, [gameOver, winner, navigate]);
+  }, [gameOver, winner, navigate, npcEnabled, isMultiplayer, realPlayers.player2.name]);
 
   // マルチプレイヤー時のゲームエンジンコールバック設定
   useEffect(() => {
@@ -645,9 +714,15 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     const positionClass = side === "left"
       ? "left-0 bottom-16"
       : "right-0 top-16";
-    const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
-
-    const playerInfo = realPlayers[avatarPlayerKey];
+    const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";    const playerInfo = realPlayers[avatarPlayerKey];
+    
+    // NPC対戦時の名前とアバター表示を調整
+    let displayName = playerInfo.name;
+    let displayAvatar = playerInfo.avatar;
+    if (npcEnabled && avatarPlayerKey === "player2") {
+      displayName = "NPC";
+      displayAvatar = "/images/avatar/npc_avatar.png";
+    }
 
     return (
       <div
@@ -659,17 +734,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           <img src={`${ICON_PATH}win.svg`} alt="win" className="w-12 h-12 lg:w-16 lg:h-16" />
         ) : (
           <span className="text-white font-extrabold text-6xl lg:text-8xl leading-none">{pts}</span>
-        )}
-
-        <div className="flex flex-col items-center gap-1">
+        )}        <div className="flex flex-col items-center gap-1">
           <img
-            src={playerInfo.avatar}
+            src={displayAvatar}
             alt="avatar"
             className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
-          />
-          {playerInfo.name && (
+          />          {playerInfo.name && (
             <span className="text-white text-xs lg:text-sm font-medium">
-              {playerInfo.name}
+              {displayName}
             </span>
           )}
         </div>
