@@ -224,27 +224,32 @@ export class NPCGameManager {
   }
 
   private createInitialGameState(canvasWidth: number, canvasHeight: number, config: GameConfig) {
+    // 比率から実際のサイズを計算
+    const ballRadius = canvasWidth * config.ballRadiusRatio;
+    const paddleWidth = canvasWidth * config.paddleWidthRatio;
+    const paddleHeight = canvasHeight * config.paddleHeightRatio;
+
     return {
       ball: {
         x: canvasWidth / 2,
         y: canvasHeight / 2,
         dx: config.initialBallSpeed * (Math.random() > 0.5 ? 1 : -1),
         dy: config.initialBallSpeed * (Math.random() > 0.5 ? 1 : -1),
-        radius: config.ballRadius,
+        radius: ballRadius,
         speed: config.initialBallSpeed,
         speedMultiplier: 1,
       },
       paddle1: {
-        x: canvasWidth / 2 - config.paddleWidth / 2,
+        x: canvasWidth / 2 - paddleWidth / 2,
         y: 2, // 上端から2ピクセルの位置に移動
-        width: config.paddleWidth,
-        height: config.paddleHeight,
+        width: paddleWidth,
+        height: paddleHeight,
       },
       paddle2: {
-        x: canvasWidth / 2 - config.paddleWidth / 2,
-        y: canvasHeight - 2 - config.paddleHeight, // 下端から2ピクセルの位置に移動
-        width: config.paddleWidth,
-        height: config.paddleHeight,
+        x: canvasWidth / 2 - paddleWidth / 2,
+        y: canvasHeight - 2 - paddleHeight, // 下端から2ピクセルの位置に移動
+        width: paddleWidth,
+        height: paddleHeight,
       },
       canvasWidth,
       canvasHeight,
