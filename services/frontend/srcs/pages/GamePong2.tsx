@@ -241,15 +241,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             const opponentPlayer = data.players.find(p => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
               console.log('Found opponent player:', opponentPlayer);
-              setRealPlayers(prev => ({
-                ...prev,
-                player2: {
-                  id: opponentPlayer.playerInfo.id,
-                  avatar: opponentPlayer.playerInfo.avatar,
-                  name: opponentPlayer.playerInfo.name || 'Player 2'
-                }
-              }));
-              console.log('Opponent player info updated:', opponentPlayer.playerInfo);
+              // APIから対戦相手の詳細プロフィール（画像含む）を取得
+              fetchOpponentProfile(opponentPlayer.playerInfo.id).then(opponentProfile => {
+                setRealPlayers(prev => ({
+                  ...prev,
+                  player2: opponentProfile
+                }));
+                console.log('Opponent player profile updated with API data:', opponentProfile);
+              });
             } else {
               console.log('No opponent player found in room');
             }
@@ -276,15 +275,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
               console.log('Found new opponent player:', opponentPlayer);
-              setRealPlayers(prev => ({
-                ...prev,
-                player2: {
-                  id: opponentPlayer.playerInfo.id,
-                  avatar: opponentPlayer.playerInfo.avatar,
-                  name: opponentPlayer.playerInfo.name || 'Player 2'
-                }
-              }));
-              console.log('New opponent player info updated:', opponentPlayer.playerInfo);
+              // APIから対戦相手の詳細プロフィール（画像含む）を取得
+              fetchOpponentProfile(opponentPlayer.playerInfo.id).then(opponentProfile => {
+                setRealPlayers(prev => ({
+                  ...prev,
+                  player2: opponentProfile
+                }));
+                console.log('New opponent player profile updated with API data:', opponentProfile);
+              });
             } else {
               console.log('No new opponent player found');
             }
@@ -304,15 +302,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
               console.log('Found participant opponent player:', opponentPlayer);
-              setRealPlayers(prev => ({
-                ...prev,
-                player2: {
-                  id: opponentPlayer.playerInfo.id,
-                  avatar: opponentPlayer.playerInfo.avatar,
-                  name: opponentPlayer.playerInfo.name || 'Player 2'
-                }
-              }));
-              console.log('Participant opponent player info updated:', opponentPlayer.playerInfo);
+              // APIから対戦相手の詳細プロフィール（画像含む）を取得
+              fetchOpponentProfile(opponentPlayer.playerInfo.id).then(opponentProfile => {
+                setRealPlayers(prev => ({
+                  ...prev,
+                  player2: opponentProfile
+                }));
+                console.log('Participant opponent player profile updated with API data:', opponentProfile);
+              });
             }
           }
         });
@@ -327,15 +324,14 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           if (data.players && data.players.length > 0) {
             const opponentPlayer = data.players.find((p: any) => p.playerId !== multiplayerService.getPlayerId());
             if (opponentPlayer) {
-              setRealPlayers(prev => ({
-                ...prev,
-                player2: {
-                  id: opponentPlayer.playerInfo.id,
-                  avatar: opponentPlayer.playerInfo.avatar,
-                  name: opponentPlayer.playerInfo.name || 'Player 2'
-                }
-              }));
-              console.log('Game ready: Opponent player info updated:', opponentPlayer.playerInfo);
+              // APIから対戦相手の詳細プロフィール（画像含む）を取得
+              fetchOpponentProfile(opponentPlayer.playerInfo.id).then(opponentProfile => {
+                setRealPlayers(prev => ({
+                  ...prev,
+                  player2: opponentProfile
+                }));
+                console.log('Game ready: Opponent player profile updated with API data:', opponentProfile);
+              });
             } else {
               console.log('Game ready: No opponent player found');
             }
