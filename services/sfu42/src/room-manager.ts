@@ -27,13 +27,11 @@ export class GameRoom implements Room {
     // 既に参加している場合は既存のプレイヤー番号を返す
     if (this.players.has(playerId)) {
       const existingPlayerNumber = this.players.get(playerId)!.playerNumber;
-      console.log(`Player ${playerId} already in room ${this.id} as player ${existingPlayerNumber}`);
       return existingPlayerNumber;
     }
 
     // 既に観戦者として参加している場合
     if (this.spectators.has(playerId)) {
-      console.log(`Player ${playerId} already in room ${this.id} as spectator`);
       return 'spectator';
     }
 
@@ -42,12 +40,10 @@ export class GameRoom implements Room {
     if (playerNumber === null) {
       // プレイヤー枠が満杯の場合は観戦者として追加
       this.spectators.set(playerId, { playerInfo, joinedAt: new Date() });
-      console.log(`Added player ${playerId} to room ${this.id} as spectator`);
       return 'spectator';
     }
 
     this.players.set(playerId, { playerInfo, playerNumber });
-    console.log(`Added player ${playerId} to room ${this.id} as player ${playerNumber}`);
     return playerNumber;
   }
 
@@ -66,9 +62,9 @@ export class GameRoom implements Room {
   getPlayerNumber(playerId: string): 1 | 2 | 'spectator' | null {
     const player = this.players.get(playerId);
     if (player) return player.playerNumber;
-    
+
     if (this.spectators.has(playerId)) return 'spectator';
-    
+
     return null;
   }
 
@@ -138,14 +134,14 @@ export class GameRoom implements Room {
   updateScore(scorer: 'player1' | 'player2', winningScore: number = 11): boolean {
     this.scores[scorer]++;
     this.lastActivity = new Date();
-    
+
     // ゲーム終了判定
     if (this.scores[scorer] >= winningScore) {
       this.gameOver = true;
       this.winner = scorer === 'player1' ? 1 : 2;
       return true; // ゲーム終了
     }
-    
+
     return false; // ゲーム継続
   }
 
@@ -181,11 +177,9 @@ export class RoomManager {
     if (!room) {
       room = new GameRoom(roomNumber);
       this.rooms.set(roomNumber, room);
-      console.log(`Created new room: ${roomNumber}`);
     }
 
     const role = room.addPlayer(playerId, playerInfo);
-    console.log(`Player ${playerId} joined room ${roomNumber} as ${role === 'spectator' ? 'spectator' : `player ${role}`}`);
 
     return { room, role };
   }
@@ -198,12 +192,10 @@ export class RoomManager {
     for (const [roomNumber, room] of this.rooms.entries()) {
       if (room.hasPlayer(playerId)) {
         room.removePlayer(playerId);
-        console.log(`Player ${playerId} left room ${roomNumber}`);
 
         // 部屋が空になったら削除
         if (room.isEmpty()) {
           this.rooms.delete(roomNumber);
-          console.log(`Removed empty room: ${roomNumber}`);
         }
 
         return roomNumber;
@@ -214,9 +206,6 @@ export class RoomManager {
 
   removeRoom(roomNumber: string): boolean {
     const removed = this.rooms.delete(roomNumber);
-    if (removed) {
-      console.log(`Removed room: ${roomNumber}`);
-    }
     return removed;
   }
 
@@ -239,7 +228,6 @@ export class RoomManager {
       if (timeSinceLastActivity > timeoutMs) {
         this.rooms.delete(roomNumber);
         removedCount++;
-        console.log(`Cleaned up inactive room: ${roomNumber}`);
       }
     }
 

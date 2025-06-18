@@ -43,14 +43,10 @@ const roomGameStates = new Map<string, { gameStarted: boolean; timestamp: number
 // プレイヤーゲーム状態中継の統計
 const playerGameStateStats = new Map<string, { count: number, lastUpdate: number }>();
 
-// 1秒ごとに統計をログ出力
+// 1秒ごとに統計をリセット
 setInterval(() => {
   for (const [roomNumber, stats] of playerGameStateStats.entries()) {
-    if (stats.count > 0) {
-      const connectionsInRoom = roomConnections.get(roomNumber)?.size || 0;
-      console.log(`🔄 Player game state relays: ${stats.count}/sec from ${connectionsInRoom} clients in room ${roomNumber}`);
-      stats.count = 0; // リセット
-    }
+    stats.count = 0; // リセット
   }
 }, 1000);
 

@@ -22,13 +22,10 @@ export class NPCGameManager {
 
         // ゲームが終了した場合の処理
         if (!session.isRunning) {
-          console.log(`🏁 Game ${gameId} finished`);
-
           // GamePong42では終了したNPCは再起動しない（脱落）
           // ただし、5秒後にゲームを削除
           setTimeout(() => {
             this.games.delete(gameId);
-            console.log(`🗑️ Game ${gameId} deleted (NPC defeated), remaining games: ${this.games.size}`);
           }, 5000); // 5秒後に削除
         }
       }
@@ -62,17 +59,14 @@ export class NPCGameManager {
     if (ball.x <= ball.radius) {
       // Player2が得点
       session.score.player2++;
-      console.log(`🏓 Player2 scored! Score: ${session.score.player1}-${session.score.player2}`);
 
       // GamePong42ルール: Player2が得点してもゲーム継続（スコアリセット）
       session.score.player1 = 0;
       session.score.player2 = 0;
       this.resetGameBall(session, 'player2');
-      console.log(`🔄 Game continues - scores reset to 0-0`);
     } else if (ball.x >= session.gameState.canvasWidth - ball.radius) {
       // Player1が得点
       session.score.player1++;
-      console.log(`🏓 Player1 scored! Score: ${session.score.player1}-${session.score.player2}`);
 
       // GamePong42ルール: Player1が得点したら即座にゲーム終了
       console.log(`💀 Game Over - Player1 (upper NPC) scored, game terminated`);
@@ -219,7 +213,6 @@ export class NPCGameManager {
     };
 
     this.games.set(gameId, session);
-    console.log(`✅ Game created: ${gameId}, Total games: ${this.games.size}, Active: ${this.getActiveGameCount()}`);
     return gameId;
   }
 
@@ -332,10 +325,13 @@ export class NPCGameManager {
   public stopGame(gameId: string): boolean {
     const session = this.games.get(gameId);
     if (!session) {
-      return false;
+      // ゲームが見つからない場合（すでに停止済み）も成功として扱う
+      console.log(`⚠️ Game ${gameId} not found (already stopped?)`);
+      return true;
     }
 
     session.isRunning = false;
+    console.log(`✅ Game ${gameId} stopped successfully`);
     return true;
   }
 

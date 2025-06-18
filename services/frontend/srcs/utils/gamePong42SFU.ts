@@ -90,11 +90,9 @@ export const useGamePong42SFU = () => {
   // Room Leaderのカウントダウン管理
   const startRoomLeaderCountdown = useCallback(() => {
     if (!localGameState.isRoomLeader || localGameState.gameStarted || countdownStartedRef.current) {
-      console.log('⚠️ Countdown already started or not Room Leader');
       return;
     }
 
-    console.log('🏆 Room Leader starting countdown');
     countdownStartedRef.current = true; // フラグを設定
 
     // Clear existing timer
@@ -139,7 +137,7 @@ export const useGamePong42SFU = () => {
   // Room Leaderになったときのログ出力のみ（自動カウントダウンは削除）
   useEffect(() => {
     if (localGameState.isRoomLeader && !localGameState.gameStarted) {
-      console.log('👑 Became Room Leader - ready to start countdown when requested');
+      console.log('👑 Became Room Leader');
     }
   }, [localGameState.isRoomLeader, localGameState.gameStarted]);
 
@@ -148,8 +146,6 @@ export const useGamePong42SFU = () => {
     if (!localGameState.isRoomLeader || localGameState.gameStarted) {
       return;
     }
-
-    console.log('🎮 Room Leader starting game');
 
     const playerCount = localGameState.participantCount;
     const npcCount = Math.max(0, 42 - playerCount);
@@ -162,8 +158,6 @@ export const useGamePong42SFU = () => {
 
     // NPCリクエストをSFU経由で送信（Room Leaderのみ）
     if (socketRef.current && roomNumberRef.current) {
-      console.log(`🤖 Requesting ${npcCount} NPCs for room ${roomNumberRef.current}`);
-
       socketRef.current.emit('npc-request', {
         type: 'join',
         roomNumber: roomNumberRef.current,
@@ -185,11 +179,8 @@ export const useGamePong42SFU = () => {
   // 接続状態を監視
   const connect = useCallback(() => {
     if (socketRef.current?.connected) {
-      console.log('🔗 SFU already connected');
       return;
     }
-
-    console.log('🔗 Connecting to SFU server:', SFU_URL());
 
     const socket = io(SFU_URL(), {
       transports: ['websocket'], // WebSocketのみ使用
@@ -210,13 +201,11 @@ export const useGamePong42SFU = () => {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ Connected to SFU server:', socket.id);
       playerIdRef.current = socket.id;
       setState(prev => ({ ...prev, connected: true, error: null }));
     });
 
     socket.on('disconnect', (reason) => {
-      console.log('🔌 Disconnected from SFU server:', reason);
       setState(prev => ({ ...prev, connected: false }));
     });
 
@@ -227,8 +216,6 @@ export const useGamePong42SFU = () => {
 
     // Room join confirmation (from SFU server)
     socket.on('room-join-confirmed', (data: { roomNumber: string; isRoomLeader: boolean; participantCount: number; countdown?: number; gameStarted?: boolean; timestamp: number }) => {
-      console.log('🏠 Room join confirmed:', data);
-
       // サーバーから割り当てられた部屋番号を設定
       roomNumberRef.current = data.roomNumber;
 
@@ -241,14 +228,12 @@ export const useGamePong42SFU = () => {
         gameStarted: data.gameStarted !== undefined ? data.gameStarted : prev.gameStarted
       }));
 
-      console.log(`👑 Room Leader status confirmed: isLeader=${data.isRoomLeader}, playerCount=${data.participantCount}, room=${data.roomNumber}`);
-
       if (data.countdown !== undefined) {
-        console.log(`⏰ Room countdown: ${data.countdown}s`);
+        // カウントダウン状態も同期
       }
 
       if (data.gameStarted) {
-        console.log(`🎮 Room game already started`);
+        // ゲーム開始状態も同期
       }
     });
 
@@ -277,9 +262,6 @@ export const useGamePong42SFU = () => {
           isActive: false
         });
 
-        console.log(`🎮 Player count updated: ${data.participantCount} (another player: ${data.socketId})`);
-        console.log(`📊 PlayerGameStates now has ${newPlayerGameStates.size} entries`);
-
         return {
           ...prev,
           connectedPlayers: newConnectedPlayers,
@@ -291,8 +273,6 @@ export const useGamePong42SFU = () => {
 
     // Existing players list (received when joining a room with existing players)
     socket.on('existing-players-list', (data: { roomNumber: string; existingClients: string[]; timestamp: number }) => {
-      console.log('📝 Received existing players list:', data);
-
       setLocalGameState(prev => {
         const newPlayerGameStates = new Map(prev.playerGameStates);
         const newConnectedPlayers = new Set(prev.connectedPlayers);
@@ -318,9 +298,6 @@ export const useGamePong42SFU = () => {
           }
         });
 
-        console.log(`📊 Added ${data.existingClients.length} existing players to game states map`);
-        console.log(`📊 PlayerGameStates now has ${newPlayerGameStates.size} entries`);
-
         return {
           ...prev,
           connectedPlayers: newConnectedPlayers,
@@ -331,8 +308,6 @@ export const useGamePong42SFU = () => {
 
     // Room leader assignment (when previous leader leaves)
     socket.on('room-leader-assigned', (data: { roomNumber: string; isRoomLeader: boolean; participantCount: number; timestamp: number }) => {
-      console.log('👑 New room leader assigned:', data);
-
       setLocalGameState(prev => ({
         ...prev,
         isRoomLeader: data.isRoomLeader,
@@ -363,21 +338,16 @@ export const useGamePong42SFU = () => {
       });
     });    // Room Leader countdown updates (relay from other Room Leader)
     socket.on('room-leader-countdown', (data: { action: string; countdown: number; from: string; timestamp: number }) => {
-      console.log('📊 Room Leader countdown update:', data);
-
       // Only non-Room Leaders should update countdown from external source
       if (data.from !== playerIdRef.current) {
-        console.log('⏰ Receiving countdown update from another Room Leader:', data.countdown);
         setLocalGameState(prev => {
           // Only update if this client is NOT the Room Leader
           if (!prev.isRoomLeader) {
-            console.log('✅ Non-leader updating countdown to:', data.countdown);
             return {
               ...prev,
               countdown: data.countdown
             };
           } else {
-            console.log('⚠️ Ignoring countdown update - this client is Room Leader');
             return prev;
           }
         });
@@ -386,10 +356,7 @@ export const useGamePong42SFU = () => {
 
     // Game start (relay from Room Leader or server)
     socket.on('game-start', (data: { playerCount: number; npcCount: number; from: string; timestamp: number; alreadyStarted?: boolean }) => {
-      console.log('🎮 Game start relay:', data);
-
       if (data.from !== playerIdRef.current) {
-        console.log(`✅ ${data.alreadyStarted ? 'Late joiner' : 'Non-leader'} receiving game start from ${data.from}`);
         setLocalGameState(prev => ({
           ...prev,
           gameStarted: true,
@@ -411,41 +378,19 @@ export const useGamePong42SFU = () => {
 
     // Player game over event
     socket.on('player-game-over', (data: { from: string; timestamp: number }) => {
-      console.log('� GAMEOVER EVENT RECEIVED - Player game over received:', data);
-      console.log('💀💀💀 IMPORTANT: Another player has been eliminated! 💀💀💀');
+      console.log('💀 Player eliminated:', data.from);
 
       // 該当プレイヤーのゲーム状態を非アクティブに設定
       setLocalGameState(prev => {
         const newPlayerGameStates = new Map(prev.playerGameStates);
         const playerState = newPlayerGameStates.get(data.from);
 
-        console.log('🔍 Before update - playerGameStates:', {
-          total: newPlayerGameStates.size,
-          players: Array.from(newPlayerGameStates.entries()).map(([id, state]) => ({
-            id,
-            isActive: state.isActive,
-            name: state.playerName
-          }))
-        });
-
         if (playerState) {
           newPlayerGameStates.set(data.from, {
             ...playerState,
             isActive: false
           });
-          console.log(`🚫💀 Player ${data.from} set to inactive in playerGameStates`);
-        } else {
-          console.log(`⚠️❌ Player ${data.from} not found in playerGameStates`);
         }
-
-        console.log('🔍 After update - playerGameStates:', {
-          total: newPlayerGameStates.size,
-          players: Array.from(newPlayerGameStates.entries()).map(([id, state]) => ({
-            id,
-            isActive: state.isActive,
-            name: state.playerName
-          }))
-        });
 
         return {
           ...prev,
@@ -464,11 +409,8 @@ export const useGamePong42SFU = () => {
 
     // Player game state relay（他のプレイヤーのゲーム状態を受信）
     socket.on('player-game-state-relay', (data: { playerGameState: PlayerGameState }) => {
-      console.log('📨 Frontend received player-game-state-relay from:', data.playerGameState.playerId, 'to:', playerIdRef.current);
-
       // 自分以外のプレイヤーからのゲーム状態のみ処理
       if (data.playerGameState.playerId !== playerIdRef.current) {
-        console.log('✅ Processing game state from other player:', data.playerGameState.playerId);
         setLocalGameState(prev => {
           const newPlayerGameStates = new Map(prev.playerGameStates);
           newPlayerGameStates.set(data.playerGameState.playerId, {
@@ -480,16 +422,10 @@ export const useGamePong42SFU = () => {
           const newConnectedPlayers = new Set(prev.connectedPlayers);
           if (!newConnectedPlayers.has(data.playerGameState.playerId)) {
             newConnectedPlayers.add(data.playerGameState.playerId);
-            console.log(`🆕 Added unknown player to connected list: ${data.playerGameState.playerId}`);
           }
-
-          console.log(`📊 Updated playerGameStates, total: ${newPlayerGameStates.size}, active players:`, Array.from(newPlayerGameStates.keys()))
 
           // 🔧 重要な修正: 他のプレイヤーからゲーム状態を受信した場合、ゲームが開始されているとみなす
           const shouldStartGame = !prev.gameStarted && data.playerGameState.isActive;
-          if (shouldStartGame) {
-            console.log('🎮 Auto-starting game because received active game state from other player');
-          }
 
           return {
             ...prev,
@@ -498,10 +434,6 @@ export const useGamePong42SFU = () => {
             gameStarted: shouldStartGame ? true : prev.gameStarted, // ゲーム自動開始
           };
         });
-
-        console.log('📨 Received game state from other player:', data.playerGameState.playerId);
-      } else {
-        console.log('⚠️ Ignoring own game state relay from:', data.playerGameState.playerId);
       }
     });
 
@@ -521,10 +453,29 @@ export const useGamePong42SFU = () => {
     socket.on('npc-response', (data: { success: boolean; data?: any; error?: string; timestamp: number }) => {
       console.log('🤖 NPC response:', data);
 
-      if (data.success) {
-        console.log('✅ NPC request successful:', data.data);
+      if (data.success && data.data) {
+        // データの詳細構造をログ出力
+        console.log('🔍 NPC response data details:', {
+          hasSuccess: 'success' in data.data,
+          successValue: data.data.success,
+          hasError: 'error' in data.data,
+          errorValue: data.data.error,
+          dataKeys: Object.keys(data.data)
+        });
+
+        if (data.data.success === true) {
+          console.log('✅ NPC request successful:', data.data);
+        } else if (data.data.success === false) {
+          // エラーメッセージをより詳細に表示
+          const errorMsg = data.data.error || data.data.message || 'Unknown error';
+          console.error('❌ NPC request failed:', errorMsg);
+          console.error('Full response data:', data.data);
+        } else {
+          // successフィールドがない場合の処理
+          console.log('ℹ️ NPC response (no success field):', data.data);
+        }
       } else {
-        console.error('❌ NPC request failed:', data.error);
+        console.error('❌ SFU request failed:', data.error || 'Unknown SFU error');
       }
     });
 
@@ -538,18 +489,18 @@ export const useGamePong42SFU = () => {
       }
     });    // NPCデータの受信 (npc_manager → SFU → client)
     socket.on('gamepong42-data', (data: any) => {
-      console.log('🤖 Received NPC data:', data);
+      // console.log('🤖 Received NPC data:', data);
 
       // データ構造を確認
       const payload = data.payload || data;
       const npcStates = payload.npcStates || data.npcStates;
 
-      console.log('📊 Data structure:', {
-        hasPayload: !!data.payload,
-        hasDirectNpcStates: !!data.npcStates,
-        payloadNpcStatesCount: payload.npcStates?.length || 0,
-        directNpcStatesCount: data.npcStates?.length || 0
-      });
+      // console.log('📊 Data structure:', {
+      //   hasPayload: !!data.payload,
+      //   hasDirectNpcStates: !!data.npcStates,
+      //   payloadNpcStatesCount: payload.npcStates?.length || 0,
+      //   directNpcStatesCount: data.npcStates?.length || 0
+      // });
 
       // NPCデータをreceivedDataに追加
       if (npcStates && Array.isArray(npcStates)) {
@@ -565,14 +516,14 @@ export const useGamePong42SFU = () => {
         };
 
         setReceivedData(prev => [...prev.slice(-49), npcData]); // 最新50件を保持
-        console.log('✅ NPC data processed and added to receivedData, count:', npcStates.length);
+        // console.log('✅ NPC data processed and added to receivedData, count:', npcStates.length);
       } else {
         console.warn('⚠️ Received NPC data without valid npcStates:', data);
         console.warn('⚠️ Payload structure:', payload);
       }
     });
 
-  }, []);
+  }, [setState, setLocalGameState, setReceivedData]);
 
   // WebRTCデータ送信
   const sendData = useCallback((data: GamePong42Data) => {
@@ -731,12 +682,12 @@ export const useGamePong42SFU = () => {
       isActive: true,
     };
 
-    console.log('🚨 About to emit player-game-state from:', playerIdRef.current);
+    // console.log('🚨 About to emit player-game-state from:', playerIdRef.current);
     socketRef.current.emit('player-game-state', {
       roomNumber: roomNumberRef.current,
       playerGameState: playerGameData,
     });
-    console.log('✅ player-game-state emitted successfully');
+    // console.log('✅ player-game-state emitted successfully');
   }, []);
 
   // ゲーム終了を送信
@@ -805,7 +756,7 @@ export const useGamePong42SFU = () => {
     }
 
     return new Promise((resolve, reject) => {
-      const requestId = Date.now().toString();
+      const requestId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`; // より一意なIDを生成
       const timeout = setTimeout(() => {
         reject(new Error('NPC game creation timeout'));
       }, 10000);
@@ -814,10 +765,13 @@ export const useGamePong42SFU = () => {
         if (data.requestId === requestId) {
           clearTimeout(timeout);
           socketRef.current?.off('npc-response', responseHandler);
-          if (data.success) {
-            resolve(data);
+          // SFUが正常に応答し、かつNPC Managerからの実際の結果も成功の場合
+          if (data.success && data.data && data.data.success) {
+            resolve(data.data); // NPC Managerからの実際のレスポンスを返す
           } else {
-            reject(new Error(data.error || 'Failed to create NPC game'));
+            // エラー情報を適切に取得
+            const errorMsg = data.data?.error || data.error || 'Failed to create NPC game';
+            reject(new Error(errorMsg));
           }
         }
       };
@@ -841,7 +795,7 @@ export const useGamePong42SFU = () => {
     }
 
     return new Promise((resolve, reject) => {
-      const requestId = Date.now().toString();
+      const requestId = `${Date.now()}_${gameId.slice(-8)}`; // より一意なIDを生成
       const timeout = setTimeout(() => {
         reject(new Error('Speed boost timeout'));
       }, 10000);
@@ -850,10 +804,13 @@ export const useGamePong42SFU = () => {
         if (data.requestId === requestId) {
           clearTimeout(timeout);
           socketRef.current?.off('npc-response', responseHandler);
-          if (data.success) {
-            resolve(data);
+          // SFUが正常に応答し、かつNPC Managerからの実際の結果も成功の場合
+          if (data.success && data.data && data.data.success) {
+            resolve(data.data); // NPC Managerからの実際のレスポンスを返す
           } else {
-            reject(new Error(data.error || 'Failed to apply speed boost'));
+            // エラー情報を適切に取得
+            const errorMsg = data.data?.error || data.error || 'Failed to apply speed boost';
+            reject(new Error(errorMsg));
           }
         }
       };
@@ -877,7 +834,7 @@ export const useGamePong42SFU = () => {
     }
 
     return new Promise((resolve, reject) => {
-      const requestId = Date.now().toString();
+      const requestId = `${Date.now()}_${gameId.slice(-8)}`; // より一意なIDを生成
       const timeout = setTimeout(() => {
         reject(new Error('Stop game timeout'));
       }, 10000);
@@ -886,10 +843,24 @@ export const useGamePong42SFU = () => {
         if (data.requestId === requestId) {
           clearTimeout(timeout);
           socketRef.current?.off('npc-response', responseHandler);
-          if (data.success) {
-            resolve(data);
+
+          // 詳細なログでデバッグ情報を出力
+          console.log(`🔍 Stop game ${gameId} response:`, {
+            success: data.success,
+            dataExists: !!data.data,
+            dataSuccess: data.data?.success,
+            dataError: data.data?.error,
+            fullData: data
+          });
+
+          // SFUが正常に応答し、かつNPC Managerからの実際の結果も成功の場合
+          if (data.success && data.data && data.data.success) {
+            resolve(data.data); // NPC Managerからの実際のレスポンスを返す
           } else {
-            reject(new Error(data.error || 'Failed to stop NPC game'));
+            // エラー情報を適切に取得
+            const errorMsg = data.data?.error || data.error || 'Failed to stop NPC game';
+            console.log(`❌ Stop game ${gameId} failed:`, errorMsg);
+            reject(new Error(errorMsg));
           }
         }
       };

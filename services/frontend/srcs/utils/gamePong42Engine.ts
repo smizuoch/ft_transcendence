@@ -53,6 +53,7 @@ export class GameEngine {
   private gameStarted: boolean = false;
   private gameOver: boolean = false;
   private winner: number | null = null;
+  private isCleanedUp: boolean = false; // クリーンアップ状態を追跡
 
   // マルチプレイヤー用の状態管理
   private isAuthoritativeClient: boolean = false;
@@ -133,7 +134,6 @@ export class GameEngine {
 
     // NPC設定が有効な場合は初期化
     if (config.npc.enabled) {
-      console.log('🤖 Initializing NPC during GameEngine construction:', config.npc);
       this.updateNPCConfig(config.npc);
     }
   }
@@ -186,8 +186,6 @@ export class GameEngine {
         y: this.state.paddle2.y,
       },
     };
-
-    console.log('Canvas size updated while preserving ball and paddle positions');
   }
 
   public setKeyState(): void {
@@ -240,6 +238,11 @@ export class GameEngine {
   }
 
   public update(): 'none' | 'player1' | 'player2' {
+    // クリーンアップ済みの場合は何もしない
+    if (this.isCleanedUp) {
+      return 'none';
+    }
+
     // 時間ベース計算のためのデルタタイム更新
     const currentTime = performance.now();
     if (this.lastFrameTime === 0) {
@@ -260,14 +263,20 @@ export class GameEngine {
     if (this.npcEngine) {
       this.npcEngine.updatePaddle(this.getGameState(), 240 * deltaTimeSeconds); // 固定速度240 pixels/second（プレイヤーと統一）
     } else if (this.config.npc.enabled && this.config.npc.player === 1) {
-      console.warn('⚠️ NPC for Player1 should be enabled but npcEngine is null');
+      // クリーンアップ済みでない場合のみ警告を表示
+      if (!this.isCleanedUp) {
+        console.warn('⚠️ NPC for Player1 should be enabled but npcEngine is null');
+      }
     }
 
     // NPC更新（Player2用）
     if (this.npcEngine2) {
       this.npcEngine2.updatePaddle(this.getGameState(), 240 * deltaTimeSeconds); // 固定速度240 pixels/second（プレイヤーと統一）
     } else if (this.config.npc.enabled && this.config.npc.player === 2) {
-      console.warn('⚠️ NPC for Player2 should be enabled but npcEngine2 is null');
+      // クリーンアップ済みでない場合のみ警告を表示
+      if (!this.isCleanedUp) {
+        console.warn('⚠️ NPC for Player2 should be enabled but npcEngine2 is null');
+      }
     }
 
     this.updatePaddles();
@@ -420,20 +429,7 @@ export class GameEngine {
   private checkGoals(): 'none' | 'player1' | 'player2' {
     const { ball } = this.state;
 
-    // デバッグ: ボール位置を定期的にログ出力
-    if (Date.now() % 5000 < 100) { // 5秒ごと
-      console.log('🏐 Ball position debug:', {
-        x: ball.x.toFixed(2),
-        y: ball.y.toFixed(2),
-        radius: ball.radius,
-        canvasHeight: this.state.canvasHeight,
-        topBoundary: (ball.y - ball.radius).toFixed(2),
-        bottomBoundary: (ball.y + ball.radius).toFixed(2),
-        isNearTop: ball.y - ball.radius < 10,
-        isNearBottom: ball.y + ball.radius > this.state.canvasHeight - 10
-      });
-    }
-
+    // ボールが上下の境界を越えたかチェック（得点判定）
     if (ball.y - ball.radius < 0) {
       // Player2が得点
       if (this.attackEffect.isActive) {
@@ -444,7 +440,6 @@ export class GameEngine {
       this.score.player2++;
       this.state.score.player2++;
       console.log('🎯🎯🎯 Player2 scored! PidNPC DEFEATED! New score:', this.score);
-      console.log('⚽ Ball went past top boundary (y - radius < 0)');
 
       this.resetBall('player2');
 
@@ -459,7 +454,6 @@ export class GameEngine {
       this.score.player1++;
       this.state.score.player1++;
       console.log('💀💀💀 Player1 (pidNPC) scored! PLAYER ELIMINATED! New score:', this.score);
-      console.log('⚽ Ball went past bottom boundary (y + radius > canvasHeight)');
 
       this.resetBall('player1');
 
@@ -613,7 +607,6 @@ export class GameEngine {
     this.state.winner = null;
     this.gameOver = false;
     this.winner = null;
-    console.log('Score reset to 0:0');
   }
 
   // パドル位置とplayers同期メソッド
@@ -626,8 +619,6 @@ export class GameEngine {
 
   // リモートゲーム状態の同期（マルチプレイヤー用）
   public syncGameState(remoteState: GameState): void {
-    console.log('Syncing game state:', remoteState);
-
     // ボール状態の同期
     this.state.ball.x = remoteState.ball.x;
     this.state.ball.y = remoteState.ball.y;
@@ -672,6 +663,9 @@ export class GameEngine {
    * ゲームエンジンをクリーンアップする
    */
   public cleanup(): void {
+    // クリーンアップ状態を設定
+    this.isCleanedUp = true;
+
     // NPCエンジンの停止
     if (this.npcEngine) {
       this.npcEngine = null;
@@ -689,5 +683,7 @@ export class GameEngine {
 
     // ボールをリセット
     this.resetBall();
+
+    console.log('🛑 GameEngine cleanup completed - further updates will be ignored');
   }
 }
