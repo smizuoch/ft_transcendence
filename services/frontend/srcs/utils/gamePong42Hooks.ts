@@ -12,36 +12,22 @@ export const useGameEngine = (
   const isFirstFrameRef = useRef<boolean>(true); // 初回フレームを検出
 
   const initializeEngine = useCallback(() => {
-    console.log('initializeEngine called, canvasRef.current:', canvasRef.current);
     const canvas = canvasRef.current;
     if (!canvas) {
-      console.log('Canvas ref is null, skipping initialization');
       return null;
     }
 
-    // canvasの寸法情報をログ出力
-    console.log('Canvas dimensions:', {
-      clientWidth: canvas.clientWidth,
-      clientHeight: canvas.clientHeight,
-      offsetWidth: canvas.offsetWidth,
-      offsetHeight: canvas.offsetHeight,
-      getBoundingClientRect: canvas.getBoundingClientRect()
-    });
-
     const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
-    console.log('Canvas size calculated:', size);
     canvas.width = size;
     canvas.height = size;
 
     if (!engineRef.current) {
       // エンジンが存在しない場合のみ新規作成（初期化時のみ）
       engineRef.current = new GameEngine(size, size, config);
-      console.log('Created new GameEngine with size:', size);
     } else {
       // エンジンが既に存在する場合はボールとパドルの位置を保持してキャンバスサイズのみ更新
       // この更新はupdateCanvasSize内で既に相対位置を保持するよう修正済み
       engineRef.current.updateCanvasSize(size, size);
-      console.log('Updated existing GameEngine canvas size to:', size);
     }
     return engineRef.current;
   }, [canvasRef, config]);
@@ -56,20 +42,12 @@ export const useGameEngine = (
     playerNumber?: number | 'spectator' | boolean, // プレイヤー番号
     gameSender?: (gameState: any) => void, // ゲーム状態送信関数（GamePong42専用）
   ) => {
-    console.log('startGameLoop called', {
-      hasEngine: !!engineRef.current,
-      hasCanvas: !!canvasRef.current,
-      gameStarted,
-      playerNumber
-    });
-
     // 初回実行時にlastTimeRefを現在時刻に設定
     lastTimeRef.current = performance.now();
     isFirstFrameRef.current = true; // 初回フレームフラグをリセット
 
     // エンジンが初期化されていない場合は初期化を試行
     if (!engineRef.current) {
-      console.log('Engine not initialized, attempting to initialize...');
       const engine = initializeEngine();
       if (!engine) {
         console.error('Failed to initialize engine in startGameLoop');
@@ -78,13 +56,11 @@ export const useGameEngine = (
     }
 
     if (!canvasRef.current) {
-      console.log('Missing canvas, cannot start game loop');
       return;
     }
 
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) {
-      console.log('Could not get canvas context');
       return;
     }
 

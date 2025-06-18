@@ -11,8 +11,6 @@ export class MediasoupService {
 
   async initialize(): Promise<void> {
     try {
-      console.log('Initializing Mediasoup service...');
-
       // Mediasoupワーカーを作成
       this.worker = await mediasoup.createWorker({
         logLevel: 'warn', // debugから変更してログを減らす
@@ -27,8 +25,6 @@ export class MediasoupService {
         rtcMinPort: 20000,
         rtcMaxPort: 20100,
       });
-
-      console.log('Mediasoup worker created successfully');
 
       this.worker.on('died', (error) => {
         console.error('Mediasoup worker died:', error);
@@ -75,7 +71,6 @@ export class MediasoupService {
         ],
       });
 
-      console.log('Mediasoup service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Mediasoup service:', error);
       throw error;
@@ -123,15 +118,7 @@ export class MediasoupService {
       maxSctpMessageSize: 65536,
     };
 
-    console.log('🔧 Creating WebRTC transport with options:', JSON.stringify(transportOptions, null, 2));
-
     const transport = await this.router.createWebRtcTransport(transportOptions);
-
-    console.log('✅ WebRTC transport created:', {
-      id: transport.id,
-      sctpState: transport.sctpState,
-      sctpParameters: transport.sctpParameters,
-    });
 
     this.transports.set(socketId, transport);
 
@@ -182,7 +169,6 @@ export class MediasoupService {
     this.producers.set(producer.id, producer);
 
     producer.on('transportclose', () => {
-      console.log('Producer transport closed');
       this.producers.delete(producer.id);
       producer.close();
     });
@@ -212,7 +198,6 @@ export class MediasoupService {
     this.dataProducers.set(dataProducer.id, dataProducer);
 
     dataProducer.on('transportclose', () => {
-      console.log('Data producer transport closed');
       this.dataProducers.delete(dataProducer.id);
       dataProducer.close();
     });
@@ -258,13 +243,11 @@ export class MediasoupService {
     this.consumers.set(consumer.id, consumer);
 
     consumer.on('transportclose', () => {
-      console.log('Consumer transport closed');
       this.consumers.delete(consumer.id);
       consumer.close();
     });
 
     consumer.on('producerclose', () => {
-      console.log('Consumer producer closed');
       this.consumers.delete(consumer.id);
       consumer.close();
     });
@@ -372,12 +355,10 @@ export class MediasoupService {
         if (dataProducer.appData.socketId === socketId) {
           // DataProducerはデータ送信用ではなく受信用なので、
           // 実際の送信は異なる方法で行う必要がある
-          console.log(`📊 Data channel available for ${socketId}, but send method needs implementation`);
           return false;
         }
       }
 
-      console.log(`📊 No data channel found for ${socketId}`);
       return false;
     } catch (error) {
       console.error('❌ Error sending data to client:', error);
