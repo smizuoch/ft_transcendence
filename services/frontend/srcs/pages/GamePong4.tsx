@@ -49,8 +49,8 @@ interface GamePong4Props {
 const ICON_PATH = "/images/icons/";
 
 const defaultPlayers = {
-  player1: { id: 1, avatar: "/images/avatar/default_avatar.png", name: "Player 1" },
-  player2: { id: 2, avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
+  player1: { id: "1", avatar: "/images/avatar/default_avatar.png", name: "Player 1" },
+  player2: { id: "2", avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
 };
 
 const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayers }) => {
@@ -62,6 +62,96 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       return;
     }
   }, [navigate]);
+
+  // ============= ユーザー情報取得関連の状態 =============
+  const [realPlayers, setRealPlayers] = useState<{
+    player1: PlayerInfo;
+    player2: PlayerInfo;
+  }>({
+    player1: { id: "1", avatar: "/images/avatar/default_avatar.png", name: "Player 1" },
+    player2: { id: "2", avatar: "/images/avatar/default_avatar1.png", name: "Player 2" },
+  });
+
+  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
+
+  // ============= APIからユーザー情報を取得 =============
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          console.log('No auth token found, using default players');
+          setIsLoadingUserData(false);
+          return;
+        }
+
+        const response = await fetch('/api/user-search/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const userData = result.data;
+          
+          // 自分の情報をplayer1として設定
+          setRealPlayers(prev => ({
+            ...prev,
+            player1: {
+              id: userData.username,
+              avatar: userData.profileImage || "/images/avatar/default_avatar.png",
+              name: userData.username || "Player 1"
+            }
+          }));
+          console.log('User data loaded:', userData);
+        } else {
+          console.error('Failed to fetch user data');
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setIsLoadingUserData(false);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  // ============= 対戦相手のプロフィールデータを取得 =============
+  const fetchOpponentProfile = async (username: string): Promise<PlayerInfo> => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.log('No auth token found for opponent profile');
+        return { id: username, avatar: "/images/avatar/default_avatar1.png", name: username };
+      }
+
+      const response = await fetch(`/api/user-search/profile/${username}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const opponentData = result.data;
+        return {
+          id: opponentData.username,
+          avatar: opponentData.profileImage || "/images/avatar/default_avatar1.png",
+          name: opponentData.username
+        };
+      } else {
+        console.error('Failed to fetch opponent profile data');
+        return { id: username, avatar: "/images/avatar/default_avatar1.png", name: username };
+      }
+    } catch (error) {
+      console.error('Error fetching opponent profile data:', error);
+      return { id: username, avatar: "/images/avatar/default_avatar1.png", name: username };
+    }
+  };
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -129,6 +219,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
           setTournament(data.tournament);
           setTournamentId(data.tournamentId);
           setIsInTournament(true);
+          setParticipants(data.participants || { players: [] });
           setShowTournamentLobby(true);
         });
 
@@ -307,7 +398,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         });
 
         // 通常のゲーム部屋のイベントリスナー
-        multiplayerService.on('roomJoined', (data: RoomState) => {
+        multiplayerService.on('roomJoined', async (data: RoomState) => {
           console.log('Joined room event received:', data);
           
           // スコアを必ずリセット
@@ -321,6 +412,27 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
           
           setPlayerNumber(data.playerNumber);
           console.log(`Joined match room as player ${data.playerNumber}`);
+          
+          // 対戦相手の情報を取得・更新
+          if (data.players && data.players.length > 0) {
+            const myPlayerId = multiplayerService.getPlayerId();
+            const opponentPlayer = data.players.find(p => p.playerId !== myPlayerId);
+            
+            if (opponentPlayer) {
+              console.log('Found opponent player:', opponentPlayer);
+              // APIから対戦相手の詳細プロフィール（画像含む）を取得
+              try {
+                const opponentProfile = await fetchOpponentProfile(opponentPlayer.playerInfo.id);
+                setRealPlayers(prev => ({
+                  ...prev,
+                  player2: opponentProfile
+                }));
+                console.log('Opponent player profile updated with API data:', opponentProfile);
+              } catch (error) {
+                console.error('Failed to fetch opponent profile:', error);
+              }
+            }
+          }
           
           // 修正: 権威クライアントの設定を簡潔に
           // トーナメントでは常にプレイヤー1が権威クライアント
@@ -513,9 +625,9 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       setScore({ player1: 0, player2: 0 });
       
       const playerInfo = {
-        id: '',
-        avatar: players.player2.avatar,
-        name: players.player2.name || 'Player'
+        id: String(realPlayers.player1.id),
+        avatar: realPlayers.player1.avatar,
+        name: realPlayers.player1.name || 'Player'
       };
 
       await multiplayerService.joinRoom(roomNum, playerInfo);
@@ -550,13 +662,14 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         console.log('Connected successfully');
       }
 
+      // 実際のユーザー情報を使用
       const playerInfo = {
-        id: '',
-        avatar: players.player1.avatar,
-        name: players.player1.name || 'Tournament Host'
+        id: String(realPlayers.player1.id),
+        avatar: realPlayers.player1.avatar,
+        name: realPlayers.player1.name || 'Tournament Host'
       };
 
-      console.log('Sending create tournament request with playerInfo:', playerInfo);
+      console.log('Sending create tournament request with real playerInfo:', playerInfo);
       // 4人制のトーナメントのみを作成
       multiplayerService.createTournament(4, playerInfo);
     } catch (error) {
@@ -579,12 +692,14 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
     }
 
     try {
+      // 実際のユーザー情報を使用
       const playerInfo = {
-        id: '',
-        avatar: players.player2.avatar,
-        name: players.player2.name || 'Player'
+        id: String(realPlayers.player1.id),
+        avatar: realPlayers.player1.avatar,
+        name: realPlayers.player1.name || 'Player'
       };
 
+      console.log('Joining tournament with real playerInfo:', playerInfo);
       multiplayerService.joinTournament(tournamentId, playerInfo);
     } catch (error) {
       console.error('Failed to join tournament:', error);
@@ -864,11 +979,11 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       if (isMyScore) {
         // 自分のスコアとアバター
         displayedScore = playerNumber === 1 ? score.player1 : score.player2;
-        avatarPlayerKey = playerNumber === 1 ? "player1" : "player2";
+        avatarPlayerKey = "player1"; // 自分の情報（realPlayers.player1）
       } else {
         // 相手のスコアとアバター  
         displayedScore = playerNumber === 1 ? score.player2 : score.player1;
-        avatarPlayerKey = playerNumber === 1 ? "player2" : "player1";
+        avatarPlayerKey = "player2"; // 相手の情報（realPlayers.player2）
       }
     } else {
       // ローカルゲーム/NPCモードの場合は従来通り
@@ -885,6 +1000,9 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       : "right-0 top-16";
     const initialPosition = iconsDocked ? "" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2";
 
+    // 実際のプレイヤー情報を使用
+    const playerInfo = realPlayers[avatarPlayerKey];
+
     return (
       <div
         className={`absolute flex items-center gap-3 select-none pointer-events-none transition-all duration-700 ease-out ${
@@ -900,10 +1018,18 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         
         {/* inner avatar */}
         <img
-          src={players[avatarPlayerKey].avatar}
-          alt="avatar"
+          src={playerInfo.avatar}
+          alt={`${playerInfo.name || 'Player'} avatar`}
           className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-lg"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = '/images/avatar/default_avatar.png';
+          }}
         />
+        
+        {/* プレイヤー名表示（オプション） */}
+        <span className="text-white font-medium text-sm lg:text-base">
+          {playerInfo.name || 'Player'}
+        </span>
       </div>
     );
   };
