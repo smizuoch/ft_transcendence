@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameEngine, useKeyboardControls } from "@/utils/gamePong42Hooks";
 import { DEFAULT_CONFIG } from "@/utils/gamePong42Engine";
 import { NPCGameResponse, NPCGameConfig } from "@/utils/npcManagerService";
-import { useGamePong42SFU } from "@/utils/gamePong42SFU";
+import { useGamePong42SFU } from "@/utils/gamePong42SFU_WebRTC";
 import { apiClient } from "@/utils/authApi";
 
 // GamePong42専用のカスタムConfig（中央キャンバスでpidNPCを有効にする）
@@ -92,22 +92,22 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
   // 他のプレイヤーのゲーム状態を取得（全クライアントで同じ順序になるよう統一）
   const getOtherPlayerGames = useCallback(() => {
-    const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
+    const allPlayerGames = Array.from(sfu.playerGameStates.values());
     // 全クライアントで同じ順序になるよう、playerIdでソート（自分は除外）
     const sortedPlayerGames = allPlayerGames
-      .filter(playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId)
-      .sort((a, b) => a.playerId.localeCompare(b.playerId));
+      .filter((playerGame: any) => playerGame.isActive && playerGame.playerId !== sfu.playerId)
+      .sort((a: any, b: any) => a.playerId.localeCompare(b.playerId));
 
     return sortedPlayerGames;
-  }, [sfu.gameState.playerGameStates, sfu.playerId]);
+  }, [sfu.playerGameStates, sfu.playerId]);
 
   // プレイヤーゲームの更新時刻を記録（別のuseEffect）
   useEffect(() => {
-    const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
+    const allPlayerGames = Array.from(sfu.playerGameStates.values());
     // 全クライアントで同じ順序になるよう、playerIdでソート（自分は除外）
     const sortedPlayerGames = allPlayerGames
-      .filter(playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId)
-      .sort((a, b) => a.playerId.localeCompare(b.playerId));
+      .filter((playerGame: any) => playerGame.isActive && playerGame.playerId !== sfu.playerId)
+      .sort((a: any, b: any) => a.playerId.localeCompare(b.playerId));
 
     if (sortedPlayerGames.length > 0) {
       setLastUpdateTimes(prev => {

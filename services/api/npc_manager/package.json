@@ -12,7 +12,8 @@
   "dependencies": {
     "fastify": "^4.26.2",
     "@fastify/cors": "^9.0.1",
-    "socket.io-client": "^4.7.5"
+    "socket.io-client": "^4.7.5",
+    "mediasoup-client": "^3.7.6"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

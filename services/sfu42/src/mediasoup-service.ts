@@ -376,4 +376,129 @@ export class MediasoupService {
   getDataProducers(): Map<string, DataProducer> {
     return this.dataProducers;
   }
+
+  // WebRTC Transport connection by transport ID
+  async connectWebRtcTransport(transportId: string, dtlsParameters: any): Promise<void> {
+    // Find transport by ID
+    let transport = null;
+    for (const [socketId, t] of this.transports.entries()) {
+      if (t.id === transportId) {
+        transport = t;
+        break;
+      }
+    }
+
+    if (!transport) {
+      throw new Error('Transport not found');
+    }
+
+    await transport.connect({ dtlsParameters });
+  }
+
+  // Create data producer
+  async createDataProducer(
+    transportId: string,
+    sctpStreamParameters: any,
+    label: string,
+    protocol: string = 'sctp',
+    appData: any = {}
+  ): Promise<string> {
+    // Find transport by ID
+    let transport = null;
+    let socketId = '';
+    for (const [sId, t] of this.transports.entries()) {
+      if (t.id === transportId) {
+        transport = t;
+        socketId = sId;
+        break;
+      }
+    }
+
+    if (!transport) {
+      throw new Error('Transport not found');
+    }
+
+    const dataProducer = await transport.produceData({
+      sctpStreamParameters,
+      label,
+      protocol,
+      appData: { ...appData, socketId },
+    });
+
+    this.dataProducers.set(dataProducer.id, dataProducer);
+
+    dataProducer.on('transportclose', () => {
+      this.dataProducers.delete(dataProducer.id);
+      dataProducer.close();
+    });
+
+    return dataProducer.id;
+  }
+
+  // Create data consumer
+  async createDataConsumer(
+    transportId: string,
+    dataProducerId: string,
+    appData: any = {}
+  ): Promise<{
+    id: string;
+    dataProducerId: string;
+    sctpStreamParameters: any;
+    label: string;
+    protocol: string;
+  }> {
+    // Find transport by ID
+    let transport = null;
+    let socketId = '';
+    for (const [sId, t] of this.transports.entries()) {
+      if (t.id === transportId) {
+        transport = t;
+        socketId = sId;
+        break;
+      }
+    }
+
+    if (!transport) {
+      throw new Error('Transport not found');
+    }
+
+    const dataProducer = this.dataProducers.get(dataProducerId);
+    if (!dataProducer) {
+      throw new Error('Data producer not found');
+    }
+
+    const dataConsumer = await transport.consumeData({
+      dataProducerId,
+      appData: { ...appData, socketId },
+    });
+
+    // Note: consumers are not stored in this.consumers for data consumers
+    // We need a separate map for data consumers
+    // For now, we'll use the existing consumers map with a type assertion
+
+    dataConsumer.on('transportclose', () => {
+      dataConsumer.close();
+    });
+
+    dataConsumer.on('dataproducerclose', () => {
+      dataConsumer.close();
+    });
+
+    return {
+      id: dataConsumer.id,
+      dataProducerId,
+      sctpStreamParameters: dataConsumer.sctpStreamParameters,
+      label: dataConsumer.label,
+      protocol: dataConsumer.protocol,
+    };
+  }
+
+  // Close data producer
+  async closeDataProducer(dataProducerId: string): Promise<void> {
+    const dataProducer = this.dataProducers.get(dataProducerId);
+    if (dataProducer) {
+      dataProducer.close();
+      this.dataProducers.delete(dataProducerId);
+    }
+  }
 }

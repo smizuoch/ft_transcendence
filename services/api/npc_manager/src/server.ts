@@ -1,8 +1,9 @@
+// WebRTC対応のため、Socket.IOインポートを削除
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { NPCGameManager } from './gameManager';
 import { GameConfig } from './types';
-import { io as SocketIOClient, Socket } from 'socket.io-client';
+import { Device, DataProducer } from 'mediasoup-client';
 
 // SFU接続用の型定義
 interface SFURoomRequest {
@@ -15,7 +16,16 @@ interface NPCRoomData {
   roomNumber: string;
   npcCount: number;
   gameInstances: string[];
-  sfuSocket: Socket | null;
+  webrtcConnection: WebRTCConnection | null; // Socket.IOをWebRTCに変更
+}
+
+// WebRTC接続管理
+interface WebRTCConnection {
+  device: Device | null;
+  sendTransport: any | null;
+  dataProducer: DataProducer | null;
+  roomNumber: string;
+  connected: boolean;
 }
 
 const fastify = Fastify({
@@ -37,7 +47,10 @@ const roomNPCs = new Map<string, NPCRoomData>();
 
 // SFUサーバーへの接続
 let defaultSfuSocket: Socket | null = null;
-const defaultSfuUrl = process.env.SFU_URL || 'https://sfu42:3042';
+const defaultSfuUrl = 'https://sfu42:3042';
+
+// WebRTC接続情報
+const webrtcConnections = new Map<string, WebRTCConnection>();
 
 // 特定の部屋用にSFUサーバーに接続
 function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<Socket> {
@@ -93,7 +106,54 @@ function connectToSFUForRoom(roomNumber: string, sfuServerUrl: string): Promise<
   });
 }
 
-// デフォルトSFUサーバーに接続
+// stopRoomNPCs関数の実装
+function stopRoomNPCs(roomNumber: string): { success: boolean; message: string; roomNumber?: string; npcCount?: number } {
+  try {
+    const roomData = roomNPCs.get(roomNumber);
+
+    if (!roomData) {
+      return {
+        success: false,
+        message: `No NPCs found for room ${roomNumber}`
+      };
+    }
+
+    // GameManagerからNPCインスタンスを停止
+    roomData.gameInstances.forEach(gameId => {
+      gameManager.stopGame(gameId);
+    });
+
+    // SFU接続を切断
+    if (roomData.sfuSocket) {
+      roomData.sfuSocket.emit('leave-gamepong42-room', { roomNumber });
+      roomData.sfuSocket.disconnect();
+    }
+
+    // WebRTC接続を切断
+    const webrtcConnection = webrtcConnections.get(roomNumber);
+    if (webrtcConnection) {
+      disconnectWebRTC(roomNumber);
+    }
+
+    // 部屋データを削除
+    roomNPCs.delete(roomNumber);
+
+    return {
+      success: true,
+      message: `Stopped ${roomData.npcCount} NPCs for room ${roomNumber}`,
+      roomNumber,
+      npcCount: roomData.npcCount
+    };
+  } catch (error) {
+    console.error('Error stopping room NPCs:', error);
+    return {
+      success: false,
+      message: `Failed to stop NPCs for room ${roomNumber}: ${error}`
+    };
+  }
+}
+
+// SFUサーバーに接続
 function connectToDefaultSFU() {
   defaultSfuSocket = SocketIOClient(defaultSfuUrl, {
     transports: ['websocket'], // WebSocketのみ使用
@@ -282,41 +342,170 @@ function startNPCDataTransmission(roomNumber: string) {
   }, 1000 / 60); // 60fps
 }
 
-// 部屋のNPCを停止
-function stopRoomNPCs(roomNumber: string): { success: boolean; message: string } {
-  const roomData = roomNPCs.get(roomNumber);
-  if (!roomData) {
-    // 部屋が見つからない場合（すでに停止済み）は成功として扱う
-    return {
-      success: true,
-      message: `Room ${roomNumber} was already stopped or not found`
-    };
-  }
+// WebRTC経由でSFUに接続
+async function connectToSFUViaWebRTC(roomNumber: string, sfuServerUrl: string): Promise<boolean> {
+  try {
+    console.log(`🔗 Connecting to SFU via WebRTC for room ${roomNumber}`);
 
-  // 全てのNPCゲームを停止
-  let stoppedCount = 0;
-  roomData.gameInstances.forEach(gameId => {
-    const stopped = gameManager.stopGame(gameId);
-    if (stopped) {
-      stoppedCount++;
+    const device = new Device();
+
+    // ルーターのRTPキャパビリティを取得
+    const response = await fetch(`${sfuServerUrl}/api/webrtc/router-capabilities`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get router capabilities: ${response.statusText}`);
     }
-  });
 
-  // SFU接続を切断
-  if (roomData.sfuSocket) {
-    roomData.sfuSocket.disconnect();
+    const routerRtpCapabilities = await response.json();
+
+    // デバイスをロード
+    await device.load({ routerRtpCapabilities });
+
+    // 送信トランスポートを作成
+    const transportResponse = await fetch(`${sfuServerUrl}/api/webrtc/create-send-transport`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ roomNumber })
+    });
+
+    if (!transportResponse.ok) {
+      throw new Error(`Failed to create send transport: ${transportResponse.statusText}`);
+    }
+
+    const transportData = await transportResponse.json();
+    const sendTransport = device.createSendTransport(transportData);
+
+    // Transportのconnectとproduceイベントをハンドリング
+    sendTransport.on('connect', async (params: any, callback: any, errback: any) => {
+      try {
+        await fetch(`${sfuServerUrl}/api/webrtc/connect-transport`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            transportId: sendTransport.id,
+            dtlsParameters: params.dtlsParameters,
+            roomNumber
+          })
+        });
+        callback();
+      } catch (error) {
+        errback(error);
+      }
+    });
+
+    sendTransport.on('produce', async (params: any, callback: any, errback: any) => {
+      try {
+        const response = await fetch(`${sfuServerUrl}/api/webrtc/produce`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            transportId: sendTransport.id,
+            kind: params.kind,
+            rtpParameters: params.rtpParameters,
+            appData: params.appData,
+            roomNumber
+          })
+        });
+
+        const { id } = await response.json();
+        callback({ id });
+      } catch (error) {
+        errback(error);
+      }
+    });
+
+    // DataProducerを作成
+    const dataProducer = await sendTransport.produceData({
+      ordered: false,
+      appData: { type: 'npc-data' }
+    });
+
+    // WebRTC接続情報を保存
+    webrtcConnections.set(roomNumber, {
+      device,
+      sendTransport,
+      dataProducer,
+      roomNumber,
+      connected: true
+    });
+
+    console.log(`✅ WebRTC connection established for room ${roomNumber}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Failed to connect via WebRTC for room ${roomNumber}:`, error);
+    return false;
   }
-
-  // 部屋データを削除
-  roomNPCs.delete(roomNumber);
-
-  return {
-    success: true,
-    message: `Stopped ${stoppedCount}/${roomData.gameInstances.length} NPCs for room ${roomNumber}`
-  };
 }
 
-// サーバー起動時にSFUに接続
+// WebRTC経由でNPCデータを送信
+function sendNPCDataViaWebRTC(roomNumber: string, npcData: any): boolean {
+  try {
+    const connection = webrtcConnections.get(roomNumber);
+
+    if (!connection || !connection.connected || !connection.dataProducer) {
+      console.warn(`No WebRTC connection for room ${roomNumber}`);
+      return false;
+    }
+
+    const message = JSON.stringify({
+      type: 'npc-update',
+      roomNumber,
+      data: npcData,
+      timestamp: Date.now()
+    });
+
+    connection.dataProducer.send(message);
+    return true;
+  } catch (error) {
+    console.error(`Error sending NPC data via WebRTC for room ${roomNumber}:`, error);
+    return false;
+  }
+}
+
+// WebRTC接続を切断
+async function disconnectWebRTC(roomNumber: string): Promise<void> {
+  try {
+    const connection = webrtcConnections.get(roomNumber);
+
+    if (!connection) {
+      return;
+    }
+
+    // DataProducerを閉じる
+    if (connection.dataProducer) {
+      connection.dataProducer.close();
+    }
+
+    // SendTransportを閉じる
+    if (connection.sendTransport) {
+      connection.sendTransport.close();
+    }
+
+    // 接続情報を削除
+    webrtcConnections.delete(roomNumber);
+
+    console.log(`🔌 WebRTC connection closed for room ${roomNumber}`);
+  } catch (error) {
+    console.error(`Error disconnecting WebRTC for room ${roomNumber}:`, error);
+  }
+}
+
+// デフォルトSFUサーバーに接続
 connectToDefaultSFU();
 
 // ヘルスチェック
@@ -571,15 +760,11 @@ const gracefulShutdown = async () => {
   try {
     gameManager.shutdown();
     await fastify.close();
-    process.exit(0);
+    console.log('✅ Shutdown completed');
   } catch (error) {
     console.error('Error during shutdown:', error);
-    process.exit(1);
   }
 };
-
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
 
 // サーバー起動
 const start = async () => {
@@ -591,7 +776,6 @@ const start = async () => {
     console.log(`🚀 NPC Manager server running on http://${host}:${port}`);
   } catch (error) {
     fastify.log.error(error);
-    process.exit(1);
   }
 };
 
