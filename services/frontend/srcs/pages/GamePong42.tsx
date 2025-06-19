@@ -90,29 +90,31 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   // 各キャンバスの最後の更新時刻を追跡
   const [lastUpdateTimes, setLastUpdateTimes] = useState<Map<string, number>>(new Map());
 
-  // 他のプレイヤーのゲーム状態を取得（最新データを確実に取得）
+  // 他のプレイヤーのゲーム状態を取得（全クライアントで同じ順序になるよう統一）
   const getOtherPlayerGames = useCallback(() => {
     const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
-    const filteredPlayerGames = allPlayerGames.filter(
-      playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId
-    );
+    // 全クライアントで同じ順序になるよう、playerIdでソート（自分は除外）
+    const sortedPlayerGames = allPlayerGames
+      .filter(playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId)
+      .sort((a, b) => a.playerId.localeCompare(b.playerId));
 
-    return filteredPlayerGames;
+    return sortedPlayerGames;
   }, [sfu.gameState.playerGameStates, sfu.playerId]);
 
   // プレイヤーゲームの更新時刻を記録（別のuseEffect）
   useEffect(() => {
     const allPlayerGames = Array.from(sfu.gameState.playerGameStates.values());
-    const filteredPlayerGames = allPlayerGames.filter(
-      playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId
-    );
+    // 全クライアントで同じ順序になるよう、playerIdでソート（自分は除外）
+    const sortedPlayerGames = allPlayerGames
+      .filter(playerGame => playerGame.isActive && playerGame.playerId !== sfu.playerId)
+      .sort((a, b) => a.playerId.localeCompare(b.playerId));
 
-    if (filteredPlayerGames.length > 0) {
+    if (sortedPlayerGames.length > 0) {
       setLastUpdateTimes(prev => {
         const newTimes = new Map(prev);
         let hasChanges = false;
 
-        filteredPlayerGames.forEach(playerGame => {
+        sortedPlayerGames.forEach(playerGame => {
           const key = `player-${playerGame.playerId}`;
           const prevTime = prev.get(key) || 0;
           if (playerGame.timestamp && playerGame.timestamp > prevTime) {
@@ -172,7 +174,6 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
   const gameStarted = sfu.gameState.gameStarted;
   const countdown = sfu.gameState.countdown;
   const [survivors, setSurvivors] = useState(42); // 動的な生存者数
-  const isWaitingForGame = !gameStarted && countdown > 0;
 
   // ゲーム開始済みフラグ（ローカル管理）
   const [gameInitialized, setGameInitialized] = useState(false);
@@ -270,8 +271,11 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         canvasInitializedRef.current = true;
       }
 
-      // NPCの数を計算（42 - 参加者数）
-      const npcCount = Math.max(0, 42 - gameState.participantCount);
+      // NPCの数を計算（41 - プレイヤー数、中央のキャンバスは除く）
+      const npcCount = Math.max(0, 41 - gameState.participantCount);
+
+      // ゲーム開始時は常に生存者数を42に設定
+      setSurvivors(42);
 
       if (npcCount > 0) {
         initMiniGames(npcCount);
@@ -314,11 +318,13 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
   // NPCデータの監視・処理（SFU経由でNPCデータを受信）
   useEffect(() => {
-    sfu.receivedData.forEach(data => {
-      if (data.type === 'gameState' && data.playerId === 'npc-manager' && data.payload.npcStates) {
-        // 生存者数の更新（アクティブなNPCの数 + 参加プレイヤー数）
+    sfu.receivedData.forEach(data => {      if (data.type === 'gameState' && data.playerId === 'npc-manager' && data.payload.npcStates) {
+        // 生存者数の更新（常に42に固定、NPCが余分に作成されている問題への対処）
         const activeNPCCount = data.payload.npcStates.filter((npc: any) => npc.active !== false).length;
-        const totalSurvivors = activeNPCCount + sfu.gameState.participantCount;
+        // 理想的には activeNPCCount + participantCount = 42 であるべき
+        // しかし現在NPCが1つ多く作成されているため、最大42に制限
+        const totalSurvivors = Math.min(42, activeNPCCount + sfu.gameState.participantCount);
+
         setSurvivors(totalSurvivors);
 
         // NPCの状態をミニゲームに反映
@@ -427,7 +433,22 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
   // ゲーム状態送信（60fps）
   useEffect(() => {
-    if (!gameStarted || !sfu.connected || !engineRef.current) return;
+    if (!gameStarted || !sfu.connected || !engineRef.current) {
+      console.log('🟡 Game state sending stopped:', {
+        gameStarted,
+        sfuConnected: sfu.connected,
+        engineExists: !!engineRef.current,
+        isRoomLeader: sfu.gameState.isRoomLeader
+      });
+      return;
+    }
+
+    // console.log('🟢 Starting game state sending:', {
+    //   gameStarted,
+    //   sfuConnected: sfu.connected,
+    //   engineExists: !!engineRef.current,
+    //   isRoomLeader: sfu.gameState.isRoomLeader
+    // });
 
     const sendGameState = () => {
       if (engineRef.current) {
@@ -452,6 +473,8 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
   // ミニゲーム初期化関数
   const initMiniGames = useCallback(async (npcCount: number) => {
+    console.log(`🔧 Initializing ${npcCount} NPC games for 42-canvas layout (1 center + ${npcCount} NPCs + ${41 - npcCount} players = 42 total)`);
+
     // Room Leaderでない場合はNPCデータ受信用のプレースホルダーを作成
     if (!sfu.gameState.isRoomLeader) {
       const miniCanvasSize = { width: 100, height: 100 };
@@ -480,7 +503,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     const games: MiniGame[] = [];
     const miniCanvasSize = { width: 100, height: 100 };
 
-    // NPCが0の場合（42人満員）はミニゲームを作成しない
+    // NPCが0の場合（41人のプレイヤーで満員）はミニゲームを作成しない
     if (npcCount === 0) {
       setMiniGamesReady(true);
       return;
@@ -572,11 +595,19 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       const playerInfo = playerInfoRef.current; // 固定のプレイヤー情報を使用
       const roomNumber = 'gamepong42-auto'; // プレースホルダー（サーバーが適切な部屋を選択）
 
+      console.log('🟢 SFU connected, joining room:', {
+        playerInfo,
+        roomNumber,
+        sfuConnected: sfu.connected
+      });
+
       try {
         sfu.joinRoom(roomNumber, playerInfo);
       } catch (error) {
         console.error('❌ Error requesting room assignment:', error);
       }
+    } else {
+      console.log('🟡 SFU not connected yet');
     }
   }, [sfu.connected]);
 
@@ -594,8 +625,8 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         });
       }
 
-      // NPCの数を計算（42 - 参加者数）
-      const npcCount = Math.max(0, 42 - sfu.gameState.participantCount);
+      // NPCの数を計算（41 - プレイヤー数、中央のキャンバスは除く）
+      const npcCount = Math.max(0, 41 - sfu.gameState.participantCount);
       if (npcCount > 0) {
         initMiniGames(npcCount);
       } else {
@@ -996,64 +1027,52 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       {gameStarted && (
         <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20">
           <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
-            {Array.from({ length: Math.min(21, miniGames.length) }).map((_, i) => {
-              const game = miniGames[i];
+            {Array.from({ length: 21 }).map((_, i) => {
+              const otherPlayerGames = getOtherPlayerGames();
+              const playerGameCount = otherPlayerGames.length;
 
-              // 他のプレイヤーのゲーム状態を取得（インデックス順）
-              const otherPlayerGame = getOtherPlayerGames()[i];
-              const hasPlayerGame = otherPlayerGame && otherPlayerGame.isActive;
-              const hasNPCGame = game?.active;
+              let gameToDisplay;
+              let gameType;
 
-              // 💀 非表示条件の強化: NPCゲームもプレイヤーゲームもない場合は非表示
-              if (!hasNPCGame && !hasPlayerGame) {
+              if (i < playerGameCount) {
+                // 最初の部分：プレイヤーゲームを配置
+                gameToDisplay = otherPlayerGames[i];
+                gameType = 'player';
+              } else {
+                // 残りの部分：NPCゲームを配置（41 - プレイヤー数）
+                const npcIndex = i - playerGameCount;
+                const totalNpcNeeded = 41 - playerGameCount; // 中央除く41個からプレイヤー数を引く
+                if (npcIndex < totalNpcNeeded && npcIndex < miniGames.length) {
+                  gameToDisplay = miniGames[npcIndex];
+                  gameType = 'npc';
+                } else {
+                  // NPCが不足している場合はプレースホルダー
+                  gameToDisplay = null;
+                  gameType = 'placeholder';
+                }
+              }
+
+              // ⏰ 選択されたゲームタイプに基づいてキャンバスの古さをチェック
+              const canvasId = gameType === 'player' ? `player-${gameToDisplay?.playerId}` : `npc-${i}`;
+              const isStale = isCanvasStale(canvasId);
+
+              if (isStale) {
                 return null;
               }
 
-              // 💀 プレイヤーゲームが非アクティブな場合の追加チェック
-              if (otherPlayerGame && !otherPlayerGame.isActive) {
-                return null;
-              }
-
-              // ⏰ 1秒以上更新されていないキャンバスは非表示
-              const playerCanvasId = `player-${otherPlayerGame?.playerId}`;
-              const npcCanvasId = `npc-${i}`;
-              const isPlayerStale = hasPlayerGame && isCanvasStale(playerCanvasId);
-              const isNPCStale = hasNPCGame && isCanvasStale(npcCanvasId);
-
-              if (isPlayerStale || isNPCStale) {
-                return null;
-              }
-
-              // 💀 最終安全チェック: プレイヤーゲームがあるがisActiveがfalseの場合
-              if (hasPlayerGame && otherPlayerGame && otherPlayerGame.isActive === false) {
-                return null;
-              }
-
-              // NPCゲームか他のプレイヤーゲームかを判定
-              const gameState = hasPlayerGame ? otherPlayerGame.gameState : game?.gameState?.gameState;
+              // 選択されたゲームの状態を取得
+              const gameState = gameType === 'player' ? gameToDisplay?.gameState : gameToDisplay?.gameState?.gameState;
 
               // ゲーム状態の安全性チェック
               if (!gameState || !gameState.paddle1 || !gameState.paddle2 || !gameState.ball ||
                   typeof gameState.paddle1.x === 'undefined' || typeof gameState.paddle2.x === 'undefined' ||
                   typeof gameState.ball.x === 'undefined') {
-                // ゲーム状態が不完全な場合はロード中状態を表示
-                return (
-                  <div
-                    key={`left-${i}`}
-                    className="cursor-pointer transition-all duration-200 relative"
-                    style={{ width: "12.8vmin", height: "12.8vmin" }}
-                  >
-                    <div className="w-full h-full border border-white relative overflow-hidden bg-gray-800">
-                      <div className="w-full h-full flex items-center justify-center">
-                        <div className="text-white text-xs opacity-60">Loading...</div>
-                      </div>
-                    </div>
-                  </div>
-                );
+                // ゲーム状態が不完全な場合は何も表示しない．
+                return (null);
               }
 
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要
-              const isPlayerVsPlayer = hasPlayerGame;
+              const isPlayerVsPlayer = gameType === 'player';
 
               return (
                 <div
@@ -1142,54 +1161,53 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       {gameStarted && (
         <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
           <div className="grid grid-cols-3 grid-rows-7 gap-3" style={{ width: "calc(3 * 12.8vmin + 2 * 0.75rem)", height: "90vmin" }}>
-            {Array.from({ length: Math.min(20, Math.max(0, miniGames.length - 21)) }).map((_, i) => {
-              const gameIndex = 21 + i;
-              const game = miniGames[gameIndex];
+            {Array.from({ length: 20 }).map((_, i) => {
+              const gameIndex = 21 + i; // 右側は22番目から41番目まで
+              const otherPlayerGames = getOtherPlayerGames();
+              const playerGameCount = otherPlayerGames.length;
 
-              if (!game?.active) {
+              let gameToDisplay;
+              let gameType;
+
+              if (gameIndex < playerGameCount) {
+                // プレイヤーゲームを配置
+                gameToDisplay = otherPlayerGames[gameIndex];
+                gameType = 'player';
+              } else {
+                // NPCゲームを配置（41 - プレイヤー数）
+                const npcIndex = gameIndex - playerGameCount;
+                const totalNpcNeeded = 41 - playerGameCount; // 中央除く41個からプレイヤー数を引く
+                if (npcIndex < totalNpcNeeded && npcIndex < miniGames.length) {
+                  gameToDisplay = miniGames[npcIndex];
+                  gameType = 'npc';
+                } else {
+                  // NPCが不足している場合はプレースホルダー
+                  gameToDisplay = null;
+                  gameType = 'placeholder';
+                }
+              }
+
+              // ⏰ 選択されたゲームタイプに基づいてキャンバスの古さをチェック（右側）
+              const canvasId = gameType === 'player' ? `player-${gameToDisplay?.playerId}` : `npc-${gameIndex}`;
+              const isStale = isCanvasStale(canvasId);
+
+              if (isStale) {
                 return null;
               }
 
-              // ⏰ 1秒以上更新されていないNPCキャンバスは非表示
-              const rightNpcCanvasId = `npc-${gameIndex}`;
-              const isRightNPCStale = isCanvasStale(rightNpcCanvasId);
-
-              if (isRightNPCStale) {
-                return null;
-              }
-
-              // ⏰ 1秒以上更新されていないNPCキャンバスは非表示
-              const npcCanvasId = `npc-${gameIndex}`;
-              const isNPCStale = isCanvasStale(npcCanvasId);
-
-              if (isNPCStale) {
-                return null;
-              }
-
-              const gameState = game.gameState?.gameState; // NPCGameResponse.gameState
+              // 選択されたゲームの状態を取得（右側）
+              const gameState = gameType === 'player' ? gameToDisplay?.gameState : gameToDisplay?.gameState?.gameState;
 
               // 右側ゲーム状態の安全性チェック
               if (!gameState || !gameState.paddle1 || !gameState.paddle2 || !gameState.ball ||
                   typeof gameState.paddle1.x === 'undefined' || typeof gameState.paddle2.x === 'undefined' ||
                   typeof gameState.ball.x === 'undefined') {
-                // ゲーム状態が不完全な場合はロード中状態を表示
-                return (
-                  <div
-                    key={`right-${gameIndex}`}
-                    className="cursor-pointer transition-all duration-200 relative"
-                    style={{ width: "12.8vmin", height: "12.8vmin" }}
-                  >
-                    <div className="w-full h-full border border-white relative overflow-hidden bg-gray-800">
-                      <div className="w-full h-full flex items-center justify-center">
-                        <div className="text-white text-xs opacity-60">Loading...</div>
-                      </div>
-                    </div>
-                  </div>
-                );
+                // ゲーム状態が不完全な場合は何も表示しない
+                return (null);
               }
 
               const isUnderAttack = false; // スピードブースト状態は別途管理が必要
-              const isPlayerVsPlayer = false; // 右側は純粋にNPCゲーム
+              const isPlayerVsPlayer = gameType === 'player';
 
               return (
                 <div
@@ -1274,9 +1292,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         </div>
       )}
 
-      {/* central content */}
+      {/* Central game canvas (1 of 42 total canvases) */}
       <div className="relative z-10 w-full h-full flex items-center justify-center">
-        {/* play square */}
+        {/* main play square - center canvas (your own game) */}
         <div className="relative" style={{ width: "90vmin", height: "90vmin" }}>
           <canvas ref={canvasRef} className="w-full h-full border border-white" />
         </div>
