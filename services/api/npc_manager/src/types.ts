@@ -27,7 +27,7 @@ export interface GameState {
 export interface NPCConfig {
   enabled: boolean;
   player: 1 | 2;
-  mode: 'heuristic' | 'pid' | 'technician';
+  mode: 'pid' | 'technician';
   reactionDelay: number;
   positionNoise: number;
   followGain: number;

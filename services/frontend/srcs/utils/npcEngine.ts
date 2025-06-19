@@ -153,5 +153,4 @@ export class NPCEngine {
 }
 
 // 既存のアルゴリズムを登録（この部分は各アルゴリズムファイルで行う）
-// NPCFactory.registerAlgorithm('heuristic', HeuristicNPC);
 // NPCFactory.registerAlgorithm('pid', PIDNPC);

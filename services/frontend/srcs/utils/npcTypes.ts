@@ -1,7 +1,7 @@
 export interface NPCConfig {
   enabled: boolean;
   player: 1 | 2;
-  mode: 'heuristic' | 'pid' | 'technician';
+  mode: 'pid' | 'technician';
   reactionDelay: number;
   positionNoise: number;
   followGain: number;
@@ -60,7 +60,7 @@ export interface GameState {
   canvasWidth: number;
   canvasHeight: number;
   paddleHits: number;
-  
+
   // multiplayerService.tsとの互換性のため
   players: {
     player1: {
@@ -122,7 +122,7 @@ export const DIFFICULTY_SETTINGS = {
 export const DEFAULT_NPC_CONFIG: NPCConfig = {
   enabled: false,
   player: 2,
-  mode: 'heuristic',
+  mode: 'technician',
   reactionDelay: 0.1,
   positionNoise: 5,
   followGain: 0.7,
