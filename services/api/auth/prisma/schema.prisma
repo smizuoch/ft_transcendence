@@ -1,0 +1,25 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  username              String    @id // ユーザー名を主キーとして使用
+  email                 String    @unique
+  password              String?   // Google認証ユーザーの場合はパスワードが不要なのでオプショナルに
+  
+  // 最適化された2FA設計（1テーブル）
+  twoFactorCode         String?   // 現在有効な6桁コード
+  twoFactorExpiresAt    DateTime? // 有効期限
+  twoFactorIsUsed       Boolean   @default(false) // 使用済みフラグ
+  
+  @@map("users")
+}

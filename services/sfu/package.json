@@ -1,0 +1,32 @@
+{
+  "name": "pong-sfu-server",
+  "version": "1.0.0",
+  "description": "WebRTC SFU server for Pong game multiplayer",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "mediasoup": "^3.13.24",
+    "socket.io": "^4.7.4",
+    "fastify": "^4.24.3",
+    "@fastify/cors": "^8.4.0",
+    "uuid": "^9.0.1",
+    "https": "^1.0.0",
+    "fs": "^0.0.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/uuid": "^9.0.7",
+    "@types/jsonwebtoken": "^9.0.5",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2"
+  },
+  "keywords": ["webrtc", "sfu", "mediasoup", "pong", "multiplayer"],
+  "author": "",
+  "license": "MIT"
+}

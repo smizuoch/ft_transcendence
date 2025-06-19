@@ -1,0 +1,83 @@
+# ===== General =====
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ====================
+# === Node / TypeScript ===
+**/node_modules/
+**/.pnp
+.pnp.cjs
+.pnp.js
+
+# Build caches & outputs
+**/dist/
+**/build/
+**/.next/
+**/out/
+**/.turbo/
+**/.cache/
+**/.eslintcache
+
+# Coverage
+coverage/
+**/coverage/
+
+# Package manager archives
+*.tgz
+**/package-lock.json
+
+# ====================
+# === Environment files ===
+.env
+.env.*
+!.env.example
+!**/.env.example
+secrets/.env
+
+# SQLite / Prisma
+**/*.db
+**/*.db-journal
+**/*.sqlite
+**/.prisma/
+
+# ====================
+# === Docker / Compose artifacts ===
+compose.override.yml
+compose.dev.yml
+**/docker-volume/
+volumes/
+
+# Elasticsearch & Kibana runtime data
+services/elkstack/elasticsearch/data/
+services/elkstack/elasticsearch/logs/
+services/elkstack/logstash/logs/
+services/elkstack/kibana/logs/
+
+# Janus / SFU build artifacts
+services/sfu/janus/bin/
+services/sfu/janus/lib/
+services/sfu/janus/logs/
+
+# Nginx certs generated locally
+secrets/certs/*
+!secrets/certs/generate-common-certs.sh
+
+# ====================
+# === Misc ===
+*.pem
+*.key
+
+# webserv
+services/webserv/
