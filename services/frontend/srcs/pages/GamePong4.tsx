@@ -191,9 +191,6 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
   // 重複防止フラグ
   const [tournamentResultSent, setTournamentResultSent] = useState(false);
 
-  // AnimationFrame ID管理用
-  const rafIdRef = useRef<number | null>(null);
-
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
 
@@ -208,13 +205,8 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
     }
   }, [initializeEngine, showTournamentLobby, isEliminated]);
 
-  // トーナメント通信のセットアップ (マウント時に1度だけ)
+  // トーナメント通信のセットアップ
   useEffect(() => {
-    const handlers: { event: string; fn: (...args: any[]) => void }[] = [];
-    const on = (event: string, fn: (...args: any[]) => void) => {
-      multiplayerService.on(event, fn);
-      handlers.push({ event, fn });
-    };
     const setupTournamentConnection = async () => {
       try {
         if (!multiplayerService.isConnectedToServer()) {
@@ -520,10 +512,15 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
           let isWinner = false;
 
           if (currentMatch) {
-            if (data.winner === 1 && currentMatch.player1?.playerId === myPlayerId) {
-              isWinner = true;
-            } else if (data.winner === 2 && currentMatch.player2?.playerId === myPlayerId) {
-              isWinner = true;
+            // playerNumber === 1の場合、画面が180度回転していることを考慮
+            // 実際のゲームでは、playerNumber === 1は画面下側（実質player2のポジション）でプレイ
+            // playerNumber === 2は画面上側（実質player1のポジション）でプレイ
+            if (playerNumber === 1) {
+              // playerNumber === 1の場合、winner === 2が自分の勝利
+              isWinner = (data.winner === 2);
+            } else if (playerNumber === 2) {
+              // playerNumber === 2の場合、winner === 1が自分の勝利
+              isWinner = (data.winner === 1);
             }
           }
 
@@ -565,23 +562,23 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
 
         multiplayerService.on('scoreUpdated', (data: any) => {
           // console.log('Score updated event received:', data);
-          
-          // Pong2のようにシンプルなスコア更新処理
           if (data.scores) {
-            // 完全なスコア情報が来た場合
+            // console.log('Setting scores from scoreUpdated:', data.scores);
             setScore(data.scores);
           } else if (data.scorer) {
             // 個別スコア更新の場合
-            setScore(prev => ({
-              ...prev,
-              [data.scorer]: prev[data.scorer] + 1
-            }));
+            setScore((prev: { player1: number; player2: number }) => {
+              const scorer = data.scorer as 'player1' | 'player2';
+              const newScore = { ...prev, [scorer]: prev[scorer] + 1 };
+              // console.log('Updated score from scoreUpdated event:', newScore);
+              return newScore;
+            });
           }
 
           if (data.gameOver) {
             setGameOver(true);
             setWinner(data.winner);
-            setGameStarted(false);
+            // console.log('Game ended via scoreUpdated event, winner:', data.winner);
           }
         });
 
@@ -596,12 +593,20 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         // 修正: fullGameStateUpdateの処理を簡潔に
         multiplayerService.on('fullGameStateUpdate', (data: any) => {
           if (engineRef.current && data.gameState && !isAuthoritativeClient) {
-            // Pong2のように、非権威クライアントは単純に状態を同期
-            engineRef.current.syncGameState(data.gameState);
-            
-            // スコアもゲーム状態から同期
-            if (data.gameState.score) {
-              setScore(data.gameState.score);
+            // console.log('Non-authoritative client received full game state update');
+
+            // ゲームが初期化されていない場合はスコアを同期しない
+            if (isGameInitialized) {
+              engineRef.current.syncWithRemoteState(data.gameState);
+              // スコアも同期
+              if (data.gameState.score) {
+                // console.log('Syncing score from full state update:', data.gameState.score);
+                setScore(data.gameState.score);
+              }
+            } else {
+              // ゲーム開始前はスコアを除いた状態のみ同期
+              const { score: _, ...stateWithoutScore } = data.gameState;
+              engineRef.current.syncWithRemoteState(stateWithoutScore);
             }
           }
         });
@@ -618,10 +623,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
     };
 
     setupTournamentConnection();
-    return () => {
-      handlers.forEach(h => multiplayerService.off(h.event, h.fn));
-    };
-  }, []);
+  }, [isGameInitialized]); // isGameInitializedを依存配列に追加
 
   // 試合部屋に参加
   const joinMatchRoom = async (roomNum: string) => {
@@ -796,9 +798,17 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
 
         // トーナメント中の場合、結果を報告（権威クライアントのみ、かつ重複防止）
         if (currentMatch && tournamentId && isInTournament && isMultiplayer && isAuthoritativeClient && !tournamentResultSent) {
-          const winnerId = winnerNumber === 1 ?
-            currentMatch.player1?.playerId :
-            currentMatch.player2?.playerId;
+          // playerNumber === 1の場合、画面が180度回転していることを考慮
+          // winnerNumber 1 = 実際の画面上側の勝利、winnerNumber 2 = 実際の画面下側の勝利
+          let winnerId: string | undefined;
+
+          if (winnerNumber === 1) {
+            // 画面上側の勝利 = player2のポジション = currentMatch.player2の勝利
+            winnerId = currentMatch.player2?.playerId;
+          } else if (winnerNumber === 2) {
+            // 画面下側の勝利 = player1のポジション = currentMatch.player1の勝利
+            winnerId = currentMatch.player1?.playerId;
+          }
 
           if (winnerId) {
             // console.log('Reporting tournament result from handleScore:', {
@@ -819,7 +829,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       }
       return newScore;
     });
-  }, [currentMatch, tournamentId, isInTournament, isMultiplayer, isAuthoritativeClient, tournamentResultSent]);
+  }, [currentMatch, tournamentId, isInTournament, isMultiplayer]);
 
   // マルチプレイヤー用のスコア更新コールバック（サーバーに送信）
   const handleMultiplayerScore = useCallback((scorer: 'player1' | 'player2') => {
@@ -865,25 +875,21 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
           } else {
             // console.log('Starting non-authoritative client - display only');
             // 非権威クライアントは描画のみ
-            // 非権威クライアントは描画のみ (requestAnimationFrame管理)
             const renderLoop = () => {
               if (engineRef.current && canvasRef.current && gameStarted) {
                 const ctx = canvasRef.current.getContext('2d');
                 if (ctx) {
                   engineRef.current.draw(ctx, '#212121');
                 }
-                rafIdRef.current = requestAnimationFrame(renderLoop);
+                requestAnimationFrame(renderLoop);
               }
             };
-            rafIdRef.current = requestAnimationFrame(renderLoop);
+            requestAnimationFrame(renderLoop);
           }
 
           return () => {
             clearInterval(inputInterval);
             stopGameLoop();
-            if (rafIdRef.current) {
-              cancelAnimationFrame(rafIdRef.current);
-            }
           };
         }
       } else {
@@ -906,27 +912,22 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       // 権威クライアントのGameEngineにスコア更新コールバックを設定
       engineRef.current.setScoreUpdateCallback((scorer: 'player1' | 'player2') => {
         // console.log('Score update from game engine, sending to server:', scorer);
-        
-        // まずローカルのスコアを更新
-        handleScore(scorer);
-        
-        // そしてサーバーに送信
         handleMultiplayerScore(scorer);
       });
 
-      // ゲーム状態の定期送信（30fps）
+      // ゲーム状態の定期送信（60fps）
       const gameStateInterval = setInterval(() => {
         if (engineRef.current && gameStarted) {
           const gameState = engineRef.current.getGameState();
           multiplayerService.sendFullGameState(gameState);
         }
-      }, 33); // 約30fps
+      }, 16); // 約60fps
 
       return () => {
         clearInterval(gameStateInterval);
       };
     }
-  }, [gameStarted, isMultiplayer, isAuthoritativeClient, handleMultiplayerScore, handleScore]);
+  }, [gameStarted, isMultiplayer, isAuthoritativeClient, handleMultiplayerScore]);
 
   const handleStartMatch = () => {
     // console.log('handleStartMatch called', {
