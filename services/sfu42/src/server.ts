@@ -57,39 +57,24 @@ const NPC_MANAGER_URL = process.env.NPC_MANAGER_URL || 'http://npc_manager:3003'
 const getSSLOptions = () => {
   const certDirs = ['/app/internal-certs', '/app/certs', '/certs', './certs'];
 
-  console.log('=== SSL Certificate Debug ===');
-
   for (const certDir of certDirs) {
-    console.log(`Checking certificate directory: ${certDir}`);
-
     // 証明書ディレクトリの存在確認
     if (!fs.existsSync(certDir)) {
-      console.log(`Certificate directory does not exist: ${certDir}`);
       continue;
     }
 
     // ディレクトリの内容を表示
     try {
       const files = fs.readdirSync(certDir);
-      console.log('Files in certificate directory:', files);
 
       // 共通証明書のパス
       const keyPath = path.join(certDir, 'server.key');
       const certPath = path.join(certDir, 'server.crt');
 
-      console.log('Checking certificate paths:');
-      console.log('- Common key:', keyPath, 'exists:', fs.existsSync(keyPath));
-      console.log('- Common cert:', certPath, 'exists:', fs.existsSync(certPath));
-
       // まず共通証明書を試す
       if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-        console.log('Using common SSL certificates from:', certDir);
         const keyContent = fs.readFileSync(keyPath);
         const certContent = fs.readFileSync(certPath);
-        console.log('Successfully read common SSL certificates');
-        console.log('Key size:', keyContent.length, 'bytes');
-        console.log('Cert size:', certContent.length, 'bytes');
-        console.log('=== End SSL Certificate Debug ===');
         return {
           key: keyContent,
           cert: certContent
@@ -97,15 +82,11 @@ const getSSLOptions = () => {
       }
 
     } catch (error) {
-      console.log(`Error accessing certificate directory ${certDir}:`, error);
       continue;
     }
   }
 
-  console.error('No valid SSL certificate files found in any directory');
-
   // 自己署名証明書を生成
-  console.log('Generating self-signed certificate...');
   try {
     const { execSync } = require('child_process');
     const tempCertDir = '/tmp/ssl-certs';
@@ -126,11 +107,6 @@ const getSSLOptions = () => {
     const keyContent = fs.readFileSync(keyPath);
     const certContent = fs.readFileSync(certPath);
 
-    console.log('Generated self-signed certificate');
-    console.log('Key size:', keyContent.length, 'bytes');
-    console.log('Cert size:', certContent.length, 'bytes');
-    console.log('=== End SSL Certificate Debug ===');
-
     return {
       key: keyContent,
       cert: certContent
@@ -138,15 +114,10 @@ const getSSLOptions = () => {
   } catch (error: any) {
     console.error('Error generating self-signed certificate:', error?.message || error);
   }
-
-  console.log('=== End SSL Certificate Debug ===');
   return null;
 };
 
 const sslOptions = getSSLOptions();
-
-console.log('=== SFU42 Server Configuration ===');
-console.log('SSL Options available:', !!sslOptions);
 
 // SSL証明書が必須なのでHTTPS/WSSを強制
 if (!sslOptions) {
@@ -156,26 +127,16 @@ if (!sslOptions) {
   process.exit(1);
 }
 
-console.log('✅ SSL certificates loaded successfully');
-console.log('🔒 Server will run with HTTPS/WSS (required for WebRTC)');
-
 // npc_managerのエミュレーションを停止する関数
 async function stopNPCManagerEmulation(roomId: string): Promise<void> {
   try {
-    console.log(`🛑 Sending stop request to NPC Manager for room ${roomId}`);
     const response = await axios.post(`${NPC_MANAGER_URL}/api/stop-room`, {
       roomId: roomId
     }, {
       timeout: 5000
     });
-
-    if (response.status === 200) {
-      console.log(`✅ Successfully stopped NPC Manager emulation for room ${roomId}`);
-    } else {
-      console.log(`⚠️ NPC Manager returned status ${response.status} for room ${roomId}`);
-    }
   } catch (error) {
-    console.error(`❌ Failed to stop NPC Manager emulation for room ${roomId}:`, (error as Error).message || 'Unknown error');
+    // Silently fail
   }
 }
 
@@ -208,12 +169,9 @@ const io = new Server({
 
 // Socket.IO handlers - Pure data relay only
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
-
   // Join room - Only for routing purposes
   socket.on('join-room', (data) => {
     const { roomNumber, userId } = data;
-    console.log(`Client ${socket.id} joining room ${roomNumber} as user ${userId}`);
 
     // Leave any existing rooms
     socket.rooms.forEach(room => {
@@ -227,12 +185,10 @@ io.on('connection', (socket) => {
             roomConnections.delete(room);
             roomLeaders.delete(room); // Remove leader when room is empty
             roomGameStates.delete(room); // Clean up game state
-            console.log(`🧹 Cleaned up room state for ${room}`);
           } else if (roomLeaders.get(room) === socket.id) {
             // If leaving player is leader, assign new leader
             const newLeader = Array.from(roomSet)[0];
             roomLeaders.set(room, newLeader);
-            console.log(`New leader assigned in room ${room}: ${newLeader}`);
           }
         }
       }
@@ -253,13 +209,10 @@ io.on('connection', (socket) => {
     // Set room leader if this is the first player
     if (wasEmpty) {
       roomLeaders.set(roomNumber, socket.id);
-      console.log(`Room leader assigned: ${socket.id} for room ${roomNumber}`);
     }
 
     const currentPlayerCount = roomSet.size;
     const isRoomLeader = roomLeaders.get(roomNumber) === socket.id;
-
-    console.log(`Room ${roomNumber} now has ${currentPlayerCount} connections, leader: ${roomLeaders.get(roomNumber)}`);
 
     // Send join confirmation to the joining player with leader status
     socket.emit('room-join-confirmed', {
@@ -272,7 +225,6 @@ io.on('connection', (socket) => {
     // Check if game is already started and notify new participant
     const roomGameState = roomGameStates.get(roomNumber);
     if (roomGameState && roomGameState.gameStarted) {
-      console.log(`🎮 Sending existing game state to new participant ${socket.id} in room ${roomNumber}`);
       socket.emit('game-start', {
         playerCount: currentPlayerCount,
         npcCount: Math.max(0, 42 - currentPlayerCount),
@@ -295,7 +247,6 @@ io.on('connection', (socket) => {
   socket.on('room-leader-countdown', (data) => {
     const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);
     if (roomNumber) {
-      console.log(`Relaying countdown from ${socket.id} in room ${roomNumber}`);
       socket.to(roomNumber).emit('room-leader-countdown', {
         ...data,
         from: socket.id,
@@ -308,11 +259,8 @@ io.on('connection', (socket) => {
   socket.on('game-start', (data) => {
     const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);
     if (roomNumber) {
-      console.log(`Relaying game start from ${socket.id} in room ${roomNumber}`);
-
       // Record room game state for future participants
       roomGameStates.set(roomNumber, { gameStarted: true, timestamp: Date.now() });
-      console.log(`🎮 Recorded game start state for room ${roomNumber}`);
 
       socket.to(roomNumber).emit('game-start', {
         ...data,
@@ -334,18 +282,15 @@ io.on('connection', (socket) => {
   // Pure data relay - Player game state
   // デバッグ: すべてのイベントをキャッチ
   socket.onAny((eventName, ...args) => {
-    if (eventName !== 'ping' && eventName !== 'pong') {
-      console.log(`🔍 SFU received event: ${eventName} from ${socket.id}`, args.length > 0 ? args[0] : '');
-    }
-  });  // クライアント接続時のルーム参加確認
+    // Removed verbose logging
+  });
+
+  // クライアント接続時のルーム参加確認
   socket.on('join-gamepong42-room', (data) => {
     const { roomNumber, playerInfo } = data;
-    console.log(`👥 Client ${socket.id} requesting to join GamePong42 room, playerInfo:`, playerInfo);
 
     // npc_managerからの接続の場合は特別に処理
     if (playerInfo?.isNPCManager) {
-      console.log(`🤖 NPC Manager ${socket.id} joining room ${roomNumber}`);
-
       // npc_managerを直接指定されたルームに参加させる
       socket.join(roomNumber);
 
@@ -354,8 +299,6 @@ io.on('connection', (socket) => {
         roomConnections.set(roomNumber, new Set());
       }
       roomConnections.get(roomNumber)!.add(socket.id);
-
-      console.log(`🤖 NPC Manager ${socket.id} joined room ${roomNumber}`);
 
       // Confirm join to NPC Manager
       socket.emit('gamepong42-room-joined', {
@@ -370,8 +313,6 @@ io.on('connection', (socket) => {
     try {
       const room = gamePong42Manager.getAvailableRoom();
       const actualRoomNumber = room.id;
-
-      console.log(`🏠 Assigned room ${actualRoomNumber} to client ${socket.id}`);
 
       // 部屋に参加者を追加
       room.addParticipant(socket.id, playerInfo);
@@ -399,11 +340,9 @@ io.on('connection', (socket) => {
               roomConnections.delete(room);
               roomLeaders.delete(room);
               roomGameStates.delete(room);
-              console.log(`🧹 Cleaned up room state for ${room}`);
             } else if (roomLeaders.get(room) === socket.id) {
               const newLeader = Array.from(roomSet)[0];
               roomLeaders.set(room, newLeader);
-              console.log(`New leader assigned in room ${room}: ${newLeader}`);
             }
           }
         }
@@ -424,13 +363,10 @@ io.on('connection', (socket) => {
       // Set room leader if this is the first player
       if (wasEmpty) {
         roomLeaders.set(actualRoomNumber, socket.id);
-        console.log(`Room leader assigned: ${socket.id} for room ${actualRoomNumber}`);
       }
 
       const currentPlayerCount = roomSet.size;
       const isRoomLeader = roomLeaders.get(actualRoomNumber) === socket.id;
-
-      console.log(`Room ${actualRoomNumber} now has ${currentPlayerCount} connections, leader: ${roomLeaders.get(actualRoomNumber)}`);
 
       // Send join confirmation to the joining player with leader status
       socket.emit('room-join-confirmed', {
@@ -453,7 +389,6 @@ io.on('connection', (socket) => {
       // 新規参加者に既存の参加者リストを送信
       const existingClients = Array.from(roomSet).filter(id => id !== socket.id);
       if (existingClients.length > 0) {
-        console.log(`📤 Sending existing clients list to new participant ${socket.id}:`, existingClients);
         socket.emit('existing-players-list', {
           roomNumber: actualRoomNumber,
           existingClients,
@@ -462,7 +397,6 @@ io.on('connection', (socket) => {
       }
 
     } catch (error) {
-      console.error('❌ Error joining GamePong42 room:', error);
       socket.emit('room-join-error', {
         error: 'Failed to join room',
         message: (error as Error).message || 'Unknown error'
@@ -471,10 +405,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('player-game-state', (data) => {
-    console.log(`📨 SFU received player-game-state from ${socket.id} (${data?.playerGameState?.playerId || 'unknown'})`);
-    console.log(`🔍 Full player-game-state data:`, JSON.stringify(data).substring(0, 200) + '...');
     const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);
-    console.log(`🏠 Client ${socket.id} rooms:`, Array.from(socket.rooms));
     if (roomNumber) {
       // 統計をカウント
       if (!playerGameStateStats.has(roomNumber)) {
@@ -490,23 +421,11 @@ io.on('connection', (socket) => {
         timestamp: Date.now()
       });
 
-      console.log(`📡 Relaying player game state from ${socket.id} in room ${roomNumber} to ${clientsInRoom - 1} other clients`);
-
       // デバッグログ（100回に1回で詳細ログ）
       const stats = playerGameStateStats.get(roomNumber)!;
       if (stats.count % 100 === 1) {
-        console.log(`🔍 Player Game State Stats (room ${roomNumber}):`, {
-          totalReceived: stats.count,
-          playerId: data.playerGameState?.playerId,
-          playerName: data.playerGameState?.playerName,
-          hasGameState: !!data.playerGameState?.gameState,
-          clientsInRoom: clientsInRoom,
-          ballPos: data.playerGameState?.gameState?.ball ?
-            { x: data.playerGameState.gameState.ball.x.toFixed(1), y: data.playerGameState.gameState.ball.y.toFixed(1) } : 'N/A'
-        });
+        // Reduced detailed logging
       }
-    } else {
-      console.log('⚠️ Player game state received but no room found for socket:', socket.id);
     }
   });
 
@@ -526,16 +445,11 @@ io.on('connection', (socket) => {
   socket.on('player-game-over', (data) => {
     const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);
     if (roomNumber) {
-      console.log(`🔔 Received player-game-over from ${socket.id} in room ${roomNumber}:`, data);
-      console.log(`📡 Relaying game over to other clients in room ${roomNumber}`);
       socket.to(roomNumber).emit('player-game-over', {
         ...data,
         from: socket.id,
         timestamp: Date.now()
       });
-      console.log(`✅ player-game-over relayed successfully`);
-    } else {
-      console.log(`⚠️ Cannot relay player-game-over: socket ${socket.id} not in any room`);
     }
   });
 
@@ -566,23 +480,14 @@ io.on('connection', (socket) => {
   // Pure data relay - GamePong42 data (including NPC states)
   socket.on('gamepong42-data', (data) => {
     const roomNumber = Array.from(socket.rooms).find(room => room !== socket.id);
-    console.log(`📨 Received gamepong42-data from ${socket.id}:`, JSON.stringify(data).substring(0, 200) + '...');
-    console.log(`🔍 Socket rooms:`, Array.from(socket.rooms));
-    console.log(`🏠 Target room: ${roomNumber}`);
 
     if (roomNumber) {
-      console.log(`🔄 Relaying GamePong42 data from ${socket.id} in room ${roomNumber}`);
-
       // Relay to all clients in the room (including sender for verification)
       io.to(roomNumber).emit('gamepong42-data', {
         ...data,
         from: socket.id,
         relayTimestamp: Date.now()
       });
-
-      console.log(`✅ Data relayed to room ${roomNumber}`);
-    } else {
-      console.warn(`❌ No valid room found for socket ${socket.id}`);
     }
   });
 
@@ -595,8 +500,6 @@ io.on('connection', (socket) => {
     }
 
     try {
-      console.log(`Relaying NPC request from ${socket.id} in room ${roomNumber}:`, data);
-
       // npc_managerにHTTPリクエストを中継
       const npcResponse = await axios.post(`${NPC_MANAGER_URL}/api/npc/request-via-sfu`, {
         ...data,
@@ -630,7 +533,6 @@ io.on('connection', (socket) => {
       }
 
     } catch (error) {
-      console.error(`Failed to relay NPC request from ${socket.id}:`, error);
       socket.emit('npc-response', {
         success: false,
         requestId: data.requestId, // エラーレスポンスにもrequestIdを含める
@@ -642,13 +544,10 @@ io.on('connection', (socket) => {
 
   // Disconnect handler - Only cleanup routing
   socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
-
     // GamePong42の部屋から参加者を削除
     gamePong42Manager.getAllRooms().forEach(room => {
       if (room.hasParticipant(socket.id)) {
         room.removeParticipant(socket.id);
-        console.log(`🚪 Removed ${socket.id} from GamePong42 room ${room.id}`);
       }
     });
 
@@ -670,13 +569,11 @@ io.on('connection', (socket) => {
           roomConnections.delete(roomNumber);
           roomLeaders.delete(roomNumber);
           roomGameStates.delete(roomNumber);
-          console.log(`Room ${roomNumber} is empty, removed from tracking`);
         } else {
           // If the disconnected player was the leader, assign new leader
           if (wasLeader) {
             const newLeader = Array.from(connectionSet)[0];
             roomLeaders.set(roomNumber, newLeader);
-            console.log(`New leader assigned in room ${roomNumber}: ${newLeader} (previous leader ${socket.id} disconnected)`);
 
             // Notify the new leader
             io.to(newLeader).emit('room-leader-assigned', {
@@ -686,8 +583,6 @@ io.on('connection', (socket) => {
               timestamp: Date.now()
             });
           }
-
-          console.log(`Room ${roomNumber} now has ${connectionSet.size} connections`);
         }
         break;
       }
@@ -728,14 +623,6 @@ const start = async () => {
 
     // Fastifyサーバーを起動
     await fastify.listen({ port: Number(PORT), host: '0.0.0.0' });
-    console.log(`${protocol} SFU42 Data Relay Server running on port ${PORT}`);
-    console.log(`Server principle: Pure data relay - no state management`);
-
-    if (sslOptions) {
-      console.log('WSS (WebSocket Secure) connections enabled');
-    } else {
-      console.log('WS (WebSocket) connections enabled');
-    }
 
   } catch (err) {
     fastify.log.error(err);

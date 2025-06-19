@@ -79,7 +79,6 @@ export class GamePong42Room {
     this.lastActivity = new Date();
     if (!this.participants.has(playerId)) {
       this.participants.set(playerId, playerInfo);
-      console.log(`Player ${playerId} joined GamePong42 room ${this.id}`);
 
       // 最初の参加者でカウントダウン開始
       if (this.participants.size === 1 && !this.countdownStarted) {
@@ -128,14 +127,12 @@ export class GamePong42Room {
     if (this.countdownStarted || this.gameStarted) return;
 
     this.countdownStarted = true;
-    console.log(`Starting countdown for room ${this.id} with ${this.participants.size} participants`);
 
     // 初回の部屋状態を送信
     this.broadcastRoomState();
 
     this.countdownTimer = setInterval(() => {
       this.countdown--;
-      console.log(`Room ${this.id} countdown: ${this.countdown}`);
 
       // カウントダウン更新を参加者に送信
       this.broadcastRoomState();
@@ -157,7 +154,6 @@ export class GamePong42Room {
     this.gameStarted = true;
     this.npcCount = this.calculateNPCCount();
     this.gameState.roomState.npcCount = this.npcCount;
-    console.log(`Game started in room ${this.id} with ${this.participants.size} players and ${this.npcCount} NPCs`);
 
     // ゲームループ開始
     this.startGameLoop();
@@ -167,7 +163,6 @@ export class GamePong42Room {
   public startGameLoop(): void {
     if (this.gameLoop) return;
 
-    console.log(`Starting game loop for room ${this.id}`);
     this.gameState.mainGame.gameStarted = true;
     this.gameState.roomState.gameStarted = true;
 
@@ -199,7 +194,6 @@ export class GamePong42Room {
     if (this.gameLoop) {
       clearInterval(this.gameLoop);
       this.gameLoop = null;
-      console.log(`Stopped game loop for room ${this.id}`);
     }
   }
 
@@ -360,7 +354,6 @@ export class GamePong42Room {
         // 攻撃効果：対象ゲームの速度を上げる
         targetGame.ball.vx *= 1.1;
         targetGame.ball.vy *= 1.1;
-        console.log(`Player ${playerId} attacked game ${targetGameId}`);
       }
     }
   }
@@ -405,11 +398,8 @@ export class GamePong42Room {
     this.stopGameLoop();
   }  // 部屋を試合前の状態に初期化
   resetRoomToInitialState(): void {
-    console.log(`🔄 Resetting room ${this.id} to initial state`);
-
     // npc_managerの停止処理を実行
     if (this.onStopNPCManager) {
-      console.log(`🛑 Stopping NPC manager for room ${this.id}`);
       this.onStopNPCManager(this.id);
     }
 
@@ -430,14 +420,11 @@ export class GamePong42Room {
 
     // ゲーム状態を初期化
     this.gameState = this.initializeGameState();
-
-    console.log(`✅ Room ${this.id} reset complete`);
   }
 
   // カウントダウンが0かつ生存クライアントが0の場合の初期化チェック
   checkForRoomReset(): void {
     if (this.countdown <= 0 && this.participants.size === 0 && this.gameStarted) {
-      console.log(`🔄 Room ${this.id} meets reset conditions (countdown: ${this.countdown}, participants: ${this.participants.size})`);
       this.resetRoomToInitialState();
     }
   }
@@ -446,19 +433,16 @@ export class GamePong42Room {
   canJoinRoom(): boolean {
     // カウントダウンが0になった部屋には入室不可
     if (this.countdown <= 0 && this.gameStarted) {
-      console.log(`❌ Room ${this.id} cannot be joined - game already started`);
       return false;
     }
 
     // カウントダウン中なら入室可能
     if (this.countdown > 0 && this.countdownStarted) {
-      console.log(`✅ Room ${this.id} can be joined - countdown in progress (${this.countdown}s remaining)`);
       return true;
     }
 
     // まだカウントダウンが始まっていない場合も入室可能
     if (!this.countdownStarted) {
-      console.log(`✅ Room ${this.id} can be joined - countdown not started yet`);
       return true;
     }
 
@@ -474,14 +458,12 @@ export class GamePong42Manager {
     // 既存の部屋の中でカウントダウン中の部屋を探す
     for (const room of this.rooms.values()) {
       if (room.canJoinRoom()) {
-        console.log(`🏠 Found available room: ${room.id}`);
         return room;
       }
     }
 
     // 入室可能な部屋がない場合、新しい部屋を作成
     const roomId = `gamepong42-room-${Date.now()}`;
-    console.log(`🆕 Creating new room: ${roomId}`);
     const newRoom = new GamePong42Room(roomId);
     this.rooms.set(roomId, newRoom);
     return newRoom;
@@ -550,7 +532,6 @@ export class GamePong42Manager {
 
       // 参加者がいない部屋を削除
       if (room.getParticipantCount() === 0) {
-        console.log(`🗑️ Removing empty room: ${roomId}`);
         room.cleanup();
         this.rooms.delete(roomId);
       }
