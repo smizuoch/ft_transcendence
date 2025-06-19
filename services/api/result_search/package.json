@@ -28,6 +28,7 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-fastify": "^10.3.2",
     "@prisma/client": "^6.9.0",
+    "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "fastify": "^4.26.1",
     "passport": "^0.7.0",
