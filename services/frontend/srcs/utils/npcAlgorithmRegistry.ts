@@ -1,7 +1,6 @@
 import { NPCFactory } from './npcEngine';
 
 // 既存のアルゴリズムをインポート
-import './heuristicNPC';
 import './pidNPC';
 import './technicianNPC'; // 追加
 

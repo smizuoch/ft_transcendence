@@ -47,7 +47,7 @@ export interface NPCGameConfig {
   npc?: {
     enabled?: boolean;
     player?: 1 | 2;
-    mode?: 'heuristic' | 'pid' | 'technician';
+    mode?: 'pid' | 'technician';
     difficulty?: 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom';
     reactionDelayMs?: number;
     maxSpeed?: number;
@@ -56,7 +56,7 @@ export interface NPCGameConfig {
   npc2?: {
     enabled?: boolean;
     player?: 1 | 2;
-    mode?: 'heuristic' | 'pid' | 'technician';
+    mode?: 'pid' | 'technician';
     difficulty?: 'Nightmare' | 'Hard' | 'Normal' | 'Easy' | 'Custom';
     reactionDelayMs?: number;
     maxSpeed?: number;
