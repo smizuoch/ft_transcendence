@@ -191,6 +191,9 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
   // 重複防止フラグ
   const [tournamentResultSent, setTournamentResultSent] = useState(false);
 
+  // AnimationFrame ID管理用
+  const rafIdRef = useRef<number | null>(null);
+
   const { engineRef, initializeEngine, startGameLoop, stopGameLoop } = useGameEngine(canvasRef, DEFAULT_CONFIG);
   const keysRef = useKeyboardControls();
 
@@ -205,8 +208,13 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
     }
   }, [initializeEngine, showTournamentLobby, isEliminated]);
 
-  // トーナメント通信のセットアップ
+  // トーナメント通信のセットアップ (マウント時に1度だけ)
   useEffect(() => {
+    const handlers: { event: string; fn: (...args: any[]) => void }[] = [];
+    const on = (event: string, fn: (...args: any[]) => void) => {
+      multiplayerService.on(event, fn);
+      handlers.push({ event, fn });
+    };
     const setupTournamentConnection = async () => {
       try {
         if (!multiplayerService.isConnectedToServer()) {
@@ -618,7 +626,10 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
     };
 
     setupTournamentConnection();
-  }, [isGameInitialized]); // isGameInitializedを依存配列に追加
+    return () => {
+      handlers.forEach(h => multiplayerService.off(h.event, h.fn));
+    };
+  }, []);
 
   // 試合部屋に参加
   const joinMatchRoom = async (roomNum: string) => {
@@ -862,21 +873,25 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
           } else {
             // console.log('Starting non-authoritative client - display only');
             // 非権威クライアントは描画のみ
+            // 非権威クライアントは描画のみ (requestAnimationFrame管理)
             const renderLoop = () => {
               if (engineRef.current && canvasRef.current && gameStarted) {
                 const ctx = canvasRef.current.getContext('2d');
                 if (ctx) {
                   engineRef.current.draw(ctx, '#212121');
                 }
-                requestAnimationFrame(renderLoop);
+                rafIdRef.current = requestAnimationFrame(renderLoop);
               }
             };
-            requestAnimationFrame(renderLoop);
+            rafIdRef.current = requestAnimationFrame(renderLoop);
           }
 
           return () => {
             clearInterval(inputInterval);
             stopGameLoop();
+            if (rafIdRef.current) {
+              cancelAnimationFrame(rafIdRef.current);
+            }
           };
         }
       } else {
@@ -902,13 +917,13 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         handleMultiplayerScore(scorer);
       });
 
-      // ゲーム状態の定期送信（60fps）
+      // ゲーム状態の定期送信（30fps）
       const gameStateInterval = setInterval(() => {
         if (engineRef.current && gameStarted) {
           const gameState = engineRef.current.getGameState();
           multiplayerService.sendFullGameState(gameState);
         }
-      }, 16); // 約60fps
+      }, 33); // 約30fps
 
       return () => {
         clearInterval(gameStateInterval);
