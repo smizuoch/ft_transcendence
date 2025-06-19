@@ -1,7 +1,6 @@
 import { Controller, Get, Put, Param, UseGuards, Request, Body, HttpException, HttpStatus } from '@nestjs/common';
 import { UserSearchService } from './user-search.service';
 import { FullAuthGuard } from '../auth/full-auth.guard';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('user-search')
 export class UserSearchController {

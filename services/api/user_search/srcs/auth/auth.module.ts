@@ -3,7 +3,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy';
-import { JwtAuthGuard } from './jwt-auth.guard';
 import { FullAuthGuard } from './full-auth.guard';
 
 @Module({
@@ -18,7 +17,7 @@ import { FullAuthGuard } from './full-auth.guard';
       inject: [ConfigService],
     }),
   ],
-  providers: [JwtStrategy, JwtAuthGuard, FullAuthGuard],
-  exports: [JwtModule, JwtStrategy, JwtAuthGuard, FullAuthGuard],
+  providers: [JwtStrategy, FullAuthGuard],
+  exports: [JwtModule, JwtStrategy, FullAuthGuard],
 })
 export class AuthModule {}
