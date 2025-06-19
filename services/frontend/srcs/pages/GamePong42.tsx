@@ -272,7 +272,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
       }
 
       // NPCの数を計算（41 - プレイヤー数、中央のキャンバスは除く）
-      const npcCount = Math.max(0, 41 - gameState.participantCount);
+      const npcCount = Math.max(0, 41 - sfu.participantCount);
 
       // ゲーム開始時は常に生存者数を42に設定
       setSurvivors(42);
@@ -295,9 +295,9 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     const { gameState } = sfu;
 
     // Room Leader確定時にカウントダウンを開始
-    if (gameState.isRoomLeader &&
-        !gameState.gameStarted &&
-        gameState.participantCount > 0 &&
+    if (sfu.isRoomLeader &&
+        !sfu.gameStarted &&
+        sfu.participantCount > 0 &&
         !countdownStartedRef.current) {
 
       console.log('👑 Room Leader confirmed, auto-starting countdown');
@@ -305,14 +305,14 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
 
       // 少し遅延してからカウントダウン開始（他のプレイヤーの参加を待つ）
       const timeoutId = setTimeout(() => {
-        if (gameState.isRoomLeader && !gameState.gameStarted) { // 再確認
+        if (sfu.isRoomLeader && !sfu.gameStarted) { // 再確認
           sfu.startRoomLeaderCountdown();
         }
       }, 1000); // 1秒遅延（サーバー応答を待つ）
 
       return () => clearTimeout(timeoutId);
     }
-  }, [sfu.gameState.isRoomLeader, sfu.gameState.participantCount, sfu]);
+  }, [sfu.isRoomLeader, sfu.participantCount, sfu]);
 
 
 
@@ -323,7 +323,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         const activeNPCCount = data.payload.npcStates.filter((npc: any) => npc.active !== false).length;
         // 理想的には activeNPCCount + participantCount = 42 であるべき
         // しかし現在NPCが1つ多く作成されているため、最大42に制限
-        const totalSurvivors = Math.min(42, activeNPCCount + sfu.gameState.participantCount);
+        const totalSurvivors = Math.min(42, activeNPCCount + sfu.participantCount);
 
         setSurvivors(totalSurvivors);
 
@@ -438,7 +438,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
         gameStarted,
         sfuConnected: sfu.connected,
         engineExists: !!engineRef.current,
-        isRoomLeader: sfu.gameState.isRoomLeader
+        isRoomLeader: sfu.isRoomLeader
       });
       return;
     }
@@ -453,7 +453,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     const sendGameState = () => {
       if (engineRef.current) {
         const gameState = engineRef.current.getState();
-        sfu.sendGameState(gameState);
+        sfu.sendPlayerGameState(gameState);
       }
     };
 
@@ -476,7 +476,7 @@ const GamePong42: React.FC<GamePong42Props> = ({ navigate }) => {
     console.log(`🔧 Initializing ${npcCount} NPC games for 42-canvas layout (1 center + ${npcCount} NPCs + ${41 - npcCount} players = 42 total)`);
 
     // Room Leaderでない場合はNPCデータ受信用のプレースホルダーを作成
-    if (!sfu.gameState.isRoomLeader) {
+    if (!sfu.isRoomLeader) {
       const miniCanvasSize = { width: 100, height: 100 };
       const placeholderGames: MiniGame[] = [];
 

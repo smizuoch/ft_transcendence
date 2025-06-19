@@ -8,10 +8,11 @@ interface GamePong42WebRTCConfig {
 }
 
 interface GamePong42Data {
-  type: 'gameState' | 'playerInput' | 'gameEvent' | 'npcStates';
+  type: 'playerInput' | 'gameState' | 'gameEvent' | 'ping' | 'sharedState' | 'roomLeader' | 'join-room' | 'leave-room' | 'npc-request' | 'game-start' | 'room-leader-countdown' | 'npcStates';
   payload: any;
   timestamp: number;
   from?: string;
+  playerId?: string;
 }
 
 export class GamePong42WebRTC {
