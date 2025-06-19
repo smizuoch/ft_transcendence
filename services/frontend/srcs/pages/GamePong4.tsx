@@ -565,23 +565,23 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
 
         multiplayerService.on('scoreUpdated', (data: any) => {
           // console.log('Score updated event received:', data);
+          
+          // Pong2のようにシンプルなスコア更新処理
           if (data.scores) {
-            // console.log('Setting scores from scoreUpdated:', data.scores);
+            // 完全なスコア情報が来た場合
             setScore(data.scores);
           } else if (data.scorer) {
             // 個別スコア更新の場合
-            setScore((prev: { player1: number; player2: number }) => {
-              const scorer = data.scorer as 'player1' | 'player2';
-              const newScore = { ...prev, [scorer]: prev[scorer] + 1 };
-              // console.log('Updated score from scoreUpdated event:', newScore);
-              return newScore;
-            });
+            setScore(prev => ({
+              ...prev,
+              [data.scorer]: prev[data.scorer] + 1
+            }));
           }
 
           if (data.gameOver) {
             setGameOver(true);
             setWinner(data.winner);
-            // console.log('Game ended via scoreUpdated event, winner:', data.winner);
+            setGameStarted(false);
           }
         });
 
@@ -596,20 +596,12 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         // 修正: fullGameStateUpdateの処理を簡潔に
         multiplayerService.on('fullGameStateUpdate', (data: any) => {
           if (engineRef.current && data.gameState && !isAuthoritativeClient) {
-            // console.log('Non-authoritative client received full game state update');
-
-            // ゲームが初期化されていない場合はスコアを同期しない
-            if (isGameInitialized) {
-              engineRef.current.syncWithRemoteState(data.gameState);
-              // スコアも同期
-              if (data.gameState.score) {
-                // console.log('Syncing score from full state update:', data.gameState.score);
-                setScore(data.gameState.score);
-              }
-            } else {
-              // ゲーム開始前はスコアを除いた状態のみ同期
-              const { score: _, ...stateWithoutScore } = data.gameState;
-              engineRef.current.syncWithRemoteState(stateWithoutScore);
+            // Pong2のように、非権威クライアントは単純に状態を同期
+            engineRef.current.syncGameState(data.gameState);
+            
+            // スコアもゲーム状態から同期
+            if (data.gameState.score) {
+              setScore(data.gameState.score);
             }
           }
         });
@@ -827,7 +819,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       }
       return newScore;
     });
-  }, [currentMatch, tournamentId, isInTournament, isMultiplayer]);
+  }, [currentMatch, tournamentId, isInTournament, isMultiplayer, isAuthoritativeClient, tournamentResultSent]);
 
   // マルチプレイヤー用のスコア更新コールバック（サーバーに送信）
   const handleMultiplayerScore = useCallback((scorer: 'player1' | 'player2') => {
@@ -914,6 +906,11 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
       // 権威クライアントのGameEngineにスコア更新コールバックを設定
       engineRef.current.setScoreUpdateCallback((scorer: 'player1' | 'player2') => {
         // console.log('Score update from game engine, sending to server:', scorer);
+        
+        // まずローカルのスコアを更新
+        handleScore(scorer);
+        
+        // そしてサーバーに送信
         handleMultiplayerScore(scorer);
       });
 
@@ -929,7 +926,7 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
         clearInterval(gameStateInterval);
       };
     }
-  }, [gameStarted, isMultiplayer, isAuthoritativeClient, handleMultiplayerScore]);
+  }, [gameStarted, isMultiplayer, isAuthoritativeClient, handleMultiplayerScore, handleScore]);
 
   const handleStartMatch = () => {
     // console.log('handleStartMatch called', {
