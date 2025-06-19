@@ -3,7 +3,8 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { NPCGameManager } from './gameManager';
 import { GameConfig } from './types';
-import { Device, DataProducer } from 'mediasoup-client';
+// DataProducerはmediasoup-clientではなくmediasoupから提供される
+// import { Device, DataProducer } from 'mediasoup-client';
 
 // SFU接続用の型定義
 interface SFURoomRequest {
@@ -21,9 +22,9 @@ interface NPCRoomData {
 
 // WebRTC接続管理
 interface WebRTCConnection {
-  device: Device | null;
-  sendTransport: any | null;
-  dataProducer: DataProducer | null;
+  // device: Device | null;  // 型定義のみ保持
+  // sendTransport: any | null;
+  // dataProducer: DataProducer | null;
   roomNumber: string;
   connected: boolean;
 }
@@ -123,11 +124,10 @@ function stopRoomNPCs(roomNumber: string): { success: boolean; message: string; 
       gameManager.stopGame(gameId);
     });
 
-    // SFU接続を切断
-    if (roomData.sfuSocket) {
-      roomData.sfuSocket.emit('leave-gamepong42-room', { roomNumber });
-      roomData.sfuSocket.disconnect();
-    }
+    // SFU接続を切断（WebRTC）
+    // if (roomData.webrtcConnection) {
+    //   disconnectWebRTC(roomNumber);
+    // }
 
     // WebRTC接続を切断
     const webrtcConnection = webrtcConnections.get(roomNumber);
