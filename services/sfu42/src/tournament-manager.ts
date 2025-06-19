@@ -139,7 +139,7 @@ export class TournamentManager {
 
     // プレイヤーをランダムシャッフル
     const shuffledPlayers = [...players].sort(() => Math.random() - 0.5);
-    
+
     // 初回戦を作成
     const firstRound: TournamentMatch[] = [];
     for (let i = 0; i < playerCount; i += 2) {
@@ -189,7 +189,6 @@ export class TournamentManager {
   recordMatchResult(tournamentId: string, matchId: string, winnerId: string): boolean {
     const tournament = this.tournaments.get(tournamentId);
     if (!tournament || tournament.status !== TournamentStatus.IN_PROGRESS) {
-      console.log(`Tournament ${tournamentId} not found or not in progress. Status: ${tournament?.status}`);
       return false;
     }
 
@@ -211,26 +210,22 @@ export class TournamentManager {
     }
 
     if (!match) {
-      console.log(`Match ${matchId} not found in tournament ${tournamentId}`);
       return false;
     }
 
     if (match.status === 'completed') {
-      console.log(`Match ${matchId} is already completed. Current winner: ${match.winner?.playerInfo.name}`);
       return false; // 既に完了している試合は再処理しない
     }
 
     // 勝者を決定
     const winner = match.player1?.playerId === winnerId ? match.player1 : match.player2;
     if (!winner) {
-      console.log(`Winner ${winnerId} not found in match ${matchId}. Available players: ${match.player1?.playerId}, ${match.player2?.playerId}`);
       return false;
     }
 
     // 試合結果を記録
     match.winner = winner;
     match.status = 'completed';
-    console.log(`Match ${matchId} completed successfully. Winner: ${winner.playerInfo.name} (${winner.playerId})`);
 
     // 次のラウンドに勝者を進める
     if (roundIndex + 1 < tournament.bracket.length) {
@@ -240,15 +235,12 @@ export class TournamentManager {
 
       if (!nextMatch.player1) {
         nextMatch.player1 = winner;
-        console.log(`${winner.playerInfo.name} advanced to next round as player1 in match ${nextMatch.id}`);
       } else if (!nextMatch.player2) {
         nextMatch.player2 = winner;
-        console.log(`${winner.playerInfo.name} advanced to next round as player2 in match ${nextMatch.id}`);
-        
+
         // 両プレイヤーが揃ったら試合準備
         nextMatch.status = 'waiting';
         nextMatch.roomNumber = `${tournament.id}-r${roundIndex + 2}-m${nextMatchIndex + 1}`;
-        console.log(`Next match ${nextMatch.id} ready: ${nextMatch.player1.playerInfo.name} vs ${nextMatch.player2.playerInfo.name}`);
       }
     }
 
@@ -411,7 +403,7 @@ export class TournamentManager {
     // 現在のラウンドで待機中かつ両プレイヤーが揃っている試合を返す
     if (tournament.currentRound > 0 && tournament.currentRound <= tournament.bracket.length) {
       const currentRound = tournament.bracket[tournament.currentRound - 1];
-      return currentRound.filter(match => 
+      return currentRound.filter(match =>
         match.status === 'waiting' && match.player1 && match.player2
       );
     }
@@ -435,8 +427,7 @@ export class TournamentManager {
 
       if (allCompleted && tournament.currentRound < tournament.bracket.length) {
         tournament.currentRound++;
-        console.log(`Tournament ${tournamentId} advanced to round ${tournament.currentRound}`);
-        
+
         // 次のラウンドの試合を準備
         this.prepareNextRoundMatches(tournament);
         return true;
@@ -452,13 +443,12 @@ export class TournamentManager {
   private prepareNextRoundMatches(tournament: Tournament): void {
     if (tournament.currentRound > 0 && tournament.currentRound <= tournament.bracket.length) {
       const nextRound = tournament.bracket[tournament.currentRound - 1];
-      
+
       // 各試合に部屋番号を割り当て、ステータスを更新
       nextRound.forEach((match, index) => {
         if (match.player1 && match.player2 && match.status !== 'in_progress') {
           match.roomNumber = `${tournament.id}-r${tournament.currentRound}-m${index + 1}`;
           match.status = 'waiting';
-          console.log(`Prepared match ${match.id} for round ${tournament.currentRound}: ${match.player1.playerInfo.name} vs ${match.player2.playerInfo.name} in room ${match.roomNumber}`);
         }
       });
     }

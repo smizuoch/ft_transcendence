@@ -27,7 +27,6 @@ export class MediasoupService {
       });
 
       this.worker.on('died', (error) => {
-        console.error('Mediasoup worker died:', error);
         process.exit(1);
       });
 
@@ -72,7 +71,6 @@ export class MediasoupService {
       });
 
     } catch (error) {
-      console.error('Failed to initialize Mediasoup service:', error);
       throw error;
     }
   }
@@ -230,7 +228,6 @@ export class MediasoupService {
     }
 
     if (!this.router.canConsume({ producerId, rtpCapabilities })) {
-      console.warn('Cannot consume');
       return null;
     }
 
@@ -361,7 +358,6 @@ export class MediasoupService {
 
       return false;
     } catch (error) {
-      console.error('❌ Error sending data to client:', error);
       return false;
     }
   }
