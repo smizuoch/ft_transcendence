@@ -169,6 +169,7 @@ export class GameRoom implements Room {
     this.scores = { player1: 0, player2: 0 };
     this.winner = null;
     this.lastActivity = new Date();
+    console.log(`Game reset in room ${this.id}`);
   }
 }
 

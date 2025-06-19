@@ -536,11 +536,21 @@ async function startServer() {
         const room = roomManager.getRoom(roomNumber);
 
         if (room && room.hasPlayer(socket.id)) {
+          console.log(`Game ended in room ${roomNumber}, winner: ${winner}`);
+          
           // 全プレイヤーにゲーム終了を送信
           io.to(roomNumber).emit('game-ended', {
             winner,
             playerId: socket.id
           });
+          
+          // ゲーム終了後、部屋をリセット状態にする
+          setTimeout(() => {
+            if (room) {
+              room.resetGame();
+              console.log(`Room ${roomNumber} reset after game end`);
+            }
+          }, 2000);
         }
       });
 
