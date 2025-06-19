@@ -1,6 +1,23 @@
 import { useEffect, useRef, useCallback, RefObject } from 'react';
 import { GameEngine, GameConfig } from './gameEngine';
 
+// デバッグモードの判定（Vite環境変数を安全に使用）
+const isDebugMode = (import.meta.env as any).DEV || 
+                   (typeof window !== 'undefined' && (window as any).DEBUG_GAME_HOOKS);
+
+// デバッグ用ログ関数
+const debugLog = (...args: any[]) => {
+  if (isDebugMode) {
+    console.log(...args);
+  }
+};
+
+const debugError = (...args: any[]) => {
+  if (isDebugMode) {
+    console.error(...args);
+  }
+};
+
 export const useGameEngine = (
   canvasRef: RefObject<HTMLCanvasElement | null>,
   config?: GameConfig
@@ -9,15 +26,15 @@ export const useGameEngine = (
   const animationRef = useRef<number | undefined>(undefined);
 
   const initializeEngine = useCallback(() => {
-    console.log('initializeEngine called, canvasRef.current:', canvasRef.current);
+    debugLog('initializeEngine called, canvasRef.current:', canvasRef.current);
     const canvas = canvasRef.current;
     if (!canvas) {
-      console.log('Canvas ref is null, skipping initialization');
+      debugLog('Canvas ref is null, skipping initialization');
       return null;
     }
 
     // canvasの寸法情報をログ出力
-    console.log('Canvas dimensions:', {
+    debugLog('Canvas dimensions:', {
       clientWidth: canvas.clientWidth,
       clientHeight: canvas.clientHeight,
       offsetWidth: canvas.offsetWidth,
@@ -65,7 +82,7 @@ export const useGameEngine = (
       }
     };
     
-    console.log('Canvas and game elements set to fixed values:', { 
+    debugLog('Canvas and game elements set to fixed values:', { 
       canvasSize: size,
       ballRadius: fixedConfig.ballRadius,
       paddleWidth: fixedConfig.paddleWidth,
@@ -80,11 +97,11 @@ export const useGameEngine = (
 
     if (!engineRef.current) {
       engineRef.current = new GameEngine(size, size, fixedConfig);
-      console.log('Created new GameEngine with fixed config:', fixedConfig);
+      debugLog('Created new GameEngine with fixed config:', fixedConfig);
     } else {
       // エンジンが既に存在する場合はキャンバスサイズを更新
       engineRef.current.updateCanvasSize(size, size);
-      console.log('Updated existing GameEngine canvas size to:', size);
+      debugLog('Updated existing GameEngine canvas size to:', size);
     }
     return engineRef.current;
   }, [canvasRef, config]);
@@ -98,7 +115,7 @@ export const useGameEngine = (
     remotePlayerInput?: { up: boolean; down: boolean; timestamp: number } | null, // マルチプレイヤー入力
     playerNumber?: 1 | 2 | 'spectator' | null // プレイヤー番号（観戦者を含む）
   ) => {
-    console.log('startGameLoop called', {
+    debugLog('startGameLoop called', {
       hasEngine: !!engineRef.current,
       hasCanvas: !!canvasRef.current,
       gameStarted,
@@ -107,22 +124,22 @@ export const useGameEngine = (
 
     // エンジンが初期化されていない場合は初期化を試行
     if (!engineRef.current) {
-      console.log('Engine not initialized, attempting to initialize...');
+      debugLog('Engine not initialized, attempting to initialize...');
       const engine = initializeEngine();
       if (!engine) {
-        console.error('Failed to initialize engine in startGameLoop');
+        debugError('Failed to initialize engine in startGameLoop');
         return;
       }
     }
 
     if (!canvasRef.current) {
-      console.log('Missing canvas, cannot start game loop');
+      debugLog('Missing canvas, cannot start game loop');
       return;
     }
 
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) {
-      console.log('Could not get canvas context');
+      debugLog('Could not get canvas context');
       return;
     }
 

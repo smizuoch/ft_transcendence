@@ -3,6 +3,20 @@ import { NPCConfig, DEFAULT_NPC_CONFIG } from './npcTypes';
 import type { GameState, NPCDebugInfo } from './npcTypes';
 import { DIFFICULTY_SETTINGS } from './npcTypes';
 
+// デバッグモードの設定
+const isDebugMode = !!(
+  (import.meta.env as any).DEV || 
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost') ||
+  (typeof window !== 'undefined' && localStorage.getItem('debug') === 'true')
+);
+
+// デバッグログ関数
+const debugLog = (...args: any[]) => {
+  if (isDebugMode) {
+    console.log('[GameEngine]', ...args);
+  }
+};
+
 export interface Ball {
   x: number;
   y: number;
@@ -350,7 +364,7 @@ export class GameEngine {
       // スコア更新
       this.score.player2++;
       this.state.score.player2++;
-      console.log('Player2 scored! New score:', this.score);
+      debugLog('Player2 scored! New score:', this.score);
 
       this.resetBall('player2');
 
@@ -364,7 +378,7 @@ export class GameEngine {
       // Player1が得点
       this.score.player1++;
       this.state.score.player1++;
-      console.log('Player1 scored! New score:', this.score);
+      debugLog('Player1 scored! New score:', this.score);
 
       this.resetBall('player1');
 
@@ -518,7 +532,7 @@ export class GameEngine {
     this.state.winner = null;
     this.gameOver = false;
     this.winner = null;
-    console.log('Score reset to 0:0');
+    debugLog('Score reset to 0:0');
   }
 
   // パドル位置とplayers同期メソッド
@@ -531,7 +545,7 @@ export class GameEngine {
 
   // リモートゲーム状態の同期（マルチプレイヤー用）
   public syncGameState(remoteState: GameState): void {
-    console.log('Syncing game state:', remoteState);
+    debugLog('Syncing game state:', remoteState);
 
     // ボール状態の同期
     this.state.ball.x = remoteState.ball.x;
