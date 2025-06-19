@@ -202,10 +202,16 @@ export const useGamePong42SFU = () => {
 
     socket.on('connect', () => {
       playerIdRef.current = socket.id;
+      // console.log('🟢 Socket connected:', {
+      //   playerId: socket.id,
+      //   connected: socket.connected,
+      //   socketExists: !!socket
+      // });
       setState(prev => ({ ...prev, connected: true, error: null }));
     });
 
     socket.on('disconnect', (reason) => {
+      console.log('🔴 Socket disconnected:', reason);
       setState(prev => ({ ...prev, connected: false }));
     });
 
@@ -653,7 +659,24 @@ export const useGamePong42SFU = () => {
   // プレイヤーのゲーム状態を送信
   const sendPlayerGameState = useCallback((gameState: any) => {
     if (!socketRef.current) {
-      console.log('⚠️ Cannot send player game state: socket not available');
+      console.log('⚠️ Cannot send player game state: socket not available', {
+        socketExists: !!socketRef.current,
+        connected: socketRef.current?.connected,
+        playerIdExists: !!playerIdRef.current,
+        roomNumberExists: !!roomNumberRef.current,
+        isRoomLeader: localGameState.isRoomLeader
+      });
+      return;
+    }
+
+    if (!socketRef.current.connected) {
+      console.log('⚠️ Cannot send player game state: socket not connected', {
+        socketExists: !!socketRef.current,
+        connected: socketRef.current?.connected,
+        playerIdExists: !!playerIdRef.current,
+        roomNumberExists: !!roomNumberRef.current,
+        isRoomLeader: localGameState.isRoomLeader
+      });
       return;
     }
 
