@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { apiClient } from '../utils/authApiClient';
+import { isUserAuthenticated } from '../utils/authUtils';
 
 interface HomeProps {
   navigate: (page: string) => void;
@@ -10,8 +11,14 @@ const Home: React.FC<HomeProps> = ({ navigate }) => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // URLパラメータからエラーメッセージを取得
   useEffect(() => {
+    // JWTが有効ならMyPageにリダイレクト
+    if (isUserAuthenticated()) {
+      navigate('MyPage');
+      return;
+    }
+
+    // URLパラメータからエラーメッセージを取得
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get('error');
     const message = urlParams.get('message');
