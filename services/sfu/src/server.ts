@@ -8,6 +8,27 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as jwt from 'jsonwebtoken';
 
+// 型定義の問題回避
+declare const process: any;
+declare const require: any;
+
+// デバッグログ用のヘルパー関数
+const isDebugMode = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true';
+
+const debugLog = (message: string) => {
+  if (isDebugMode) {
+    console.log(`[DEBUG] ${message}`);
+  }
+};
+
+const errorLog = (message: string) => {
+  console.error(`[ERROR] ${message}`);
+};
+
+const warnLog = (message: string) => {
+  console.warn(`[WARN] ${message}`);
+};
+
 // JWT認証機能
 interface JWTPayload {
   username: string;
@@ -50,7 +71,7 @@ const fetchUserProfile = async (username: string): Promise<PlayerInfo> => {
               name: userData.username
             });
           } else {
-            console.error(`Failed to fetch profile for ${username}, status: ${res.statusCode}`);
+            errorLog(`Failed to fetch profile for ${username}, status: ${res.statusCode}`);
             resolve({
               id: username,
               avatar: "/images/avatar/default_avatar.png",
@@ -58,7 +79,7 @@ const fetchUserProfile = async (username: string): Promise<PlayerInfo> => {
             });
           }
         } catch (error) {
-          console.error(`Error parsing response for ${username}:`, error);
+          errorLog(`Error parsing response for ${username}: ${error}`);
           resolve({
             id: username,
             avatar: "/images/avatar/default_avatar.png",
@@ -69,7 +90,7 @@ const fetchUserProfile = async (username: string): Promise<PlayerInfo> => {
     });
 
     req.on('error', (error: any) => {
-      console.error(`Error fetching profile for ${username}:`, error);
+      errorLog(`Error fetching profile for ${username}: ${error}`);
       resolve({
         id: username,
         avatar: "/images/avatar/default_avatar.png",
@@ -87,7 +108,7 @@ const extractUsernameFromToken = (token: string): string | null => {
     const decoded = jwt.decode(token) as JWTPayload;
     return decoded?.username || null;
   } catch (error) {
-    console.error('Error decoding JWT token:', error);
+    errorLog(`Error decoding JWT token: ${error}`);
     return null;
   }
 };
@@ -96,39 +117,39 @@ const extractUsernameFromToken = (token: string): string | null => {
 const getSSLOptions = () => {
   const certDirs = ['/app/internal-certs', '/app/certs', '/certs', './certs'];
   
-  console.log('=== SSL Certificate Debug ===');
+  debugLog('=== SSL Certificate Debug ===');
   
   for (const certDir of certDirs) {
-    console.log(`Checking certificate directory: ${certDir}`);
+    debugLog(`Checking certificate directory: ${certDir}`);
     
     // 証明書ディレクトリの存在確認
     if (!fs.existsSync(certDir)) {
-      console.log(`Certificate directory does not exist: ${certDir}`);
+      debugLog(`Certificate directory does not exist: ${certDir}`);
       continue;
     }
     
     // ディレクトリの内容を表示
     try {
       const files = fs.readdirSync(certDir);
-      console.log('Files in certificate directory:', files);
+      debugLog(`Files in certificate directory: ${files}`);
       
       // 共通証明書のパス
       const keyPath = path.join(certDir, 'server.key');
       const certPath = path.join(certDir, 'server.crt');
       
-      console.log('Checking certificate paths:');
-      console.log('- Common key:', keyPath, 'exists:', fs.existsSync(keyPath));
-      console.log('- Common cert:', certPath, 'exists:', fs.existsSync(certPath));
+      debugLog('Checking certificate paths:');
+      debugLog(`- Common key: ${keyPath}, exists: ${fs.existsSync(keyPath)}`);
+      debugLog(`- Common cert: ${certPath}, exists: ${fs.existsSync(certPath)}`);
       
       // まず共通証明書を試す
       if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-        console.log('Using common SSL certificates from:', certDir);
+        debugLog(`Using common SSL certificates from: ${certDir}`);
         const keyContent = fs.readFileSync(keyPath);
         const certContent = fs.readFileSync(certPath);
-        console.log('Successfully read common SSL certificates');
-        console.log('Key size:', keyContent.length, 'bytes');
-        console.log('Cert size:', certContent.length, 'bytes');
-        console.log('=== End SSL Certificate Debug ===');
+        debugLog('Successfully read common SSL certificates');
+        debugLog(`Key size: ${keyContent.length} bytes`);
+        debugLog(`Cert size: ${certContent.length} bytes`);
+        debugLog('=== End SSL Certificate Debug ===');
         return {
           key: keyContent,
           cert: certContent
@@ -136,15 +157,15 @@ const getSSLOptions = () => {
       }
       
     } catch (error) {
-      console.log(`Error accessing certificate directory ${certDir}:`, error);
+      debugLog(`Error accessing certificate directory ${certDir}: ${error}`);
       continue;
     }
   }
   
-  console.error('No valid SSL certificate files found in any directory');
+  errorLog('No valid SSL certificate files found in any directory');
   
   // 自己署名証明書を生成
-  console.log('Generating self-signed certificate...');
+  debugLog('Generating self-signed certificate...');
   try {
     const { execSync } = require('child_process');
     const tempCertDir = '/tmp/ssl-certs';
@@ -165,38 +186,38 @@ const getSSLOptions = () => {
     const keyContent = fs.readFileSync(keyPath);
     const certContent = fs.readFileSync(certPath);
     
-    console.log('Generated self-signed certificate');
-    console.log('Key size:', keyContent.length, 'bytes');
-    console.log('Cert size:', certContent.length, 'bytes');
-    console.log('=== End SSL Certificate Debug ===');
+    debugLog('Generated self-signed certificate');
+    debugLog(`Key size: ${keyContent.length} bytes`);
+    debugLog(`Cert size: ${certContent.length} bytes`);
+    debugLog('=== End SSL Certificate Debug ===');
     
     return {
       key: keyContent,
       cert: certContent
     };
   } catch (error: any) {
-    console.error('Error generating self-signed certificate:', error?.message || error);
+    errorLog(`Error generating self-signed certificate: ${error?.message || error}`);
   }
   
-  console.log('=== End SSL Certificate Debug ===');
+  debugLog('=== End SSL Certificate Debug ===');
   return null;
 };
 
 const sslOptions = getSSLOptions();
 
-console.log('=== SFU Server Configuration ===');
-console.log('SSL Options available:', !!sslOptions);
+debugLog('=== SFU Server Configuration ===');
+debugLog(`SSL Options available: ${!!sslOptions}`);
 
 // SSL証明書が必須なのでHTTPS/WSSを強制
 if (!sslOptions) {
-  console.error('❌ SSL certificates are required for HTTPS/WSS operation');
-  console.error('Cannot start server without valid SSL certificates');
-  console.error('SFU servers must use HTTPS/WSS for WebRTC functionality');
+  errorLog('❌ SSL certificates are required for HTTPS/WSS operation');
+  errorLog('Cannot start server without valid SSL certificates');
+  errorLog('SFU servers must use HTTPS/WSS for WebRTC functionality');
   process.exit(1);
 }
 
-console.log('✅ SSL certificates loaded successfully');
-console.log('🔒 Server will run with HTTPS/WSS (required for WebRTC)');
+debugLog('✅ SSL certificates loaded successfully');
+debugLog('🔒 Server will run with HTTPS/WSS (required for WebRTC)');
 
 const app = fastify({ 
   logger: true, // シンプルなロガー
@@ -235,13 +256,13 @@ async function startServer() {
   try {
     // Mediasoupワーカーを初期化
     await mediasoupService.initialize();
-    console.log('Mediasoup service initialized');
-    console.log('Starting Socket.IO event handlers...');
+    debugLog('Mediasoup service initialized');
+    debugLog('Starting Socket.IO event handlers...');
 
     // Socket.IOイベントハンドラー（シグナリングのみ）
     io.on('connection', (socket) => {
-      console.log(`Client connected for signaling: ${socket.id}`);
-      console.log(`Total connected clients: ${io.sockets.sockets.size}`);
+      debugLog(`Client connected for signaling: ${socket.id}`);
+      debugLog(`Total connected clients: ${io.sockets.sockets.size}`);
 
       // 接続時にルーターのRTPCapabilitiesを送信
       socket.emit('connection-confirmed', {
@@ -253,11 +274,11 @@ async function startServer() {
       // WebRTCトランスポート作成要求
       socket.on('createWebRtcTransport', async () => {
         try {
-          console.log(`Creating WebRTC transport for ${socket.id}`);
+          debugLog(`Creating WebRTC transport for ${socket.id}`);
           const transport = await mediasoupService.createWebRtcTransport(socket.id);
           socket.emit('webRtcTransportCreated', transport);
         } catch (error) {
-          console.error(`Failed to create WebRTC transport for ${socket.id}:`, error);
+          errorLog(`Failed to create WebRTC transport for ${socket.id}: ${error}`);
           socket.emit('error', { message: 'Failed to create WebRTC transport' });
         }
       });
@@ -265,11 +286,11 @@ async function startServer() {
       // WebRTCトランスポート接続
       socket.on('connectWebRtcTransport', async (data: { dtlsParameters: any }) => {
         try {
-          console.log(`Connecting WebRTC transport for ${socket.id}`);
+          debugLog(`Connecting WebRTC transport for ${socket.id}`);
           await mediasoupService.connectTransport(socket.id, data.dtlsParameters);
           socket.emit('webRtcTransportConnected');
         } catch (error) {
-          console.error(`Failed to connect WebRTC transport for ${socket.id}:`, error);
+          errorLog(`Failed to connect WebRTC transport for ${socket.id}: ${error}`);
           socket.emit('error', { message: 'Failed to connect WebRTC transport' });
         }
       });
@@ -282,7 +303,7 @@ async function startServer() {
         appData?: any 
       }) => {
         try {
-          console.log(`[DATA-PRODUCER] Creating data producer for ${socket.id}`, data);
+          debugLog(`[DATA-PRODUCER] Creating data producer for ${socket.id}`);
           const result = await mediasoupService.createDataProducer(
             socket.id, 
             data.sctpStreamParameters,
@@ -290,10 +311,10 @@ async function startServer() {
             data.protocol || 'gameProtocol',
             data.appData || {}
           );
-          console.log(`[DATA-PRODUCER] ✅ Data producer created for ${socket.id}:`, result);
+          debugLog(`[DATA-PRODUCER] ✅ Data producer created for ${socket.id}: ${result.id}`);
           socket.emit('dataProducerCreated', result);
         } catch (error) {
-          console.error(`[DATA-PRODUCER] ❌ Failed to create data producer for ${socket.id}:`, error);
+          errorLog(`[DATA-PRODUCER] ❌ Failed to create data producer for ${socket.id}: ${error}`);
           socket.emit('dataProducerCreationFailed', { 
             message: error instanceof Error ? error.message : 'Failed to create data producer' 
           });
@@ -306,7 +327,7 @@ async function startServer() {
         sctpCapabilities: any;
       }) => {
         try {
-          console.log(`Creating data consumer for ${socket.id}`);
+          debugLog(`Creating data consumer for ${socket.id}`);
           const result = await mediasoupService.createDataConsumer(
             socket.id,
             data.dataProducerId,
@@ -318,25 +339,25 @@ async function startServer() {
             socket.emit('error', { message: 'Cannot create data consumer' });
           }
         } catch (error) {
-          console.error(`Failed to create data consumer for ${socket.id}:`, error);
+          errorLog(`Failed to create data consumer for ${socket.id}: ${error}`);
           socket.emit('error', { message: 'Failed to create data consumer' });
         }
       });
 
       // クライアントからのpingに応答
       socket.on('ping', () => {
-        console.log(`Ping received from ${socket.id}`);
+        debugLog(`Ping received from ${socket.id}`);
         socket.emit('pong');
       });
 
       // 接続エラーをログ
       socket.on('error', (error) => {
-        console.error(`Socket error for ${socket.id}:`, error);
+        errorLog(`Socket error for ${socket.id}: ${error}`);
       });
 
       // 接続の確認
       socket.on('client-ready', (data) => {
-        console.log(`Client ${socket.id} is ready for WebRTC:`, data);
+        debugLog(`Client ${socket.id} is ready for WebRTC`);
         socket.emit('server-ready', { 
           serverId: socket.id,
           requiresWebRTC: true,
@@ -348,7 +369,7 @@ async function startServer() {
       socket.on('join-room', async (data: { roomNumber: string; playerInfo: any }) => {
         try {
           const { roomNumber, playerInfo } = data;
-          console.log(`Player ${socket.id} attempting to join room ${roomNumber}`);
+          debugLog(`Player ${socket.id} attempting to join room ${roomNumber}`);
 
           // JWTトークンから実際のユーザー情報を取得
           let realPlayerInfo = playerInfo;
@@ -358,16 +379,16 @@ async function startServer() {
           if (token) {
             const username = extractUsernameFromToken(token);
             if (username) {
-              console.log(`Fetching real profile for user: ${username}`);
+              debugLog(`Fetching real profile for user: ${username}`);
               realPlayerInfo = await fetchUserProfile(username);
-              console.log(`Real player info for ${username}:`, realPlayerInfo);
+              debugLog(`Real player info for ${username}: ${realPlayerInfo.name}`);
             }
           }
 
           // 既に同じ部屋にいるかチェック
           const existingRooms = Array.from(socket.rooms);
           if (existingRooms.includes(roomNumber)) {
-            console.log(`Player ${socket.id} already in room ${roomNumber}`);
+            debugLog(`Player ${socket.id} already in room ${roomNumber}`);
             const room = roomManager.getRoom(roomNumber);
             if (room) {
               socket.emit('room-joined', {
@@ -384,7 +405,7 @@ async function startServer() {
           const { room, role } = roomManager.joinRoom(roomNumber, socket.id, realPlayerInfo);
           socket.join(roomNumber);
 
-          console.log(`Player ${socket.id} (${realPlayerInfo.name}) successfully joined room ${roomNumber} as ${role === 'spectator' ? 'spectator' : `player ${role}`}`);
+          debugLog(`Player ${socket.id} (${realPlayerInfo.name}) successfully joined room ${roomNumber} as ${role === 'spectator' ? 'spectator' : `player ${role}`}`);
 
           // 参加者情報を送信
           const roomData = room.getAllParticipants();
@@ -416,7 +437,7 @@ async function startServer() {
           }
 
         } catch (error) {
-          console.error('Error joining room:', error);
+          errorLog(`Error joining room: ${error}`);
           socket.emit('error', { message: 'Failed to join room' });
         }
       });
@@ -441,7 +462,7 @@ async function startServer() {
         const room = roomManager.getRoom(roomNumber);
 
         if (room && room.hasPlayer(socket.id)) {
-          console.log(`Full game state update from player ${socket.id} in room ${roomNumber}`);
+          debugLog(`Full game state update from player ${socket.id} in room ${roomNumber}`);
           // 他のプレイヤーと観戦者に完全なゲーム状態を送信（送信者以外）
           socket.to(roomNumber).emit('full-game-state-update', {
             playerId: socket.id,
@@ -471,7 +492,7 @@ async function startServer() {
         const room = roomManager.getRoom(roomNumber);
 
         if (room && room.hasPlayer(socket.id)) {
-          console.log(`Score update from player ${socket.id}: ${scorer} scored in room ${roomNumber}`);
+          debugLog(`Score update from player ${socket.id}: ${scorer} scored in room ${roomNumber}`);
           
           // サーバー側でスコアを管理
           const gameEnded = room.updateScore(scorer);
@@ -488,7 +509,7 @@ async function startServer() {
           
           // ゲーム終了の場合
           if (gameEnded) {
-            console.log(`Game ended in room ${roomNumber}, winner: player ${gameState.winner}`);
+            debugLog(`Game ended in room ${roomNumber}, winner: player ${gameState.winner}`);
             io.to(roomNumber).emit('game-ended', {
               winner: gameState.winner,
               playerId: socket.id,
@@ -504,11 +525,11 @@ async function startServer() {
         const room = roomManager.getRoom(roomNumber);
 
         if (room && room.hasPlayer(socket.id)) {
-          console.log(`Player ${socket.id} requested to start game in room ${roomNumber}`);
+          debugLog(`Player ${socket.id} requested to start game in room ${roomNumber}`);
 
           // 部屋に2人いる場合のみゲーム開始
           if (room.getPlayerCount() === 2) {
-            console.log(`Starting game in room ${roomNumber}`);
+            debugLog(`Starting game in room ${roomNumber}`);
             
             // サーバー側でゲーム開始
             room.startGame();
@@ -536,7 +557,7 @@ async function startServer() {
         const room = roomManager.getRoom(roomNumber);
 
         if (room && room.hasPlayer(socket.id)) {
-          console.log(`Game ended in room ${roomNumber}, winner: ${winner}`);
+          debugLog(`Game ended in room ${roomNumber}, winner: ${winner}`);
           
           // 全プレイヤーにゲーム終了を送信
           io.to(roomNumber).emit('game-ended', {
@@ -548,7 +569,7 @@ async function startServer() {
           setTimeout(() => {
             if (room) {
               room.resetGame();
-              console.log(`Room ${roomNumber} reset after game end`);
+              debugLog(`Room ${roomNumber} reset after game end`);
             }
           }, 2000);
         }
@@ -556,13 +577,13 @@ async function startServer() {
 
       // 切断処理
       socket.on('disconnect', (reason) => {
-        console.log(`Client disconnected: ${socket.id}, Reason: ${reason}`);
-        console.log(`Total connected clients: ${io.sockets.sockets.size}`);
+        debugLog(`Client disconnected: ${socket.id}, Reason: ${reason}`);
+        debugLog(`Total connected clients: ${io.sockets.sockets.size}`);
 
         // プレイヤーを全ての部屋から削除
         const roomNumber = roomManager.removePlayer(socket.id);
         if (roomNumber) {
-          console.log(`Player ${socket.id} left room ${roomNumber}`);
+          debugLog(`Player ${socket.id} left room ${roomNumber}`);
           socket.to(roomNumber).emit('player-left', {
             playerId: socket.id
           });
@@ -604,9 +625,9 @@ async function startServer() {
           if (token) {
             const username = extractUsernameFromToken(token);
             if (username) {
-              console.log(`Fetching real profile for tournament creator: ${username}`);
+              debugLog(`Fetching real profile for tournament creator: ${username}`);
               realPlayerInfo = await fetchUserProfile(username);
-              console.log(`Real tournament creator info for ${username}:`, realPlayerInfo);
+              debugLog(`Real tournament creator info for ${username}: ${realPlayerInfo.name}`);
             }
           }
           
@@ -627,9 +648,9 @@ async function startServer() {
             participants
           });
 
-          console.log(`Tournament ${tournamentId} created with max ${maxPlayers} players by ${realPlayerInfo.name} (${realPlayerInfo.id})`);
+          debugLog(`Tournament ${tournamentId} created with max ${maxPlayers} players by ${realPlayerInfo.name} (${realPlayerInfo.id})`);
         } catch (error) {
-          console.error('Error creating tournament:', error);
+          errorLog(`Error creating tournament: ${error}`);
           socket.emit('error', { message: 'Failed to create tournament' });
         }
       });
@@ -647,9 +668,9 @@ async function startServer() {
           if (token) {
             const username = extractUsernameFromToken(token);
             if (username) {
-              console.log(`Fetching real profile for tournament player: ${username}`);
+              debugLog(`Fetching real profile for tournament player: ${username}`);
               realPlayerInfo = await fetchUserProfile(username);
-              console.log(`Real tournament player info for ${username}:`, realPlayerInfo);
+              debugLog(`Real tournament player info for ${username}: ${realPlayerInfo.name}`);
             }
           }
           
@@ -681,9 +702,9 @@ async function startServer() {
             participants
           });
 
-          console.log(`Player ${socket.id} (${realPlayerInfo.name}) joined tournament ${tournamentId} as ${role}`);
+          debugLog(`Player ${socket.id} (${realPlayerInfo.name}) joined tournament ${tournamentId} as ${role}`);
         } catch (error) {
-          console.error('Error joining tournament:', error);
+          errorLog(`Error joining tournament: ${error}`);
           socket.emit('error', { message: 'Failed to join tournament' });
         }
       });
@@ -711,9 +732,9 @@ async function startServer() {
             nextMatches
           });
 
-          console.log(`Tournament ${tournamentId} started with ${tournament?.players.length} players`);
+          debugLog(`Tournament ${tournamentId} started with ${tournament?.players.length} players`);
         } catch (error) {
-          console.error('Error starting tournament:', error);
+          errorLog(`Error starting tournament: ${error}`);
           socket.emit('error', { message: 'Failed to start tournament' });
         }
       });
@@ -801,11 +822,11 @@ async function startServer() {
               tournament,
               winner: tournament.winner
             });
-            console.log(`Tournament ${tournamentId} completed, winner: ${tournament.winner?.playerInfo.name}`);
+            debugLog(`Tournament ${tournamentId} completed, winner: ${tournament.winner?.playerInfo.name}`);
           }
 
         } catch (error) {
-          console.error('Error recording tournament match result:', error);
+          errorLog(`Error recording tournament match result: ${error}`);
           socket.emit('error', { message: 'Failed to record match result' });
         }
       });
@@ -824,7 +845,7 @@ async function startServer() {
             progress
           });
         } catch (error) {
-          console.error('Error getting tournament info:', error);
+          errorLog(`Error getting tournament info: ${error}`);
           socket.emit('error', { message: 'Failed to get tournament info' });
         }
       });
@@ -865,19 +886,19 @@ async function startServer() {
             console.log(`Player ${socket.id} left tournament ${tournamentId}`);
           }
         } catch (error) {
-          console.error('Error leaving tournament:', error);
+          errorLog(`Error leaving tournament: ${error}`);
         }
       });
 
       // ルーターRTPCapabilities要求への応答
       socket.on('get-router-capabilities', () => {
-        console.log(`[${socket.id}] Router capabilities requested`);
+        debugLog(`[${socket.id}] Router capabilities requested`);
         try {
           const capabilities = mediasoupService.getRouterCapabilities();
           socket.emit('router-capabilities', capabilities);
-          console.log(`[${socket.id}] Router capabilities sent`);
+          debugLog(`[${socket.id}] Router capabilities sent`);
         } catch (error) {
-          console.error(`[${socket.id}] Failed to get router capabilities:`, error);
+          errorLog(`[${socket.id}] Failed to get router capabilities: ${error}`);
           socket.emit('error', { message: 'Failed to get router capabilities' });
         }
       });
@@ -894,7 +915,7 @@ async function startServer() {
         const rtpCapabilities = mediasoupService.getRouterCapabilities();
         return { rtpCapabilities };
       } catch (error) {
-        console.error('Failed to get router RTP capabilities:', error);
+        errorLog(`Failed to get router RTP capabilities: ${error}`);
         return reply.status(500).send({
           error: 'Failed to get router RTP capabilities',
           message: error instanceof Error ? error.message : 'Unknown error'
@@ -913,7 +934,7 @@ async function startServer() {
         const transport = await mediasoupService.createWebRtcTransport(socketId);
         return transport;
       } catch (error) {
-        console.error('Failed to create transport:', error);
+        errorLog(`Failed to create transport: ${error}`);
         return reply.status(500).send({
           error: 'Failed to create transport',
           message: error instanceof Error ? error.message : 'Unknown error'
@@ -934,7 +955,7 @@ async function startServer() {
         await mediasoupService.connectTransport(socketId, dtlsParameters);
         return { success: true };
       } catch (error) {
-        console.error('Failed to connect transport:', error);
+        errorLog(`Failed to connect transport: ${error}`);
         return reply.status(500).send({
           error: 'Failed to connect transport',
           message: error instanceof Error ? error.message : 'Unknown error'
@@ -961,7 +982,7 @@ async function startServer() {
         );
         return { id: dataProducer.id };
       } catch (error) {
-        console.error('Failed to create data producer:', error);
+        errorLog(`Failed to create data producer: ${error}`);
         return reply.status(500).send({
           error: 'Failed to create data producer',
           message: error instanceof Error ? error.message : 'Unknown error'
@@ -1023,7 +1044,7 @@ async function startServer() {
         stats.transports = transportStats.details;
 
       } catch (error) {
-        console.error('Failed to get transport stats:', error);
+        errorLog(`Failed to get transport stats: ${error}`);
       }
 
       return {
@@ -1054,7 +1075,7 @@ async function startServer() {
           message: `DTLS stats for client ${socketId}`
         };
       } catch (error) {
-        console.error(`Failed to get stats for client ${socketId}:`, error);
+        errorLog(`Failed to get stats for client ${socketId}: ${error}`);
         return reply.status(500).send({ 
           error: 'Internal server error',
           message: error instanceof Error ? error.message : 'Unknown error'
@@ -1079,13 +1100,13 @@ async function startServer() {
     }
 
   } catch (error) {
-    console.error('Failed to start server:', error);
+    errorLog(`Failed to start server: ${error}`);
     process.exit(1);
   }
 }
 
 // サーバーを開始
-startServer().catch(console.error);
+startServer().catch((error) => errorLog(`Server startup failed: ${error}`));
 
 // グレースフルシャットダウン
 process.on('SIGINT', async () => {
