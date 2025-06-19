@@ -270,36 +270,40 @@ const GamePong4: React.FC<GamePong4Props> = ({ navigate, players = defaultPlayer
           setGameOver(true);
           setIsGameInitialized(false);
 
+          // 現在の試合をクリア
+          setCurrentMatch(null);
+
+          // ゲームエンジンのクリーンアップを確実に実行
+          stopGameLoop();
+          if (engineRef.current) {
+            engineRef.current.cleanup();
+          }
+
+          // マルチプレイヤー接続を一旦切断
+          if (multiplayerService.isInRoom()) {
+            multiplayerService.leaveRoom();
+          }
+
+          // マルチプレイヤー状態をリセット
+          setIsMultiplayer(false);
+          setPlayerNumber(null);
+          setIsAuthoritativeClient(false);
+          setRemotePlayerInput(null);
+
           // 敗退した場合は即座にリザルト画面へ
           if (isEliminated) {
             // console.log('Player eliminated, setting elimination state');
             setIsEliminated(true);
             setShowTournamentLobby(false);
-
-            // マルチプレイヤー状態をリセット
-            setIsMultiplayer(false);
-            setPlayerNumber(null);
-            setIsAuthoritativeClient(false);
-
-            // ゲームエンジンのクリーンアップ
-            stopGameLoop();
-            if (engineRef.current) {
-              engineRef.current.cleanup();
-            }
           } else if (isWinner) {
             // console.log('Player won, returning to lobby to wait for next round');
-            setShowTournamentLobby(true);
-
-            // 勝者は次のラウンド待機状態
-            setIsMultiplayer(false);
-            setPlayerNumber(null);
-            setIsAuthoritativeClient(false);
-
-            // ゲームエンジンのクリーンアップ
-            stopGameLoop();
-            if (engineRef.current) {
-              engineRef.current.cleanup();
-            }
+            // 勝者は確実にロビーに戻す
+            setTimeout(() => {
+              setShowTournamentLobby(true);
+              setGameOver(false);
+              setWinner(null);
+              setScore({ player1: 0, player2: 0 });
+            }, 100);
           }
         });
 

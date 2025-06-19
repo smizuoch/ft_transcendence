@@ -337,10 +337,8 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
               // console.log('Game ready: No opponent player found');
             }
           }
-        });
-
-        multiplayerService.on('gameStarted', (data: { roomNumber: string; players: any[]; initiator: string }) => {
-          // console.log('Game started by player:', data.initiator);
+        });        multiplayerService.on('gameStarted', (data: { roomNumber: string; players: any[]; initiator: string }) => {
+          console.log('Game started event received:', data);
           if (engineRef.current) {
             engineRef.current.updateNPCConfig({ enabled: false });
           }
@@ -348,6 +346,25 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
           setGameOver(false);
           setWinner(null);
           setScore({ player1: 0, player2: 0 });
+          setIsResultSent(false);
+          
+          // ゲームが開始されたら入力UIを非表示に
+          setShowRoomInput(false);
+        });        // ゲーム終了イベントの処理
+        multiplayerService.on('gameEnded', (data: { winner: number; playerId: string }) => {
+          console.log('Game ended event received:', data);
+          setGameOver(true);
+          setWinner(data.winner);
+          setGameStarted(false);
+        });
+
+        // スコア更新イベント
+        multiplayerService.on('scoreUpdated', (data: { scorer: 'player1' | 'player2'; playerId: string }) => {
+          console.log('Score updated:', data);
+          setScore(prev => ({
+            ...prev,
+            [data.scorer]: prev[data.scorer] + 1
+          }));
         });
 
         multiplayerService.on('gameStartFailed', (data: { reason: string; currentPlayers: number }) => {
@@ -386,9 +403,7 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             setGameOver(true);
             setWinner(data.winner);
           }
-        });
-
-        multiplayerService.on('gameEnded', (data: {
+        });        multiplayerService.on('gameEnded', (data: {
           winner: number;
           playerId: string;
           finalScores: { player1: number; player2: number };
@@ -780,20 +795,37 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
   useEffect(() => {
     if (propRoomNumber) {
       setRoomNumber(propRoomNumber);
-      setShowRoomInput(false);
-      // 通信対戦の場合の処理
-      if (!multiplayerService.isInRoom()) {
+      setShowRoomInput(false);      // 通信対戦の場合の処理
+      if (!npcEnabled) {
         setIsMultiplayer(true);
         const autoJoinRoom = async () => {
           try {
-            if (multiplayerService.isInRoom()) {
-              // console.log('Already in room, skipping join');
+            // 既に同じ部屋にいる場合はそのまま続行
+            if (multiplayerService.isInRoom() && multiplayerService.getRoomNumber() === propRoomNumber) {
+              console.log(`Already in room ${propRoomNumber}, continuing...`);
               return;
             }
 
             if (!multiplayerService.isConnectedToServer()) {
               await multiplayerService.connect();
               setMultiplayerConnected(true);
+            }
+
+            // 別の部屋にいる場合は一度離脱
+            if (multiplayerService.isInRoom() && multiplayerService.getRoomNumber() !== propRoomNumber) {
+              console.log('Leaving current room to join new room...');
+              multiplayerService.leaveRoom();
+              // 状態をリセット
+              setIsMultiplayer(false);
+              setPlayerNumber(null);
+              setIsGameReady(false);
+              setIsSpectator(false);
+              setRoomPlayers([]);
+              setRoomSpectators([]);
+              setIsAuthoritativeClient(false);
+              
+              // 少し待ってから新しい部屋に参加
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             const playerInfo = {
@@ -803,7 +835,8 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
             };
 
             await multiplayerService.joinRoom(propRoomNumber, playerInfo);
-            // console.log(`Auto-joining room: ${propRoomNumber}`);
+            setIsMultiplayer(true);
+            console.log(`Auto-joined room: ${propRoomNumber}`);
           } catch (error) {
             console.error('Auto join room failed:', error);
             setMultiplayerConnected(false);
@@ -827,16 +860,9 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
     if (value.length <= 6) {
       setRoomNumber(value);
     }
-  };
-
-  const handleJoinRoom = async () => {
+  };  const handleJoinRoom = async () => {
     if (roomNumber.length < 4) {
       alert('部屋番号は4桁以上で入力してください');
-      return;
-    }
-
-    if (multiplayerService.isInRoom()) {
-      alert('既に部屋に参加しています');
       return;
     }
 
@@ -844,6 +870,30 @@ const GamePong2: React.FC<GamePong2Props> = ({ navigate, roomNumber: propRoomNum
       if (!multiplayerService.isConnectedToServer()) {
         await multiplayerService.connect();
         setMultiplayerConnected(true);
+      }
+
+      // 既に同じ部屋にいる場合はそのまま続行
+      if (multiplayerService.isInRoom() && multiplayerService.getRoomNumber() === roomNumber) {
+        console.log('Already in the same room, continuing...');
+        setIsMultiplayer(true);
+        return;
+      }
+
+      // 別の部屋にいる場合は一度離脱してから新しい部屋に参加
+      if (multiplayerService.isInRoom() && multiplayerService.getRoomNumber() !== roomNumber) {
+        console.log('Leaving current room to join new room...');
+        multiplayerService.leaveRoom();
+        // 状態をリセット
+        setIsMultiplayer(false);
+        setPlayerNumber(null);
+        setIsGameReady(false);
+        setIsSpectator(false);
+        setRoomPlayers([]);
+        setRoomSpectators([]);
+        setIsAuthoritativeClient(false);
+        
+        // 少し待ってから新しい部屋に参加
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       const playerInfo = {

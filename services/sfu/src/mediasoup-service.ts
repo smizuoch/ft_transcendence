@@ -5,6 +5,23 @@ import * as os from 'os';
 // 型定義の問題回避
 declare const process: any;
 
+// デバッグログ用のヘルパー関数
+const isDebugMode = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true';
+
+const debugLog = (message: string) => {
+  if (isDebugMode) {
+    console.log(`[DEBUG] ${message}`);
+  }
+};
+
+const errorLog = (message: string) => {
+  console.error(`[ERROR] ${message}`);
+};
+
+const warnLog = (message: string) => {
+  console.warn(`[WARN] ${message}`);
+};
+
 export class MediasoupService {
   private worker: Worker | null = null;
   private router: Router | null = null;
@@ -17,7 +34,7 @@ export class MediasoupService {
 
   async initialize(): Promise<void> {
     try {
-      console.log('Initializing Mediasoup service...');
+      debugLog('Initializing Mediasoup service...');
 
       // Mediasoupワーカーを作成
       this.worker = await mediasoup.createWorker({
@@ -31,10 +48,10 @@ export class MediasoupService {
         rtcMaxPort: 10100,
       });
 
-      console.log('Mediasoup worker created successfully');
+      debugLog('Mediasoup worker created successfully');
 
       this.worker.on('died', (error: any) => {
-        console.error('Mediasoup worker died:', error);
+        errorLog(`Mediasoup worker died: ${error}`);
         process.exit(1);
       });
 
@@ -82,9 +99,9 @@ export class MediasoupService {
         }
       });
 
-      console.log('Mediasoup service initialized successfully');
+      debugLog('Mediasoup service initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize Mediasoup service:', error);
+      errorLog(`Failed to initialize Mediasoup service: ${error}`);
       throw error;
     }
   }
@@ -129,30 +146,30 @@ export class MediasoupService {
 
     // DTLS接続状態の監視
     transport.on('dtlsstatechange', (dtlsState: string) => {
-      console.log(`[DTLS] ${socketId}: ${dtlsState}`);
+      debugLog(`[DTLS] ${socketId}: ${dtlsState}`);
       
       if (dtlsState === 'failed') {
-        console.error(`[DTLS] ${socketId}: DTLS handshake failed`);
+        errorLog(`[DTLS] ${socketId}: DTLS handshake failed`);
       } else if (dtlsState === 'closed') {
-        console.log(`[DTLS] ${socketId}: DTLS connection closed`);
+        debugLog(`[DTLS] ${socketId}: DTLS connection closed`);
         this.transports.delete(socketId);
       }
     });
 
     // ICE接続状態の監視
     transport.on('icestatechange', (iceState: any) => {
-      console.log(`[ICE] ${socketId}: ${iceState}`);
+      debugLog(`[ICE] ${socketId}: ${iceState}`);
       
       if (iceState === 'failed') {
-        console.error(`[ICE] ${socketId}: ICE connection failed`);
+        errorLog(`[ICE] ${socketId}: ICE connection failed`);
       } else if (iceState === 'disconnected') {
-        console.warn(`[ICE] ${socketId}: ICE disconnected`);
+        warnLog(`[ICE] ${socketId}: ICE disconnected`);
       }
     });
 
     // transport監視を削除し、基本的なrouter closeのみ監視
     transport.on('routerclose', () => {
-      console.log(`[TRANSPORT] Router closed for ${socketId}`);
+      debugLog(`[TRANSPORT] Router closed for ${socketId}`);
       this.transports.delete(socketId);
     });
 
@@ -175,9 +192,9 @@ export class MediasoupService {
 
     try {
       await transport.connect({ dtlsParameters });
-      console.log(`[CONNECT] ✅ Transport connected: ${socketId}`);
+      debugLog(`[CONNECT] ✅ Transport connected: ${socketId}`);
     } catch (error) {
-      console.error(`[CONNECT] ❌ Failed: ${socketId}`, error instanceof Error ? error.message : error);
+      errorLog(`[CONNECT] ❌ Failed: ${socketId} - ${error instanceof Error ? error.message : error}`);
       throw error;
     }
   }
@@ -202,7 +219,7 @@ export class MediasoupService {
     this.producers.set(producer.id, producer);
 
     producer.on('transportclose', () => {
-      console.log('Producer transport closed');
+      debugLog('Producer transport closed');
       this.producers.delete(producer.id);
       producer.close();
     });
@@ -235,7 +252,7 @@ export class MediasoupService {
     }
 
     if (!this.router.canConsume({ producerId, rtpCapabilities })) {
-      console.warn('Cannot consume');
+      warnLog('Cannot consume');
       return null;
     }
 
@@ -248,13 +265,13 @@ export class MediasoupService {
     this.consumers.set(consumer.id, consumer);
 
     consumer.on('transportclose', () => {
-      console.log('Consumer transport closed');
+      debugLog('Consumer transport closed');
       this.consumers.delete(consumer.id);
       consumer.close();
     });
 
     consumer.on('producerclose', () => {
-      console.log('Consumer producer closed');
+      debugLog('Consumer producer closed');
       this.consumers.delete(consumer.id);
       consumer.close();
     });
@@ -313,7 +330,7 @@ export class MediasoupService {
         sctpStreamParameters: dataProducer.sctpStreamParameters 
       };
     } catch (error) {
-      console.error(`[DATA-PRODUCER] Failed for ${socketId}:`, error);
+      errorLog(`[DATA-PRODUCER] Failed for ${socketId}: ${error}`);
       throw error;
     }
   }
@@ -354,13 +371,13 @@ export class MediasoupService {
     this.dataConsumers.set(dataConsumer.id, dataConsumer);
 
     dataConsumer.on('transportclose', () => {
-      console.log('Data consumer transport closed');
+      debugLog('Data consumer transport closed');
       this.dataConsumers.delete(dataConsumer.id);
       dataConsumer.close();
     });
 
     dataConsumer.on('dataproducerclose', () => {
-      console.log('Data consumer producer closed');
+      debugLog('Data consumer producer closed');
       this.dataConsumers.delete(dataConsumer.id);
       dataConsumer.close();
     });
@@ -505,7 +522,7 @@ export class MediasoupService {
           timestamp: new Date().toISOString()
         });
       } catch (error) {
-        console.error(`Failed to get stats for transport ${socketId}:`, error);
+        errorLog(`Failed to get stats for transport ${socketId}: ${error}`);
       }
     }
 
@@ -557,7 +574,7 @@ export class MediasoupService {
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error(`Failed to get client stats for ${socketId}:`, error);
+      errorLog(`Failed to get client stats for ${socketId}: ${error}`);
       throw error;
     }
   }
