@@ -54,14 +54,14 @@ find config/certs -type f -exec chmod 644 {} \;
 echo "Waiting for Elasticsearch availability"
 until curl -s --cacert config/certs/ca/ca.crt https://elasticsearch:9200 | grep -q "missing authentication credentials"; do
   echo "Waiting for Elasticsearch..."
-  sleep 30
+  sleep 1
 done
 
 # kibana_systemユーザーのパスワード設定
 echo "Setting kibana_system password"
 until curl -s -X POST --cacert config/certs/ca/ca.crt -u "${ELASTICSEARCH_USERNAME}:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://elasticsearch:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do
   echo "Retrying kibana_system password setup..."
-  sleep 10
+  sleep 1
 done
 
 echo "Setup completed successfully!"
