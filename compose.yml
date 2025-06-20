@@ -208,7 +208,6 @@ services:
         condition: service_healthy
     volumes:
       - elk_certs:/usr/share/logstash/config/certs
-      - ./logs:/host/logs:ro
     env_file:
       - ./secrets/.env
     networks:
