@@ -1,11 +1,18 @@
 #!/bin/bash
+ENV_FILE=./secrets/.env
+[ -f "$ENV_FILE" ] || { echo "Error: $ENV_FILE not found"; exit 1; }
+
+# HOST_IPの取得
+HOST_IP=$(grep "^HOST_IP=" "$ENV_FILE" | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+[ -n "$HOST_IP" ] || { echo "Error: HOST_IP not found in $ENV_FILE"; exit 1; }
+
 # webservレポジトリをクローンする
 [ -d ./services/webserv ] || git clone -b develop https://github.com/tobeshota/webserv ./services/webserv
 cd ./services/webserv
 
 # webservの設定ファイルを更新する
 cat << EOF > ./conf/webserv.conf
-[localhost]
+["$HOST_IP"]
 listen = [8001]
 root = "/app/html"
 index = "index.html"
@@ -19,6 +26,7 @@ docker rm -f webserv > /dev/null 2>&1
 docker run \
 	--name webserv \
 	-p 8001:8001 \
+	--network ft_transcendence_transcendence_net \
 	-v ./srcs:/app/srcs:ro \
 	-v ./Makefile:/app/Makefile:ro \
 	-v ./conf:/app/conf:ro \
@@ -31,7 +39,8 @@ docker run \
 
 # コンテナ内でwebservが起動するまで待つ
 until docker exec webserv pgrep webserv > /dev/null 2>&1; do
-	sleep 1
+	echo "waiting ..."
+	sleep 3
 done
 
 GREEN='\033[32m'
@@ -48,8 +57,7 @@ echo -e "${GREEN}$(cat << 'EOF'
 /*   Finished: 2025/03/23 23:27:00 by cjia, smizuoch, toshota        ###   ########.fr        */
 /*                                                                                            */
 /* ****************************************************************************************** */
-
-🏠 http://localhost:8001/ on webserv
-
 EOF
 )${RESET}"
+
+printf "\n\e[32m🏓 http://$HOST_IP:8001/ on webserv\e[m\n"
