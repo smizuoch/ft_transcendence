@@ -1,5 +1,5 @@
 # ft_transcendence
-**42-player PONG using [WebRTC SFU](https://scrapbox.io/guide-to-the-galaxy/WebRTC_SFU)🏓**
+**42-player online PONG using [WebRTC SFU](https://scrapbox.io/guide-to-the-galaxy/WebRTC_SFU)🏓**
 
 ---
 
