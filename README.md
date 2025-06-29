@@ -3,8 +3,6 @@
 
 ---
 
-
-
 # Description
 https://github.com/user-attachments/assets/db8236c5-d69a-40e0-9dff-afa223103984
 <div style="display: flex; gap: 10px; margin: 20px 0;">
@@ -15,7 +13,7 @@ https://github.com/user-attachments/assets/db8236c5-d69a-40e0-9dff-afa223103984
 </div>
 
 ft_transcendence is a 42-player Pong game using [WebRTC SFU](https://scrapbox.io/guide-to-the-galaxy/WebRTC_SFU).  
-The goal is to build a web application in close collaboration with teammates under a two-month time constraint.
+This project aims to build a web application in close collaboration with teammates under a two-month time constraint.
 
 For more information:
 * [Project Wiki](https://deepwiki.com/smizuoch/ft_transcendence/1-overview)
