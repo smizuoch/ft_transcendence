@@ -67,7 +67,7 @@ make up
 Register the public key certificate `./secrets/certs/ca.crt` in your web browser.
 
 ### 5. Access
-Access via your web browser: `https://HOST_IP:8443/`
+Access via your web browser: `https://HOST_IP:8443/`  
 **NOTE**: Replace HOST_IP with Your local machine's IP address
 
 # Technology Stack
