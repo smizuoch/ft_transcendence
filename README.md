@@ -12,7 +12,7 @@ https://github.com/user-attachments/assets/c8403572-ad53-462c-bf69-cd6b1cc0a3ed
   <img src="https://github.com/user-attachments/assets/5d09b6e9-0553-4106-904f-6855f9966def" alt="GamePong2" style="width: 24%; height: auto;">
 </div>
 
-ft_transcendence is the final project of the Common Core at [42](https://42tokyo.jp/).  
+ft_transcendence is the final project of the Common Core at [42](https://42tokyo.jp/).
 The goal is to build a web application in close collaboration with teammates under a two-month time constraint.
 
 For more information:
@@ -57,7 +57,7 @@ make up
 Register the public key certificate `./secrets/certs/ca.crt` in your web browser.
 
 ### 5. Access
-Access via your web browser: `https://HOST_IP:8443/`  
+Access via your web browser: `https://HOST_IP:8443/`
 **NOTE**: Replace HOST_IP with Your local machine's IP address
 
 # Technology Stack
@@ -100,7 +100,7 @@ Access via your web browser: `https://HOST_IP:8443/`
 A [microservices](https://scrapbox.io/guide-to-the-galaxy/microservices) architecture was chosen for independent development and deployment.
 ```mermaid
 flowchart LR
-    Clients[Clients]
+    Users[End users]
     nginx[nginx]
 
     subgraph "API"
@@ -108,14 +108,12 @@ flowchart LR
         user_search[user_search]
         friend_search[friend_search]
         result_search[result_search]
-    end
-
-
-    subgraph "Game"
-        sfu[sfu]
-        sfu42[sfu42]
         npc_manager[npc_manager]
     end
+
+
+    sfu[sfu]
+    sfu42[sfu42]
 
     subgraph "Log Analysis"
         logstash[logstash]
@@ -125,36 +123,32 @@ flowchart LR
         elasticsearch -.-> |HTTPS| kibana
     end
 
-    Clients -.-> |HTTPS| nginx
+    Users -.-> |HTTPS| nginx
     nginx -.-> |HTTP| frontend
     nginx -.-> |HTTP| auth
     nginx -.-> |HTTP| user_search
     nginx -.-> |HTTP| friend_search
     nginx -.-> |HTTP| result_search
 
-    Clients <-.-> |WebRTC| sfu
-    Clients <-.-> |WebRTC| sfu42
+    Users <-.-> |WebRTC| sfu
+    Users <-.-> |WebRTC| sfu42
     sfu42 <-.-> |WebRTC| npc_manager
 
-    Clients -.-> |HTTPS| kibana
+    Users -.-> |HTTPS| kibana
 
     %% Styling
-    classDef client fill:#e3f2fd
+    classDef user fill:#e3f2fd
     classDef frontend fill:#e8f5e8
     classDef api fill:#fff3e0
-    classDef game fill:#fce4ec
-    classDef ai fill:#f0f4c3
     classDef elk fill:#e0f2f1
 
-    class Clients client
+    class Users user
     class frontend frontend
-    class auth,user_search,friend_search,result_search api
-    class sfu,sfu42 game
-    class npc_manager ai
+    class auth,user_search,friend_search,result_search,npc_manager api
     class logstash,elasticsearch,kibana elk
 ```
 
-# After the Festival
+# Afterword
 _`ft_transcendence` is the final project of the Common Core at [42](https://42tokyo.jp/)._
 
 _The two years I spent at 42 were two years of learning how to learn._
