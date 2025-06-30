@@ -12,7 +12,9 @@ https://github.com/user-attachments/assets/c8403572-ad53-462c-bf69-cd6b1cc0a3ed
   <img src="https://github.com/user-attachments/assets/5d09b6e9-0553-4106-904f-6855f9966def" alt="GamePong2" style="width: 24%; height: auto;">
 </div>
 
-ft_transcendence is a Project to build a web application in close collaboration with teammates under a two-month time constraint.  
+ft_transcendence is the final project of the Common Core at [42](https://42tokyo.jp/).  
+The goal is to build a web application in close collaboration with teammates under a two-month time constraint.
+
 For more information:
 * [Project Wiki](https://deepwiki.com/smizuoch/ft_transcendence/1-overview)
 * [Learning Hub](https://scrapbox.io/guide-to-the-galaxy/)
