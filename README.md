@@ -161,7 +161,7 @@ flowchart LR
 # Afterword
 _ft_transcendence is the final project of the Common Core at [42](https://42tokyo.jp/)._
 
-_The two years I spent at 42 were time to learn how to learn._
+_The two years I spent at 42 were time to learn how to learn._  
 _It was a daily routine of mobilizing people, books, and AI to adapt to unknown rules and apply them to the problems at hand._
 
 _And you know… [our spacewalk](https://scrapbox.io/guide-to-the-galaxy/) isn’t over just yet :D_
