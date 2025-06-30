@@ -39,7 +39,7 @@ brew install --cask docker
 ### 1. Install
 ```shell
 # Clone this repository
-git clone https://github.com/tobeshota/ft_transcendence
+git clone https://github.com/smizuoch/ft_transcendence
 # Change directory to this repository
 cd ft_transcendence
 # Create env file
