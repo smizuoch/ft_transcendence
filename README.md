@@ -5,7 +5,7 @@
 ---
 
 # Description
-https://github.com/user-attachments/assets/c8403572-ad53-462c-bf69-cd6b1cc0a3ed
+https://github.com/user-attachments/assets/abd20fa5-3511-43d6-981d-3e9cf33ae030
 <div style="display: flex; gap: 10px; margin: 20px 0;">
   <img src="https://github.com/user-attachments/assets/6051b7c1-5c61-40d7-aa76-3102c1b90ab3" alt="Home" style="width: 24%; height: auto;">
   <img src="https://github.com/user-attachments/assets/b30e298e-5966-44b9-8923-52bcfbac9390" alt="UserRegistration" style="width: 24%; height: auto;">
@@ -26,8 +26,8 @@ https://github.com/user-attachments/assets/c8403572-ad53-462c-bf69-cd6b1cc0a3ed
 </div>
 
 For more information:
-* [Project Wiki](https://deepwiki.com/smizuoch/ft_transcendence/1-overview)
-* [Learning Hub](https://scrapbox.io/guide-to-the-galaxy/)
+* [DeepWiki](https://deepwiki.com/smizuoch/ft_transcendence/1-overview)
+* [guide-to-the-galaxy](https://scrapbox.io/guide-to-the-galaxy/ft_transcendence潮時)
 
 # Usage
 ### Requirements
