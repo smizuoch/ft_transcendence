@@ -1,5 +1,6 @@
 # ft_transcendence
-**42-player online PONG using [WebRTC SFU](https://scrapbox.io/guide-to-the-galaxy/WebRTC_SFU)🏓**
+**ft_transcendence is a multi-player online PONG using [WebRTC SFU](https://scrapbox.io/guide-to-the-galaxy/WebRTC_SFU)🏓**  
+**The goal is to build a web application in close collaboration with teammates under a two-month time constraint.**
 
 ---
 
@@ -23,9 +24,6 @@ https://github.com/user-attachments/assets/c8403572-ad53-462c-bf69-cd6b1cc0a3ed
   <img src="https://github.com/user-attachments/assets/b9714cab-c8dd-4c84-b35c-0fd633d1edca" alt="GamePong4" style="width: 24%; height: auto;">
   <img src="https://github.com/user-attachments/assets/bb515316-1af5-46f4-ae86-23e820e794f2" alt="GamePong42" style="width: 24%; height: auto;">
 </div>
-
-ft_transcendence is the final project of the Common Core at [42](https://42tokyo.jp/).  
-The goal is to build a web application in close collaboration with teammates under a two-month time constraint.
 
 For more information:
 * [Project Wiki](https://deepwiki.com/smizuoch/ft_transcendence/1-overview)
